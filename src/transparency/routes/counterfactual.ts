@@ -1,0 +1,201 @@
+/**
+ * Counterfactual Route
+ *
+ * GET /api/transparency/counterfactual
+ *
+ * "What if the weights were different?"
+ *
+ * Uses stored raw scores to recalculate rankings with alternate weights.
+ * No need to re-run the scoring pipeline — just arithmetic on stored values.
+ */
+
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { z } from 'zod';
+import { db } from '../../db/client.js';
+import { logger } from '../../lib/logger.js';
+import type { CounterfactualResult, CounterfactualPost } from '../transparency.types.js';
+
+// Query params schema - weights must sum to 1.0
+const CounterfactualQuerySchema = z.object({
+  recency: z.coerce.number().min(0).max(1).default(0.2),
+  engagement: z.coerce.number().min(0).max(1).default(0.2),
+  bridging: z.coerce.number().min(0).max(1).default(0.2),
+  source_diversity: z.coerce.number().min(0).max(1).default(0.2),
+  relevance: z.coerce.number().min(0).max(1).default(0.2),
+  limit: z.coerce.number().min(1).max(500).default(50),
+});
+
+export function registerCounterfactualRoute(app: FastifyInstance): void {
+  app.get(
+    '/api/transparency/counterfactual',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      // Parse and validate query params
+      const parseResult = CounterfactualQuerySchema.safeParse(request.query);
+
+      if (!parseResult.success) {
+        return reply.code(400).send({
+          error: 'ValidationError',
+          message: 'Invalid query parameters',
+          details: parseResult.error.issues,
+        });
+      }
+
+      const { recency, engagement, bridging, source_diversity, relevance, limit } =
+        parseResult.data;
+
+      // Validate weights sum to approximately 1.0
+      const sum = recency + engagement + bridging + source_diversity + relevance;
+      if (Math.abs(sum - 1.0) > 0.01) {
+        return reply.code(400).send({
+          error: 'ValidationError',
+          message: `Weights must sum to 1.0 (got ${sum.toFixed(3)})`,
+        });
+      }
+
+      try {
+        // Get current epoch
+        const epochResult = await db.query(
+          `SELECT * FROM governance_epochs WHERE status = 'active' ORDER BY id DESC LIMIT 1`
+        );
+
+        if (epochResult.rows.length === 0) {
+          return reply.code(500).send({
+            error: 'NoActiveEpoch',
+            message: 'No active governance epoch found',
+          });
+        }
+
+        const epoch = epochResult.rows[0];
+        const epochId = epoch.id;
+
+        // Fetch top posts with raw scores from current epoch
+        // We fetch more than limit to compare rankings properly
+        const fetchLimit = Math.min(limit * 2, 1000);
+
+        const postsResult = await db.query(
+          `
+          SELECT
+            post_uri,
+            recency_score,
+            engagement_score,
+            bridging_score,
+            source_diversity_score,
+            relevance_score,
+            total_score
+          FROM post_scores
+          WHERE epoch_id = $1
+          ORDER BY total_score DESC
+          LIMIT $2
+          `,
+          [epochId, fetchLimit]
+        );
+
+        if (postsResult.rows.length === 0) {
+          return reply.send({
+            alternate_weights: { recency, engagement, bridging, source_diversity, relevance },
+            current_weights: {
+              recency: parseFloat(epoch.recency_weight),
+              engagement: parseFloat(epoch.engagement_weight),
+              bridging: parseFloat(epoch.bridging_weight),
+              source_diversity: parseFloat(epoch.source_diversity_weight),
+              relevance: parseFloat(epoch.relevance_weight),
+            },
+            posts: [],
+            summary: {
+              total_posts: 0,
+              posts_moved_up: 0,
+              posts_moved_down: 0,
+              posts_unchanged: 0,
+              max_rank_change: 0,
+              avg_rank_change: 0,
+            },
+          });
+        }
+
+        // Calculate counterfactual scores using stored raw scores
+        const postsWithCounterfactual = postsResult.rows.map((row, originalRank) => ({
+          post_uri: row.post_uri,
+          original_score: parseFloat(row.total_score),
+          original_rank: originalRank + 1,
+          counterfactual_score:
+            parseFloat(row.recency_score) * recency +
+            parseFloat(row.engagement_score) * engagement +
+            parseFloat(row.bridging_score) * bridging +
+            parseFloat(row.source_diversity_score) * source_diversity +
+            parseFloat(row.relevance_score) * relevance,
+        }));
+
+        // Sort by counterfactual score to get new ranking
+        const sortedByCounterfactual = [...postsWithCounterfactual].sort(
+          (a, b) => b.counterfactual_score - a.counterfactual_score
+        );
+
+        // Assign counterfactual ranks
+        const counterfactualRankMap = new Map<string, number>();
+        sortedByCounterfactual.forEach((post, index) => {
+          counterfactualRankMap.set(post.post_uri, index + 1);
+        });
+
+        // Build result with rank deltas
+        const posts: CounterfactualPost[] = postsWithCounterfactual
+          .slice(0, limit)
+          .map((post) => {
+            const counterfactual_rank = counterfactualRankMap.get(post.post_uri)!;
+            return {
+              post_uri: post.post_uri,
+              original_score: post.original_score,
+              original_rank: post.original_rank,
+              counterfactual_score: post.counterfactual_score,
+              counterfactual_rank,
+              rank_delta: post.original_rank - counterfactual_rank,
+            };
+          });
+
+        // Calculate summary statistics
+        let movedUp = 0;
+        let movedDown = 0;
+        let unchanged = 0;
+        let maxChange = 0;
+        let totalChange = 0;
+
+        for (const post of posts) {
+          if (post.rank_delta > 0) movedUp++;
+          else if (post.rank_delta < 0) movedDown++;
+          else unchanged++;
+
+          const absChange = Math.abs(post.rank_delta);
+          maxChange = Math.max(maxChange, absChange);
+          totalChange += absChange;
+        }
+
+        const result: CounterfactualResult = {
+          alternate_weights: { recency, engagement, bridging, source_diversity, relevance },
+          current_weights: {
+            recency: parseFloat(epoch.recency_weight),
+            engagement: parseFloat(epoch.engagement_weight),
+            bridging: parseFloat(epoch.bridging_weight),
+            source_diversity: parseFloat(epoch.source_diversity_weight),
+            relevance: parseFloat(epoch.relevance_weight),
+          },
+          posts,
+          summary: {
+            total_posts: posts.length,
+            posts_moved_up: movedUp,
+            posts_moved_down: movedDown,
+            posts_unchanged: unchanged,
+            max_rank_change: maxChange,
+            avg_rank_change: posts.length > 0 ? totalChange / posts.length : 0,
+          },
+        };
+
+        return reply.send(result);
+      } catch (err) {
+        logger.error({ err }, 'Error calculating counterfactual');
+        return reply.code(500).send({
+          error: 'InternalError',
+          message: 'An error occurred while calculating counterfactual rankings',
+        });
+      }
+    }
+  );
+}

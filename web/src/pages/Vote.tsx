@@ -28,8 +28,14 @@ export function Vote() {
       const epoch = await weightsApi.getCurrentEpoch();
       setCurrentEpoch(epoch);
 
-      // Set initial weights to current epoch weights
-      setWeights(epoch.weights);
+      // Set initial weights to current epoch weights (convert from snake_case)
+      setWeights({
+        recency: epoch.weights.recency,
+        engagement: epoch.weights.engagement,
+        bridging: epoch.weights.bridging,
+        sourceDiversity: epoch.weights.source_diversity,
+        relevance: epoch.weights.relevance,
+      });
 
       // Check if user has voted (if authenticated)
       if (isAuthenticated) {
@@ -192,7 +198,7 @@ export function Vote() {
               {Object.entries(currentEpoch.weights).map(([key, value]) => (
                 <div key={key} className="weight-card">
                   <span className="weight-name">
-                    {key === 'sourceDiversity' ? 'Source Diversity' : key.charAt(0).toUpperCase() + key.slice(1)}
+                    {key === 'source_diversity' ? 'Source Diversity' : key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}
                   </span>
                   <span className="weight-value">{(value * 100).toFixed(1)}%</span>
                 </div>
