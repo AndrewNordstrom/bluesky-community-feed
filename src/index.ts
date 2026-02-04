@@ -2,6 +2,7 @@ import { config } from './config.js';
 import { logger } from './lib/logger.js';
 import { createServer } from './feed/server.js';
 import { startJetstream, stopJetstream } from './ingestion/jetstream.js';
+import { startScoring, stopScoring } from './scoring/scheduler.js';
 import { db } from './db/client.js';
 import { redis } from './db/redis.js';
 
@@ -35,18 +36,35 @@ async function main() {
     process.exit(1);
   }
 
-  // 4. Log startup complete
+  // 4. Start scoring pipeline
+  try {
+    await startScoring();
+    logger.info('Scoring pipeline started');
+  } catch (err) {
+    logger.fatal({ err }, 'Failed to start scoring pipeline');
+    process.exit(1);
+  }
+
+  // 5. Log startup complete
   logger.info({
     serviceDid: config.FEEDGEN_SERVICE_DID,
     publisherDid: config.FEEDGEN_PUBLISHER_DID,
     hostname: config.FEEDGEN_HOSTNAME,
-  }, 'All systems operational (Phase 2: Ingestion)');
+  }, 'All systems operational (Phase 3: Scoring)');
 
   // Graceful shutdown
   const shutdown = async () => {
     logger.info('Shutting down...');
 
-    // 1. Stop Jetstream first (saves final cursor)
+    // 1. Stop scoring first (wait for any in-progress run to complete)
+    try {
+      await stopScoring();
+      logger.info('Scoring pipeline stopped');
+    } catch (err) {
+      logger.error({ err }, 'Error stopping scoring pipeline');
+    }
+
+    // 2. Stop Jetstream (saves final cursor)
     try {
       await stopJetstream();
       logger.info('Jetstream stopped');
@@ -54,7 +72,7 @@ async function main() {
       logger.error({ err }, 'Error stopping Jetstream');
     }
 
-    // 2. Close HTTP server
+    // 3. Close HTTP server
     try {
       await app.close();
       logger.info('HTTP server closed');
@@ -62,7 +80,7 @@ async function main() {
       logger.error({ err }, 'Error closing HTTP server');
     }
 
-    // 3. Close database connections
+    // 4. Close database connections
     try {
       await db.end();
       logger.info('PostgreSQL connection closed');
@@ -70,7 +88,7 @@ async function main() {
       logger.error({ err }, 'Error closing PostgreSQL');
     }
 
-    // 4. Close Redis connection
+    // 5. Close Redis connection
     try {
       redis.disconnect();
       logger.info('Redis connection closed');
