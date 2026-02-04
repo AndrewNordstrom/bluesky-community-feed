@@ -4,6 +4,7 @@ import { logger } from '../lib/logger.js';
 import { registerDescribeGenerator } from './routes/describe-generator.js';
 import { registerWellKnown } from './routes/well-known.js';
 import { registerFeedSkeleton } from './routes/feed-skeleton.js';
+import { registerGovernanceRoutes } from '../governance/server.js';
 
 /**
  * Create and configure the Fastify server instance.
@@ -24,6 +25,9 @@ export async function createServer() {
   registerDescribeGenerator(app);
   registerWellKnown(app);
   registerFeedSkeleton(app);
+
+  // Register governance routes
+  registerGovernanceRoutes(app);
 
   // Health check endpoint
   app.get('/health', async () => ({
