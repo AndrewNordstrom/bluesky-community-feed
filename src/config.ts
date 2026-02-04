@@ -1,0 +1,48 @@
+import { z } from 'zod';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const ConfigSchema = z.object({
+  // Identity
+  FEEDGEN_SERVICE_DID: z.string().startsWith('did:'),
+  FEEDGEN_PUBLISHER_DID: z.string().startsWith('did:'),
+  FEEDGEN_HOSTNAME: z.string().min(1),
+
+  // Server
+  FEEDGEN_PORT: z.coerce.number().default(3000),
+  FEEDGEN_LISTENHOST: z.string().default('0.0.0.0'),
+
+  // Jetstream
+  JETSTREAM_URL: z.string().url(),
+  JETSTREAM_FALLBACK_URL: z.string().url(),
+  JETSTREAM_COLLECTIONS: z.string(),
+
+  // Database
+  DATABASE_URL: z.string().startsWith('postgresql://'),
+
+  // Redis
+  REDIS_URL: z.string().startsWith('redis://'),
+
+  // Scoring
+  SCORING_INTERVAL_CRON: z.string().default('*/5 * * * *'),
+  SCORING_WINDOW_HOURS: z.coerce.number().default(72),
+  FEED_MAX_POSTS: z.coerce.number().default(1000),
+
+  // Governance
+  GOVERNANCE_MIN_VOTES: z.coerce.number().default(5),
+  GOVERNANCE_PERIOD_HOURS: z.coerce.number().default(168),
+
+  // Bluesky API
+  BSKY_IDENTIFIER: z.string(),
+  BSKY_APP_PASSWORD: z.string(),
+
+  // Optional
+  POLIS_CONVERSATION_ID: z.string().optional().default(''),
+  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+});
+
+export type Config = z.infer<typeof ConfigSchema>;
+
+export const config = ConfigSchema.parse(process.env);
