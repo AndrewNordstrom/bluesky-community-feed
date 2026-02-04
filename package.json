@@ -1,0 +1,42 @@
+{
+  "name": "community-feed",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "A community-governed Bluesky feed generator where subscribers vote on algorithm parameters",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "migrate": "psql $DATABASE_URL -f src/db/migrations/001_initial_schema.sql",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@atproto/api": "^0.13.0",
+    "@atproto/xrpc-server": "^0.6.0",
+    "@atproto/identity": "^0.4.0",
+    "@atproto/crypto": "^0.4.0",
+    "@fastify/cors": "^10.0.0",
+    "@fastify/jwt": "^9.0.0",
+    "bullmq": "^5.0.0",
+    "dotenv": "^16.4.0",
+    "fastify": "^5.0.0",
+    "ioredis": "^5.4.0",
+    "pg": "^8.13.0",
+    "pino": "^9.5.0",
+    "ws": "^8.18.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "@types/pg": "^8.11.0",
+    "@types/ws": "^8.5.0",
+    "pino-pretty": "^13.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
