@@ -28,11 +28,41 @@ import {
   toPostForScoring,
 } from './score.types.js';
 
+// Maximum time allowed for a single scoring run (2 minutes)
+const SCORING_TIMEOUT_MS = 120_000;
+
+// Track last successful run for health checks
+let lastSuccessfulRunAt: Date | null = null;
+
 /**
- * Run the complete scoring pipeline.
+ * Get the timestamp of the last successful scoring run.
+ */
+export function getLastScoringRunAt(): Date | null {
+  return lastSuccessfulRunAt;
+}
+
+/**
+ * Run the complete scoring pipeline with timeout.
  * This is the main entry point called by the scheduler.
  */
 export async function runScoringPipeline(): Promise<void> {
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(
+      () => reject(new Error('Scoring pipeline timed out')),
+      SCORING_TIMEOUT_MS
+    );
+  });
+
+  await Promise.race([
+    runScoringPipelineInternal(),
+    timeoutPromise,
+  ]);
+}
+
+/**
+ * Internal scoring pipeline logic.
+ */
+async function runScoringPipelineInternal(): Promise<void> {
   const startTime = Date.now();
   logger.info('Starting scoring pipeline');
 
@@ -69,6 +99,9 @@ export async function runScoringPipeline(): Promise<void> {
       { elapsed, postsScored: posts.length, epochId: epoch.id },
       'Scoring pipeline complete'
     );
+
+    // Track successful run for health checks
+    lastSuccessfulRunAt = new Date();
   } catch (err) {
     logger.error({ err }, 'Scoring pipeline failed');
     throw err;
