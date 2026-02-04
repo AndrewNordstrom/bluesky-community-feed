@@ -1,18 +1,28 @@
+/**
+ * Feed Skeleton Route
+ *
+ * This is the core feed endpoint that Bluesky calls to get post URIs.
+ * CRITICAL: Response time target is <50ms. Only read from Redis/PostgreSQL.
+ * NEVER call external APIs from this endpoint.
+ *
+ * Phase 3: Reads from Redis sorted set with real ranked posts.
+ * Uses snapshot-based cursors for stable pagination.
+ */
+
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { randomUUID } from 'crypto';
 import { config } from '../../config.js';
 import { logger } from '../../lib/logger.js';
+import { redis } from '../../db/redis.js';
+import { db } from '../../db/client.js';
+import { encodeCursor, decodeCursor } from '../cursor.js';
+import { verifyRequesterDid } from '../auth.js';
 
 // The AT-URI for this feed
 const FEED_URI = `at://${config.FEEDGEN_PUBLISHER_DID}/app.bsky.feed.generator/community-gov`;
 
-// Phase 1: Hardcoded post URIs for testing
-// These are real posts from Bluesky that can be verified
-// Replace with actual post URIs from bsky.app for production testing
-const HARDCODED_POSTS = [
-  'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3l2zpbbhuvs2f',
-  'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3l2zoxdiopc2b',
-  'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3l2znpjn7xk2v',
-];
+// Snapshot TTL in seconds (5 minutes - matches scoring interval)
+const SNAPSHOT_TTL = 300;
 
 interface FeedSkeletonQuery {
   feed: string;
@@ -22,10 +32,6 @@ interface FeedSkeletonQuery {
 
 /**
  * Register the getFeedSkeleton endpoint.
- * This is the core feed endpoint that Bluesky calls to get post URIs.
- *
- * Phase 1: Returns hardcoded posts for testing.
- * Phase 3: Will read from Redis sorted set with real ranked posts.
  *
  * Spec: §9.1-9.3 - GET /xrpc/app.bsky.feed.getFeedSkeleton
  */
@@ -45,21 +51,87 @@ export function registerFeedSkeleton(app: FastifyInstance): void {
         });
       }
 
-      // Phase 1: Simple hardcoded response
-      // No cursor handling - just return all hardcoded posts
-      if (cursor) {
-        // If cursor is provided, return empty (we only have one page)
-        return reply.send({ feed: [] });
+      // Extract requester DID from JWT (optional: for subscriber tracking)
+      const requesterDid = await verifyRequesterDid(request);
+      if (requesterDid) {
+        // Track subscriber (fire-and-forget, don't block response)
+        trackSubscriber(requesterDid).catch(() => {
+          // Ignore errors - don't fail feed request for tracking
+        });
       }
 
-      const feedItems = HARDCODED_POSTS.slice(0, limit).map((uri) => ({ post: uri }));
+      let postUris: string[];
+      let offset: number;
+      let snapshotId: string;
 
-      logger.debug({ feedItems: feedItems.length }, 'Returning feed skeleton');
+      if (cursor) {
+        // Subsequent page: read from existing snapshot
+        const parsed = decodeCursor(cursor);
+        if (!parsed) {
+          logger.warn({ cursor }, 'Invalid cursor');
+          return reply.code(400).send({ error: 'InvalidCursor' });
+        }
+
+        snapshotId = parsed.snapshotId;
+        offset = parsed.offset;
+
+        // Try to get snapshot from Redis
+        const snapshotData = await redis.get(`snapshot:${snapshotId}`);
+        if (!snapshotData) {
+          // Snapshot expired, return empty to signal client to refresh
+          logger.debug({ snapshotId }, 'Snapshot expired');
+          return reply.send({ feed: [] });
+        }
+
+        const allUris: string[] = JSON.parse(snapshotData);
+        postUris = allUris.slice(offset, offset + limit);
+      } else {
+        // First page: create new snapshot from current rankings
+        snapshotId = randomUUID().substring(0, 8);
+        offset = 0;
+
+        // Get ranked posts from Redis sorted set (descending by score)
+        const rankedUris = await redis.zrevrange('feed:current', 0, config.FEED_MAX_POSTS - 1);
+
+        if (rankedUris.length === 0) {
+          logger.debug('No posts in feed');
+          return reply.send({ feed: [] });
+        }
+
+        // Cache snapshot for pagination stability
+        await redis.setex(`snapshot:${snapshotId}`, SNAPSHOT_TTL, JSON.stringify(rankedUris));
+
+        postUris = rankedUris.slice(0, limit);
+      }
+
+      // Build response
+      const feedItems = postUris.map((uri) => ({ post: uri }));
+
+      const nextOffset = offset + postUris.length;
+      const hasMore = postUris.length === limit;
+
+      logger.debug(
+        { feedItems: feedItems.length, hasMore, snapshotId },
+        'Returning feed skeleton'
+      );
 
       return reply.send({
         feed: feedItems,
-        // No cursor in Phase 1 - single page only
+        cursor: hasMore ? encodeCursor(snapshotId, nextOffset) : undefined,
       });
     }
+  );
+}
+
+/**
+ * Track subscriber in the database (fire-and-forget).
+ * Updates last_seen timestamp and ensures is_active is TRUE.
+ */
+async function trackSubscriber(did: string): Promise<void> {
+  await db.query(
+    `INSERT INTO subscribers (did, last_seen)
+     VALUES ($1, NOW())
+     ON CONFLICT (did) DO UPDATE SET last_seen = NOW(), is_active = TRUE`,
+    [did]
   );
 }
