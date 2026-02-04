@@ -1,0 +1,35 @@
+---
+description: Critical non-negotiable rules for the community-governed Bluesky feed. These rules MUST be followed in every file. Violations will break the project.
+globs:
+alwaysApply: true
+---
+
+# Critical Project Rules
+
+You are building a community-governed Bluesky feed generator where subscribers vote on algorithm parameters. The full spec is in `docs/IMPLEMENTATION_SPEC.md` — read the relevant section before implementing any layer.
+
+## Absolute Requirements
+1. **GOLDEN RULE**: Store ALL score decomposition (raw score, weight applied, weighted value) for EVERY component for EVERY post. NEVER store only total_score.
+2. Tag every score row with `epoch_id` (FK to governance_epochs).
+3. Handle post deletions from day one: soft delete (`deleted = TRUE`), never hard delete.
+4. Persist Jetstream cursor every ~1000 events. Always reconnect WITH cursor parameter.
+5. `getFeedSkeleton` reads ONLY from Redis/PostgreSQL. Zero external API calls. Target <50ms.
+6. Identity uses `did:plc`, NOT `did:web`. Generate once, never change.
+7. Governance weights MUST sum to 1.0. Validate everywhere. Use tolerance (0.01) + normalization.
+8. Feed pagination uses snapshot-based cursors with TTL. Not live query offsets.
+9. Audit log (`governance_audit_log`) is append-only. Never UPDATE or DELETE.
+10. Soft delete everything. Never hard delete posts, likes, follows, reposts.
+
+## Code Style
+- TypeScript strict mode, no `any` types
+- Use Zod for all external input validation
+- Named SQL queries in `src/db/queries/`, no inline SQL strings
+- Pino for structured logging
+- Functional patterns preferred, classes only where framework requires
+- Every public function needs JSDoc with parameter descriptions
+- Error handling: catch, log with context, re-throw or return typed error
+
+## Before You Build
+- Read the relevant section of `docs/IMPLEMENTATION_SPEC.md` first
+- Follow the phase order in `TASKING.md`
+- Ask if anything in the spec is ambiguous — don't guess

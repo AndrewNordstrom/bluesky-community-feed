@@ -1,0 +1,37 @@
+---
+description: Feed serving layer. Implements Bluesky's getFeedSkeleton API contract. Performance-critical hot path.
+globs: src/feed/**
+alwaysApply: false
+---
+
+# Feed Serving (getFeedSkeleton)
+
+Read `docs/IMPLEMENTATION_SPEC.md` §9 for complete code patterns.
+
+## Bluesky API Contract (EXACT)
+- Endpoint: `GET /xrpc/app.bsky.feed.getFeedSkeleton`
+- Query params: `feed` (AT-URI of this feed), `cursor` (optional string), `limit` (default 50, max 100)
+- Response: `{ cursor?: string, feed: [{ post: "at://did/collection/rkey" }] }`
+- Returns ONLY post URIs — Bluesky's AppView handles hydration
+- Target response time: <50ms
+
+## CRITICAL PERFORMANCE RULE
+NEVER call external APIs in this handler. No Bluesky API, no ML inference, no network requests.
+Read only from Redis (pre-computed rankings) and PostgreSQL (fallback).
+
+## Cursor Strategy (Pagination Stability)
+- First page request (no cursor): Create snapshot — generate random ID, cache ranked URIs in Redis sorted set with 5min TTL
+- Subsequent pages: Read from snapshot at offset
+- Cursor format: `base64url(JSON.stringify({ s: snapshotId, o: offset }))`
+- If snapshot expired (TTL hit): return empty feed array (client will refresh from top)
+- NEVER use live query offsets — rankings change between page loads
+
+## Subscriber Tracking
+- Extract requester DID from JWT `Authorization` header (if present)
+- Upsert to `subscribers` table (fire-and-forget, don't block response)
+- Feed is public — auth is optional, for tracking only
+
+## Required Endpoints
+1. `GET /xrpc/app.bsky.feed.getFeedSkeleton` — the feed itself
+2. `GET /xrpc/app.bsky.feed.describeFeedGenerator` — feed metadata
+3. `GET /.well-known/did.json` — DID document (for did:web resolution)

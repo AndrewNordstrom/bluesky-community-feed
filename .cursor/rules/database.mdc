@@ -1,0 +1,39 @@
+---
+description: Database layer. PostgreSQL schema, migrations, named queries, Redis caching patterns.
+globs: src/db/**
+alwaysApply: false
+---
+
+# Database Layer
+
+Read `docs/IMPLEMENTATION_SPEC.md` §6 for complete schemas.
+
+## PostgreSQL Patterns
+- Connection pool: max 20 connections, idle timeout 30s
+- All SQL in named query files (`src/db/queries/*.ts`), never inline
+- Use parameterized queries ($1, $2) — never string interpolation
+- Use transactions for multi-table operations (especially epoch transitions)
+- UPSERT pattern (`ON CONFLICT ... DO UPDATE`) for idempotent writes
+
+## Key Tables
+- `posts`: uri (PK), cid, author_did, text, reply_root, reply_parent, langs, has_media, created_at, indexed_at, **deleted** (boolean, default false)
+- `post_engagements`: post_uri (FK), likes, reposts, replies (counters updated by handlers)
+- `social_graph`: follower_did, followed_did, created_at, deleted
+- `post_scores`: post_uri, epoch_id, all 5 component scores + weights + weighted values + total_score + JSONB details. UNIQUE(post_uri, epoch_id)
+- `governance_epochs`: id, status (active/voting/closed), 5 weight columns, vote_count, created_at, closed_at
+- `governance_votes`: voter_did, epoch_id, 5 weight preferences, voted_at. UNIQUE(voter_did, epoch_id)
+- `governance_audit_log`: APPEND-ONLY. id, event_type, actor_did, epoch_id, details JSONB, created_at
+- `subscribers`: did (PK), first_seen, last_seen, request_count
+- `jetstream_cursor`: singleton row with cursor value and updated_at
+
+## Redis Patterns
+- `feed:current` — Sorted set of post URIs by total_score (the live feed)
+- `feed:snapshot:{id}` — Snapshot sorted set for pagination stability (5min TTL)
+- `feed:epoch` — Current epoch ID string
+- `feed:updated_at` — Timestamp of last scoring run
+
+## Migration Order
+1. `001_initial_schema.sql` — posts, engagements, social_graph, subscribers, cursor
+2. `002_scoring_tables.sql` — post_scores with full decomposition
+3. `003_governance_tables.sql` — epochs, votes, audit_log
+4. `004_transparency_tables.sql` — feed_snapshots, transparency_metrics

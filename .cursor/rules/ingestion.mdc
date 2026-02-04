@@ -1,0 +1,36 @@
+---
+description: Jetstream data ingestion layer. WebSocket connection to Bluesky's Jetstream, event processing, cursor persistence, reconnection logic.
+globs: src/ingestion/**
+alwaysApply: false
+---
+
+# Ingestion Layer (Jetstream)
+
+Read `docs/IMPLEMENTATION_SPEC.md` §7 for complete code patterns.
+
+## Connection
+- Primary: `wss://jetstream2.us-east.bsky.network/subscribe`
+- Fallback: `wss://jetstream1.us-east.bsky.network/subscribe`
+- Filter collections: `app.bsky.feed.post`, `app.bsky.feed.like`, `app.bsky.feed.repost`, `app.bsky.graph.follow`
+- ALWAYS include `cursor` parameter on reconnect
+
+## Cursor Persistence (CRITICAL)
+- Save cursor to `jetstream_cursor` table every ~1000 events
+- On disconnect: reconnect WITH cursor to avoid silent data gaps
+- On startup: read last cursor from DB, connect with it
+- If no cursor exists: connect without (will get latest events only)
+
+## Reconnection
+- Exponential backoff: 1s → 2s → 4s → ... → 60s max
+- After 5 failures on primary, try fallback instance
+- Log every disconnect/reconnect with timestamps and cursor value
+
+## Event Processing
+- Route events through event-processor.ts to typed handlers
+- Handle: create (post/like/repost/follow), delete
+- Delete handler is CRITICAL — must work before anything else
+- Soft delete: set `deleted = TRUE`, never remove rows
+- All handlers must be idempotent (use UPSERT patterns)
+
+## Types
+Jetstream events have: `did`, `time_us`, `kind` (commit/identity/account), `commit.operation` (create/update/delete), `commit.collection`, `commit.rkey`, `commit.record`

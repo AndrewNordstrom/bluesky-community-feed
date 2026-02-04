@@ -1,0 +1,39 @@
+---
+description: Scoring pipeline layer. Five-component scoring with governance weights, batch processing, score decomposition storage.
+globs: src/scoring/**
+alwaysApply: false
+---
+
+# Scoring Pipeline
+
+Read `docs/IMPLEMENTATION_SPEC.md` §8 for complete code patterns.
+
+## Pipeline Orchestrator (runs every 5 minutes via cron)
+1. Get current governance epoch and its weight vector
+2. Query non-deleted posts within scoring window (default 72 hours)
+3. Score each post with all 5 components
+4. Store decomposed scores tagged with epoch_id
+5. Sort by total_score, write top-N to Redis sorted set `feed:current`
+6. Update `feed:epoch` and `feed:updated_at` in Redis
+
+## Five Scoring Components (each returns 0.0-1.0)
+- **Recency** (recency.ts): Exponential decay. Half-life = window/4 (18h for 72h window)
+- **Engagement** (engagement.ts): `log(1 + likes*1 + reposts*2 + replies*3) / log(1 + maxEngagement)`. Diminishing returns via log scale.
+- **Bridging** (bridging.ts): Cross-cluster appeal. MVP: Jaccard distance of engagers' follow sets. Higher = more diverse appeal.
+- **Source Diversity** (source-diversity.ts): Penalize when one author dominates recent feed. Inverse of author's share in scoring window.
+- **Relevance** (relevance.ts): MVP returns 0.5 (neutral). Upgrade path: text embeddings, fine-tuned classifier.
+
+## Score Storage (GOLDEN RULE)
+Every row in `post_scores` MUST contain:
+- All 5 raw component scores (e.g., `recency_score = 0.8`)
+- All 5 weights applied (e.g., `recency_weight = 0.25`)
+- All 5 weighted values (e.g., `recency_weighted = 0.20`)
+- `total_score`, `epoch_id`, `scored_at`
+- `component_details` JSONB for future extensibility
+- UNIQUE constraint on (post_uri, epoch_id)
+
+## Aggregation Formula
+```
+total_score = Σ(component_score[i] × governance_weight[i])
+```
+Weights come from the active governance epoch. They MUST sum to 1.0.

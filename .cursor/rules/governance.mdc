@@ -1,0 +1,42 @@
+---
+description: Governance system. Democratic voting on algorithm weights, epoch lifecycle, vote aggregation, audit logging.
+globs: src/governance/**
+alwaysApply: false
+---
+
+# Governance System
+
+Read `docs/IMPLEMENTATION_SPEC.md` §10 for complete code patterns.
+
+## Epoch Lifecycle
+1. Epoch N active with weight vector [recency, engagement, bridging, source_diversity, relevance]
+2. Voting period opens (status = 'voting')
+3. Subscribers cast votes via `POST /api/governance/vote`
+4. Voting closes when: period expires OR manual trigger
+5. Aggregate votes → trimmed mean per component → normalize to sum=1.0
+6. Transaction: close Epoch N → create Epoch N+1 with new weights → audit log
+7. Next scoring pipeline run picks up new weights automatically
+
+## Vote Aggregation (Trimmed Mean)
+- Sort votes per component, remove top 10% and bottom 10% outliers
+- Take mean of remaining votes per component
+- Normalize resulting vector to sum to 1.0
+- Minimum vote threshold: configurable (default 5 votes, env: GOVERNANCE_MIN_VOTES)
+
+## Validation Rules
+- Voter MUST be an active subscriber (exists in subscribers table, last_seen recent)
+- Each weight component must be 0.0-1.0
+- All 5 weights must sum to 1.0 (tolerance: 0.01, then normalize)
+- One vote per voter per epoch (upsert — last vote wins)
+- All votes logged to governance_audit_log
+
+## Audit Log (APPEND-ONLY)
+- Event types: epoch_created, vote_cast, vote_updated, epoch_closed, weights_changed
+- NEVER update or delete audit log rows
+- Store: event_type, actor_did, epoch_id, details (JSONB), created_at
+- This is the trust anchor — voters verify their votes were counted
+
+## Authentication
+- MVP: Bluesky app password authentication (prove DID ownership)
+- Upgrade path: Bluesky OAuth flow
+- Session: JWT or signed cookie after DID verification

@@ -1,0 +1,30 @@
+---
+description: React frontend for governance voting UI and transparency dashboard.
+globs: web/**
+alwaysApply: false
+---
+
+# Frontend (React + Vite)
+
+## Stack
+- React 18, TypeScript, Vite 5
+- Styling: Tailwind CSS or CSS Modules (keep it simple)
+- Charts: recharts for score visualizations
+- No heavy state management — React Query for server state, useState for UI state
+
+## Key Pages
+- `Vote.tsx`: Weight slider interface. 5 sliders that must sum to 1.0. Show current epoch weights vs user's vote. Submit to `POST /api/governance/vote`.
+- `Dashboard.tsx`: Feed transparency stats. Current weights, author diversity (Gini), bridging scores, epoch history timeline.
+- `PostExplain.tsx`: Per-post score radar chart. Shows all 5 components, the weight applied, and counterfactual rank.
+- `History.tsx`: Governance epoch timeline. Weight changes over time, vote counts, audit log.
+
+## Weight Slider Constraint
+When user adjusts one slider, the others must rebalance to maintain sum=1.0.
+Common pattern: proportionally redistribute the delta across other sliders.
+Always show the current sum with visual feedback (green=valid, red=invalid).
+
+## Authentication Flow
+1. User clicks "Sign in with Bluesky"
+2. Enter handle + app password (NOT main password)
+3. Backend verifies via Bluesky API, returns session token
+4. Session token sent with vote requests

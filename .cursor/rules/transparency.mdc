@@ -1,0 +1,35 @@
+---
+description: Transparency and explainability layer. Score explanations, counterfactual comparisons, feed statistics, audit log endpoints.
+globs: src/transparency/**
+alwaysApply: false
+---
+
+# Transparency & Explainability
+
+Read `docs/IMPLEMENTATION_SPEC.md` §11 for complete code patterns.
+
+## Per-Post Explanation (`GET /api/transparency/post/:uri`)
+Response includes:
+- Score decomposition: all 5 raw scores, weights applied, weighted values
+- Rank position in current feed
+- Counterfactual: what rank would this post have with pure-engagement scoring?
+- Governance context: which epoch weights produced this score
+- Post metadata: author, created_at, engagement counts
+
+## Feed-Level Stats (`GET /api/transparency/stats`)
+- Current epoch weights and when they were set
+- Distribution metrics: author Gini coefficient, topic entropy, average bridging score
+- Comparison to baselines: Jaccard similarity with chronological and engagement-only feeds
+- Volume: posts scored, unique authors, scoring window
+- Governance: active epoch, vote count, time until next vote
+
+## Counterfactual Comparison (`GET /api/transparency/counterfactual`)
+Show side-by-side: "what the community chose" vs "what pure engagement would show."
+Requires re-scoring top-N posts with weights [0, 1, 0, 0, 0] (engagement-only) and comparing rank orderings.
+
+## Metrics Calculations
+- **Gini coefficient**: Measure author concentration in feed. 0 = perfectly equal, 1 = one author dominates.
+- **Jaccard similarity**: Compare top-100 post sets between feed variants. Lower = more different from engagement-only.
+
+## Design Principle
+Everything about the algorithm should be inspectable. If a user asks "why is this post ranked #3?", the system must give a complete, verifiable answer.
