@@ -5,6 +5,7 @@ import { registerDescribeGenerator } from './routes/describe-generator.js';
 import { registerWellKnown } from './routes/well-known.js';
 import { registerFeedSkeleton } from './routes/feed-skeleton.js';
 import { registerGovernanceRoutes } from '../governance/server.js';
+import { registerTransparencyRoutes } from '../transparency/server.js';
 
 /**
  * Create and configure the Fastify server instance.
@@ -28,6 +29,9 @@ export async function createServer() {
 
   // Register governance routes
   registerGovernanceRoutes(app);
+
+  // Register transparency routes
+  registerTransparencyRoutes(app);
 
   // Health check endpoint
   app.get('/health', async () => ({
