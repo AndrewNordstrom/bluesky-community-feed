@@ -1,0 +1,53 @@
+/**
+ * Governance Server
+ *
+ * Registers all governance routes with the Fastify application.
+ * Provides the /api/governance/* namespace for voting, epochs, weights, and auth.
+ */
+
+import { FastifyInstance } from 'fastify';
+import { registerVoteRoute } from './routes/vote.js';
+import { registerWeightsRoute } from './routes/weights.js';
+import { registerEpochsRoute } from './routes/epochs.js';
+import { registerAuthRoute } from './routes/auth.js';
+import { registerPolisRoute } from './routes/polis.js';
+import { logger } from '../lib/logger.js';
+
+/**
+ * Register all governance routes with the Fastify application.
+ *
+ * Routes registered:
+ * - POST /api/governance/auth/login - Authenticate with Bluesky
+ * - GET /api/governance/auth/session - Get current session
+ * - POST /api/governance/auth/logout - Logout
+ * - POST /api/governance/vote - Submit vote
+ * - GET /api/governance/vote - Get current vote
+ * - GET /api/governance/weights - Get current weights
+ * - GET /api/governance/weights/history - Get weight history
+ * - GET /api/governance/weights/compare - Compare epochs
+ * - GET /api/governance/epochs - List epochs
+ * - GET /api/governance/epochs/current - Get current epoch
+ * - GET /api/governance/epochs/:id - Get epoch details
+ * - GET /api/governance/polis - Polis integration info
+ * - GET /api/governance/polis/status - Polis integration status
+ */
+export function registerGovernanceRoutes(app: FastifyInstance): void {
+  logger.info('Registering governance routes');
+
+  // Auth routes
+  registerAuthRoute(app);
+
+  // Vote routes
+  registerVoteRoute(app);
+
+  // Weights routes
+  registerWeightsRoute(app);
+
+  // Epochs routes
+  registerEpochsRoute(app);
+
+  // Polis routes (placeholder)
+  registerPolisRoute(app);
+
+  logger.info('Governance routes registered');
+}
