@@ -38,6 +38,7 @@ let reconnectAttempts = 0;
 let consecutiveFailures = 0;
 let useFallback = false;
 let isShuttingDown = false;
+let lastEventReceivedAt: Date | null = null;
 
 /**
  * Start the Jetstream connection.
@@ -114,6 +115,9 @@ function connect(cursor?: bigint): void {
     try {
       const event = JSON.parse(data.toString()) as JetstreamEvent;
       await processEvent(event);
+
+      // Track last event time for health checks
+      lastEventReceivedAt = new Date();
 
       // Track cursor for persistence
       if (event.time_us) {
@@ -209,4 +213,18 @@ async function saveCursor(cursorUs: bigint): Promise<void> {
   } catch (err) {
     logger.error({ err }, 'Failed to save cursor');
   }
+}
+
+/**
+ * Check if Jetstream WebSocket is connected.
+ */
+export function isJetstreamConnected(): boolean {
+  return ws !== null && ws.readyState === WebSocket.OPEN;
+}
+
+/**
+ * Get the timestamp of the last received event.
+ */
+export function getLastEventReceivedAt(): Date | null {
+  return lastEventReceivedAt;
 }

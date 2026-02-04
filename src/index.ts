@@ -1,13 +1,23 @@
 import { config } from './config.js';
 import { logger } from './lib/logger.js';
 import { createServer } from './feed/server.js';
-import { startJetstream, stopJetstream } from './ingestion/jetstream.js';
-import { startScoring, stopScoring } from './scoring/scheduler.js';
-import { db } from './db/client.js';
-import { redis } from './db/redis.js';
+import { startJetstream, stopJetstream, isJetstreamConnected, getLastEventReceivedAt } from './ingestion/jetstream.js';
+import { startScoring, stopScoring, isScoringInProgress } from './scoring/scheduler.js';
+import { getLastScoringRunAt } from './scoring/pipeline.js';
+import { runStartupChecks } from './lib/startup-checks.js';
+import { registerShutdownHandlers } from './lib/shutdown.js';
+import { registerJetstreamHealth, registerScoringHealth, JetstreamHealth, ScoringHealth } from './lib/health.js';
 
 async function main() {
   logger.info('Starting Community Feed Generator...');
+
+  // 0. Run startup checks (fail fast if dependencies are down)
+  try {
+    await runStartupChecks();
+  } catch (err) {
+    logger.fatal({ err }, 'Startup checks failed');
+    process.exit(1);
+  }
 
   // 1. Create and configure the HTTP server
   const app = await createServer();
@@ -36,7 +46,42 @@ async function main() {
     process.exit(1);
   }
 
-  // 4. Start scoring pipeline
+  // 4. Register Jetstream health check
+  registerJetstreamHealth((): JetstreamHealth => {
+    const connected = isJetstreamConnected();
+    const lastEventAt = getLastEventReceivedAt();
+    const lastEventAgeMs = lastEventAt ? Date.now() - lastEventAt.getTime() : undefined;
+
+    // Consider unhealthy if no events for more than 5 minutes
+    const isHealthy = connected && (lastEventAgeMs === undefined || lastEventAgeMs < 300_000);
+
+    return {
+      status: isHealthy ? 'healthy' : 'unhealthy',
+      connected,
+      last_event_age_ms: lastEventAgeMs,
+      error: !connected ? 'WebSocket not connected' : undefined,
+    };
+  });
+
+  // 5. Register scoring health check (before starting scoring so it's available during initial run)
+  registerScoringHealth((): ScoringHealth => {
+    const isRunning = isScoringInProgress();
+    const lastRunAt = getLastScoringRunAt();
+
+    // Consider healthy if we've had a successful run in the last 10 minutes
+    // or if no run has happened yet (startup grace period)
+    const lastRunAgeMs = lastRunAt ? Date.now() - lastRunAt.getTime() : undefined;
+    const isHealthy = lastRunAgeMs === undefined || lastRunAgeMs < 600_000;
+
+    return {
+      status: isHealthy ? 'healthy' : 'unhealthy',
+      is_running: isRunning,
+      last_run_at: lastRunAt?.toISOString(),
+      error: !isHealthy ? 'No successful scoring run in last 10 minutes' : undefined,
+    };
+  });
+
+  // 6. Start scoring pipeline
   try {
     await startScoring();
     logger.info('Scoring pipeline started');
@@ -45,64 +90,32 @@ async function main() {
     process.exit(1);
   }
 
-  // 5. Log startup complete
+  // 7. Register graceful shutdown handlers
+  registerShutdownHandlers({
+    server: app,
+    stopScoring,
+    stopJetstream,
+  });
+
+  // 8. Log startup complete
   logger.info({
     serviceDid: config.FEEDGEN_SERVICE_DID,
     publisherDid: config.FEEDGEN_PUBLISHER_DID,
     hostname: config.FEEDGEN_HOSTNAME,
-  }, 'All systems operational (Phase 3: Scoring)');
-
-  // Graceful shutdown
-  const shutdown = async () => {
-    logger.info('Shutting down...');
-
-    // 1. Stop scoring first (wait for any in-progress run to complete)
-    try {
-      await stopScoring();
-      logger.info('Scoring pipeline stopped');
-    } catch (err) {
-      logger.error({ err }, 'Error stopping scoring pipeline');
-    }
-
-    // 2. Stop Jetstream (saves final cursor)
-    try {
-      await stopJetstream();
-      logger.info('Jetstream stopped');
-    } catch (err) {
-      logger.error({ err }, 'Error stopping Jetstream');
-    }
-
-    // 3. Close HTTP server
-    try {
-      await app.close();
-      logger.info('HTTP server closed');
-    } catch (err) {
-      logger.error({ err }, 'Error closing HTTP server');
-    }
-
-    // 4. Close database connections
-    try {
-      await db.end();
-      logger.info('PostgreSQL connection closed');
-    } catch (err) {
-      logger.error({ err }, 'Error closing PostgreSQL');
-    }
-
-    // 5. Close Redis connection
-    try {
-      redis.disconnect();
-      logger.info('Redis connection closed');
-    } catch (err) {
-      logger.error({ err }, 'Error closing Redis');
-    }
-
-    logger.info('Shutdown complete');
-    process.exit(0);
-  };
-
-  process.on('SIGTERM', shutdown);
-  process.on('SIGINT', shutdown);
+  }, 'All systems operational (Phase 6: Hardening)');
 }
+
+// Handle unhandled rejections
+process.on('unhandledRejection', (err) => {
+  logger.error({ err }, 'Unhandled promise rejection');
+  // Don't crash - log and continue
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  logger.fatal({ err }, 'Uncaught exception - shutting down');
+  process.exit(1);
+});
 
 main().catch((err) => {
   logger.fatal({ err }, 'Failed to start application');
