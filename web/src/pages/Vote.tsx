@@ -13,6 +13,7 @@ export function Vote() {
   const [currentEpoch, setCurrentEpoch] = useState<EpochResponse | null>(null);
   const [weights, setWeights] = useState<GovernanceWeights | null>(null);
   const [hasVoted, setHasVoted] = useState(false);
+  const [lastVoteTime, setLastVoteTime] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,15 +42,16 @@ export function Vote() {
       if (isAuthenticated) {
         try {
           const voteData = await voteApi.getVote();
-          if (voteData.hasVoted && voteData.vote) {
+          if (voteData.vote) {
             setHasVoted(true);
+            setLastVoteTime(voteData.voted_at);
             // Use their existing vote as initial weights
             setWeights({
-              recency: voteData.vote.recency_weight,
-              engagement: voteData.vote.engagement_weight,
-              bridging: voteData.vote.bridging_weight,
-              sourceDiversity: voteData.vote.source_diversity_weight,
-              relevance: voteData.vote.relevance_weight,
+              recency: voteData.vote.recency,
+              engagement: voteData.vote.engagement,
+              bridging: voteData.vote.bridging,
+              sourceDiversity: voteData.vote.sourceDiversity,
+              relevance: voteData.vote.relevance,
             });
           }
         } catch {
@@ -88,10 +90,12 @@ export function Vote() {
     setSuccessMessage(null);
 
     try {
-      await voteApi.submitVote(weights);
+      const result = await voteApi.submitVote(weights);
+      const wasUpdate = hasVoted;
       setHasVoted(true);
+      setLastVoteTime(new Date().toISOString());
       setSuccessMessage(
-        hasVoted
+        wasUpdate || result.is_update
           ? 'Your vote has been updated!'
           : 'Your vote has been recorded! Thank you for participating in governance.'
       );
@@ -192,7 +196,16 @@ export function Vote() {
                 : 'Submit vote'}
             </button>
             {hasVoted && (
-              <span className="voted-indicator">You have already voted this epoch</span>
+              <span className="voted-indicator">
+                {lastVoteTime
+                  ? `Last voted ${new Date(lastVoteTime).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}. You can update your vote until voting closes.`
+                  : 'You have already voted this epoch'}
+              </span>
             )}
           </div>
         </section>

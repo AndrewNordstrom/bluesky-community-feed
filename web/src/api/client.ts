@@ -69,27 +69,27 @@ export interface VotePayload {
 export interface VoteResponse {
   success: boolean;
   epoch_id: number;
-  vote: {
-    recency_weight: number;
-    engagement_weight: number;
-    bridging_weight: number;
-    source_diversity_weight: number;
-    relevance_weight: number;
-    voted_at: string;
+  is_update?: boolean;
+  message: string;
+  weights: {
+    recency: number;
+    engagement: number;
+    bridging: number;
+    sourceDiversity: number;
+    relevance: number;
   };
 }
 
 export interface GetVoteResponse {
-  hasVoted: boolean;
-  epoch_id: number;
-  vote?: {
-    recency_weight: number;
-    engagement_weight: number;
-    bridging_weight: number;
-    source_diversity_weight: number;
-    relevance_weight: number;
-    voted_at: string;
-  };
+  vote: {
+    recency: number;
+    engagement: number;
+    bridging: number;
+    sourceDiversity: number;
+    relevance: number;
+  } | null;
+  voted_at: string | null;
+  epoch_id: number | null;
 }
 
 // Vote API

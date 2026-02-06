@@ -10,6 +10,7 @@ import { registerWellKnown } from './routes/well-known.js';
 import { registerFeedSkeleton } from './routes/feed-skeleton.js';
 import { registerGovernanceRoutes } from '../governance/server.js';
 import { registerTransparencyRoutes } from '../transparency/server.js';
+import { registerDebugRoutes } from './routes/debug.js';
 import { getHealthStatus, isLive, isReady } from '../lib/health.js';
 import { generateCorrelationId } from '../lib/correlation.js';
 import { AppError, isAppError } from '../lib/errors.js';
@@ -67,6 +68,9 @@ export async function createServer() {
 
   // Register transparency routes
   registerTransparencyRoutes(app);
+
+  // Register debug routes
+  registerDebugRoutes(app);
 
   // Deep health check endpoint - returns detailed component status
   app.get('/health', async () => {
