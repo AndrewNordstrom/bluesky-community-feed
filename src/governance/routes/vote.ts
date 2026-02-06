@@ -104,7 +104,8 @@ export function registerVoteRoute(app: FastifyInstance): void {
 
     try {
       // 6. UPSERT vote (allows updating existing vote)
-      await db.query(
+      // Use xmax = 0 to detect if this was an INSERT (new) or UPDATE (existing)
+      const voteResult = await db.query(
         `INSERT INTO governance_votes (
           voter_did, epoch_id,
           recency_weight, engagement_weight, bridging_weight,
@@ -116,7 +117,8 @@ export function registerVoteRoute(app: FastifyInstance): void {
           bridging_weight = $5,
           source_diversity_weight = $6,
           relevance_weight = $7,
-          voted_at = NOW()`,
+          voted_at = NOW()
+        RETURNING id, (xmax = 0) as is_new_vote`,
         [
           voterDid,
           epochId,
@@ -128,11 +130,15 @@ export function registerVoteRoute(app: FastifyInstance): void {
         ]
       );
 
-      // 7. Log to audit trail
+      const isNewVote = voteResult.rows[0].is_new_vote;
+      const auditAction = isNewVote ? 'vote_cast' : 'vote_updated';
+
+      // 7. Log to audit trail with appropriate action
       await db.query(
         `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
-         VALUES ('vote_cast', $1, $2, $3)`,
+         VALUES ($1, $2, $3, $4)`,
         [
+          auditAction,
           voterDid,
           epochId,
           JSON.stringify({
@@ -142,13 +148,18 @@ export function registerVoteRoute(app: FastifyInstance): void {
         ]
       );
 
-      logger.info({ voterDid, epochId, weights: normalized }, 'Vote recorded');
+      logger.info({ voterDid, epochId, weights: normalized, isNewVote }, 'Vote recorded');
+
+      const message = isNewVote
+        ? 'Your vote has been recorded.'
+        : 'Your vote has been updated.';
 
       return reply.send({
         success: true,
         epoch_id: epochId,
         weights: normalized,
-        message: 'Your vote has been recorded.',
+        is_update: !isNewVote,
+        message,
       });
     } catch (err) {
       logger.error({ err, voterDid, epochId }, 'Failed to record vote');
