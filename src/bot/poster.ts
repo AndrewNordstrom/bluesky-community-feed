@@ -5,6 +5,7 @@
  * Stores announcements in PostgreSQL and pins to Redis.
  */
 
+import { RichText } from '@atproto/api';
 import { config } from '../config.js';
 import { db } from '../db/client.js';
 import { redis } from '../db/redis.js';
@@ -36,8 +37,14 @@ export async function postAnnouncement(payload: AnnouncementPayload): Promise<An
   // 3. Get authenticated agent
   const agent = await getBotAgent();
 
-  // 4. Post to Bluesky
-  const response = await agent.post({ text });
+  // 4. Post to Bluesky with RichText facets for clickable links
+  const rt = new RichText({ text });
+  await rt.detectFacets(agent);
+
+  const response = await agent.post({
+    text: rt.text,
+    facets: rt.facets,
+  });
 
   if (!response.uri || !response.cid) {
     throw new Error('Post response missing uri or cid');
