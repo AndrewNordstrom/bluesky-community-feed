@@ -173,6 +173,12 @@ export function WeightSliders({ initialWeights, onChange, disabled = false }: We
                 <span className="slider-value">{percentage}%</span>
               </div>
               <div className="slider-track-container">
+                <div className="slider-track">
+                  <div
+                    className="slider-fill"
+                    style={{ width: `${percentage}%` }}
+                  />
+                </div>
                 <input
                   type="range"
                   min="0"
@@ -183,7 +189,6 @@ export function WeightSliders({ initialWeights, onChange, disabled = false }: We
                   disabled={disabled}
                   className="slider-input"
                   aria-label={`${name} weight`}
-                  style={{ '--value': `${percentage}%` } as React.CSSProperties}
                 />
               </div>
               <div className="slider-description">{description}</div>
@@ -267,31 +272,50 @@ export function WeightSliders({ initialWeights, onChange, disabled = false }: We
 
         .slider-track-container {
           position: relative;
-          height: 24px;
+          height: 32px;
           display: flex;
           align-items: center;
         }
 
-        .slider-input {
-          width: 100%;
+        .slider-track {
+          position: absolute;
+          left: 0;
+          right: 0;
           height: 6px;
           border-radius: var(--radius-full);
-          background: linear-gradient(
-            to right,
-            var(--accent-blue) 0%,
-            var(--accent-blue) var(--value),
-            var(--slider-track) var(--value),
-            var(--slider-track) 100%
-          );
+          background: var(--slider-track);
+          pointer-events: none;
+        }
+
+        .slider-fill {
+          height: 100%;
+          border-radius: var(--radius-full);
+          background: var(--accent-blue);
+          transition: width 0.05s ease-out;
+        }
+
+        .slider-input {
+          width: 100%;
+          height: 32px;
+          background: transparent;
           outline: none;
           -webkit-appearance: none;
+          appearance: none;
           cursor: pointer;
-          transition: background var(--transition-fast);
+          position: relative;
+          z-index: 1;
+          margin: 0;
         }
 
         .slider-input:disabled {
           cursor: not-allowed;
           opacity: 0.5;
+        }
+
+        /* WebKit (Chrome, Safari, Edge) */
+        .slider-input::-webkit-slider-runnable-track {
+          height: 6px;
+          background: transparent;
         }
 
         .slider-input::-webkit-slider-thumb {
@@ -302,13 +326,19 @@ export function WeightSliders({ initialWeights, onChange, disabled = false }: We
           border-radius: 50%;
           background: var(--slider-thumb);
           cursor: pointer;
-          border: none;
-          box-shadow: var(--shadow-md);
-          transition: transform var(--transition-fast);
+          border: 3px solid var(--accent-blue);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+          margin-top: -7px;
         }
 
-        .slider-input::-webkit-slider-thumb:hover {
-          transform: scale(1.1);
+        .slider-input:hover::-webkit-slider-thumb {
+          box-shadow: 0 2px 12px rgba(16, 131, 254, 0.5);
+        }
+
+        /* Firefox */
+        .slider-input::-moz-range-track {
+          height: 6px;
+          background: transparent;
         }
 
         .slider-input::-moz-range-thumb {
@@ -317,25 +347,24 @@ export function WeightSliders({ initialWeights, onChange, disabled = false }: We
           border-radius: 50%;
           background: var(--slider-thumb);
           cursor: pointer;
-          border: none;
-          box-shadow: var(--shadow-md);
-          transition: transform var(--transition-fast);
+          border: 3px solid var(--accent-blue);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
         }
 
-        .slider-input::-moz-range-thumb:hover {
-          transform: scale(1.1);
+        .slider-input:hover::-moz-range-thumb {
+          box-shadow: 0 2px 12px rgba(16, 131, 254, 0.5);
         }
 
         .slider-input:disabled::-webkit-slider-thumb {
           background: var(--text-muted);
+          border-color: var(--text-muted);
           cursor: not-allowed;
-          transform: none;
         }
 
         .slider-input:disabled::-moz-range-thumb {
           background: var(--text-muted);
+          border-color: var(--text-muted);
           cursor: not-allowed;
-          transform: none;
         }
 
         .slider-description {
