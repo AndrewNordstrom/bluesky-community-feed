@@ -173,22 +173,17 @@ export function WeightSliders({ initialWeights, onChange, disabled = false }: We
                 <span className="slider-value">{percentage}%</span>
               </div>
               <div className="slider-track-container">
-                <div className="slider-track">
-                  <div
-                    className="slider-fill"
-                    style={{ width: `${percentage}%` }}
-                  />
-                </div>
                 <input
                   type="range"
                   min="0"
                   max="100"
                   step="1"
-                  value={value * 100}
+                  value={percentage}
                   onChange={(e) => handleSliderChange(key, parseFloat(e.target.value) / 100)}
                   disabled={disabled}
                   className="slider-input"
                   aria-label={`${name} weight`}
+                  style={{ '--slider-value': percentage } as React.CSSProperties}
                 />
               </div>
               <div className="slider-description">{description}</div>
@@ -277,23 +272,6 @@ export function WeightSliders({ initialWeights, onChange, disabled = false }: We
           align-items: center;
         }
 
-        .slider-track {
-          position: absolute;
-          left: 0;
-          right: 0;
-          height: 6px;
-          border-radius: var(--radius-full);
-          background: var(--slider-track);
-          pointer-events: none;
-        }
-
-        .slider-fill {
-          height: 100%;
-          border-radius: var(--radius-full);
-          background: var(--accent-blue);
-          transition: width 0.05s ease-out;
-        }
-
         .slider-input {
           width: 100%;
           height: 32px;
@@ -303,7 +281,6 @@ export function WeightSliders({ initialWeights, onChange, disabled = false }: We
           appearance: none;
           cursor: pointer;
           position: relative;
-          z-index: 1;
           margin: 0;
         }
 
@@ -315,7 +292,14 @@ export function WeightSliders({ initialWeights, onChange, disabled = false }: We
         /* WebKit (Chrome, Safari, Edge) */
         .slider-input::-webkit-slider-runnable-track {
           height: 6px;
-          background: transparent;
+          border-radius: var(--radius-full);
+          background: linear-gradient(
+            to right,
+            var(--accent-blue) 0%,
+            var(--accent-blue) calc(var(--slider-value) * 1%),
+            var(--slider-track) calc(var(--slider-value) * 1%),
+            var(--slider-track) 100%
+          );
         }
 
         .slider-input::-webkit-slider-thumb {
@@ -338,7 +322,14 @@ export function WeightSliders({ initialWeights, onChange, disabled = false }: We
         /* Firefox */
         .slider-input::-moz-range-track {
           height: 6px;
-          background: transparent;
+          border-radius: var(--radius-full);
+          background: linear-gradient(
+            to right,
+            var(--accent-blue) 0%,
+            var(--accent-blue) calc(var(--slider-value) * 1%),
+            var(--slider-track) calc(var(--slider-value) * 1%),
+            var(--slider-track) 100%
+          );
         }
 
         .slider-input::-moz-range-thumb {
