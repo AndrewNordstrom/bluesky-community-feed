@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { WeightSliders } from '../components/WeightSliders';
 import type { GovernanceWeights } from '../components/WeightSliders';
@@ -110,7 +110,11 @@ export function Vote() {
   if (authLoading || isLoadingData) {
     return (
       <div className="vote-page">
-        <div className="loading">Loading...</div>
+        <div className="loading">
+          <div className="loading-spinner" />
+          <span>Loading...</span>
+        </div>
+        <style>{styles}</style>
       </div>
     );
   }
@@ -119,11 +123,18 @@ export function Vote() {
     <div className="vote-page">
       <header className="vote-header">
         <div className="header-content">
-          <h1>Community Feed Governance</h1>
+          <div className="header-left">
+            <h1>Community feed</h1>
+            <nav className="header-nav">
+              <Link to="/vote" className="nav-link active">Vote</Link>
+              <Link to="/dashboard" className="nav-link">Dashboard</Link>
+              <Link to="/history" className="nav-link">History</Link>
+            </nav>
+          </div>
           <div className="user-info">
             <span className="user-handle">@{userHandle}</span>
             <button onClick={handleLogout} className="logout-button">
-              Logout
+              Log out
             </button>
           </div>
         </div>
@@ -134,16 +145,15 @@ export function Vote() {
           <div className="epoch-info">
             <div className="epoch-status">
               <span className={`status-badge ${currentEpoch.status}`}>
-                {currentEpoch.status === 'voting' ? 'Voting Open' : 'Active'}
+                {currentEpoch.status === 'voting' ? 'Voting open' : 'Active'}
               </span>
-              <span className="epoch-id">Epoch #{currentEpoch.id}</span>
+              <span className="epoch-id">Epoch {currentEpoch.id}</span>
             </div>
             <div className="vote-count">
               <strong>{currentEpoch.vote_count}</strong> votes
-              {currentEpoch.subscriber_count && (
+              {currentEpoch.subscriber_count !== undefined && (
                 <span className="subscriber-count">
-                  {' '}
-                  / {currentEpoch.subscriber_count} subscribers
+                  {' '}/ {currentEpoch.subscriber_count} subscribers
                 </span>
               )}
             </div>
@@ -151,7 +161,7 @@ export function Vote() {
         )}
 
         <section className="voting-section">
-          <h2>Your Vote</h2>
+          <h2>Your vote</h2>
           <p className="vote-description">
             Adjust the sliders to set your preferred algorithm weights. The sliders
             are linked and will always sum to 100%. Your vote will influence how
@@ -178,8 +188,8 @@ export function Vote() {
               {isSubmitting
                 ? 'Submitting...'
                 : hasVoted
-                ? 'Update Vote'
-                : 'Submit Vote'}
+                ? 'Update vote'
+                : 'Submit vote'}
             </button>
             {hasVoted && (
               <span className="voted-indicator">You have already voted this epoch</span>
@@ -188,7 +198,7 @@ export function Vote() {
         </section>
 
         <section className="current-weights-section">
-          <h2>Current Algorithm Weights</h2>
+          <h2>Current algorithm weights</h2>
           <p className="section-description">
             These are the weights currently being used by the feed algorithm,
             determined by community votes from the previous epoch.
@@ -198,9 +208,9 @@ export function Vote() {
               {Object.entries(currentEpoch.weights).map(([key, value]) => (
                 <div key={key} className="weight-card">
                   <span className="weight-name">
-                    {key === 'source_diversity' ? 'Source Diversity' : key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}
+                    {key === 'source_diversity' ? 'Source diversity' : key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}
                   </span>
-                  <span className="weight-value">{(value * 100).toFixed(1)}%</span>
+                  <span className="weight-value">{(value * 100).toFixed(0)}%</span>
                 </div>
               ))}
             </div>
@@ -208,238 +218,309 @@ export function Vote() {
         </section>
       </main>
 
-      <style>{`
-        .vote-page {
-          min-height: 100vh;
-          background: #f5f5f5;
-        }
-
-        .loading {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          min-height: 100vh;
-          font-size: 1.25rem;
-          color: #666;
-        }
-
-        .vote-header {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          padding: 1rem;
-        }
-
-        .header-content {
-          max-width: 800px;
-          margin: 0 auto;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-
-        .vote-header h1 {
-          margin: 0;
-          font-size: 1.5rem;
-        }
-
-        .user-info {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-        }
-
-        .user-handle {
-          font-weight: 500;
-        }
-
-        .logout-button {
-          background: rgba(255, 255, 255, 0.2);
-          border: 1px solid rgba(255, 255, 255, 0.3);
-          color: white;
-          padding: 0.5rem 1rem;
-          border-radius: 6px;
-          cursor: pointer;
-          font-size: 0.875rem;
-          transition: background 0.2s;
-        }
-
-        .logout-button:hover {
-          background: rgba(255, 255, 255, 0.3);
-        }
-
-        .vote-main {
-          max-width: 800px;
-          margin: 0 auto;
-          padding: 2rem 1rem;
-        }
-
-        .epoch-info {
-          background: white;
-          border-radius: 8px;
-          padding: 1rem 1.5rem;
-          margin-bottom: 1.5rem;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-
-        .epoch-status {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-        }
-
-        .status-badge {
-          padding: 0.25rem 0.75rem;
-          border-radius: 9999px;
-          font-size: 0.75rem;
-          font-weight: 600;
-          text-transform: uppercase;
-        }
-
-        .status-badge.active {
-          background: #dbeafe;
-          color: #1d4ed8;
-        }
-
-        .status-badge.voting {
-          background: #d1fae5;
-          color: #047857;
-        }
-
-        .epoch-id {
-          color: #666;
-          font-size: 0.875rem;
-        }
-
-        .vote-count {
-          color: #1a1a2e;
-        }
-
-        .subscriber-count {
-          color: #666;
-        }
-
-        .voting-section, .current-weights-section {
-          background: white;
-          border-radius: 8px;
-          padding: 1.5rem;
-          margin-bottom: 1.5rem;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-
-        .voting-section h2, .current-weights-section h2 {
-          margin: 0 0 0.5rem 0;
-          color: #1a1a2e;
-          font-size: 1.25rem;
-        }
-
-        .vote-description, .section-description {
-          color: #666;
-          margin-bottom: 1.5rem;
-          line-height: 1.5;
-        }
-
-        .error-message {
-          background: #fee2e2;
-          border: 1px solid #fecaca;
-          color: #dc2626;
-          padding: 0.75rem 1rem;
-          border-radius: 8px;
-          margin-bottom: 1rem;
-        }
-
-        .success-message {
-          background: #d1fae5;
-          border: 1px solid #a7f3d0;
-          color: #047857;
-          padding: 0.75rem 1rem;
-          border-radius: 8px;
-          margin-bottom: 1rem;
-        }
-
-        .vote-actions {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          margin-top: 1.5rem;
-        }
-
-        .submit-button {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          border: none;
-          padding: 0.875rem 2rem;
-          border-radius: 8px;
-          font-size: 1rem;
-          font-weight: 600;
-          cursor: pointer;
-          transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .submit-button:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-
-        .submit-button:disabled {
-          opacity: 0.7;
-          cursor: not-allowed;
-        }
-
-        .voted-indicator {
-          color: #047857;
-          font-size: 0.875rem;
-        }
-
-        .current-weights-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-          gap: 1rem;
-        }
-
-        .weight-card {
-          background: #f8f9fa;
-          border-radius: 8px;
-          padding: 1rem;
-          text-align: center;
-        }
-
-        .weight-name {
-          display: block;
-          font-size: 0.75rem;
-          color: #666;
-          margin-bottom: 0.5rem;
-          text-transform: uppercase;
-        }
-
-        .weight-value {
-          display: block;
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: #1a1a2e;
-        }
-
-        @media (max-width: 600px) {
-          .header-content {
-            flex-direction: column;
-            gap: 1rem;
-            text-align: center;
-          }
-
-          .vote-actions {
-            flex-direction: column;
-            align-items: stretch;
-          }
-
-          .voted-indicator {
-            text-align: center;
-          }
-        }
-      `}</style>
+      <style>{styles}</style>
     </div>
   );
 }
+
+const styles = `
+  .vote-page {
+    min-height: 100vh;
+    background: var(--bg-app);
+  }
+
+  .loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    gap: var(--space-4);
+    color: var(--text-secondary);
+  }
+
+  .loading-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border-default);
+    border-top-color: var(--accent-blue);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .vote-header {
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border-default);
+    padding: var(--space-4) var(--space-6);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .header-content {
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+  }
+
+  .vote-header h1 {
+    margin: 0;
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+  }
+
+  .header-nav {
+    display: flex;
+    gap: var(--space-1);
+  }
+
+  .nav-link {
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-medium);
+    transition: all var(--transition-fast);
+  }
+
+  .nav-link:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+
+  .nav-link.active {
+    color: var(--accent-blue);
+    background: var(--accent-blue-subtle);
+  }
+
+  .user-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  .user-handle {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  .logout-button {
+    background: transparent;
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .logout-button:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-subtle);
+    color: var(--text-primary);
+  }
+
+  .vote-main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: var(--space-6);
+  }
+
+  .epoch-info {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4) var(--space-6);
+    margin-bottom: var(--space-6);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .epoch-status {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .status-badge {
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .status-badge.active {
+    background: var(--accent-blue-subtle);
+    color: var(--accent-blue);
+  }
+
+  .status-badge.voting {
+    background: rgba(52, 199, 89, 0.15);
+    color: var(--status-success);
+  }
+
+  .epoch-id {
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+  }
+
+  .vote-count {
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+  }
+
+  .subscriber-count {
+    color: var(--text-secondary);
+  }
+
+  .voting-section, .current-weights-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    margin-bottom: var(--space-6);
+  }
+
+  .voting-section h2, .current-weights-section h2 {
+    margin: 0 0 var(--space-2) 0;
+    color: var(--text-primary);
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .vote-description, .section-description {
+    color: var(--text-secondary);
+    margin-bottom: var(--space-6);
+    line-height: var(--leading-relaxed);
+    font-size: var(--text-base);
+  }
+
+  .error-message {
+    background: rgba(255, 69, 58, 0.1);
+    border: 1px solid rgba(255, 69, 58, 0.2);
+    color: var(--status-error);
+    padding: var(--space-4);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-4);
+    font-size: var(--text-sm);
+  }
+
+  .success-message {
+    background: rgba(52, 199, 89, 0.1);
+    border: 1px solid rgba(52, 199, 89, 0.2);
+    color: var(--status-success);
+    padding: var(--space-4);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-4);
+    font-size: var(--text-sm);
+  }
+
+  .vote-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    margin-top: var(--space-6);
+  }
+
+  .submit-button {
+    background: var(--accent-blue);
+    color: white;
+    border: none;
+    padding: var(--space-3) var(--space-6);
+    border-radius: var(--radius-md);
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    transition: background var(--transition-fast);
+  }
+
+  .submit-button:hover:not(:disabled) {
+    background: var(--accent-blue-hover);
+  }
+
+  .submit-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .voted-indicator {
+    color: var(--status-success);
+    font-size: var(--text-sm);
+  }
+
+  .current-weights-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: var(--space-4);
+  }
+
+  .weight-card {
+    background: var(--bg-elevated);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    text-align: center;
+  }
+
+  .weight-name {
+    display: block;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    margin-bottom: var(--space-2);
+  }
+
+  .weight-value {
+    display: block;
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+  }
+
+  @media (max-width: 768px) {
+    .header-content {
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+
+    .header-left {
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+
+    .vote-main {
+      padding: var(--space-4);
+    }
+
+    .epoch-info {
+      flex-direction: column;
+      gap: var(--space-3);
+      text-align: center;
+    }
+
+    .vote-actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .voted-indicator {
+      text-align: center;
+    }
+  }
+`;
 
 export default Vote;

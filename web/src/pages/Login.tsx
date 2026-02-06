@@ -36,17 +36,22 @@ export function Login() {
   return (
     <div className="login-page">
       <div className="login-container">
-        <h1>Login to Vote</h1>
+        <div className="login-logo">
+          <svg width="40" height="40" viewBox="0 0 600 530" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M135.72 44.03c66.496 49.921 138.02 151.14 164.28 205.46 26.262-54.316 97.782-155.54 164.28-205.46 47.98-36.021 125.72-63.892 125.72 24.795 0 17.712-10.155 148.79-16.111 170.07-20.703 73.984-96.144 92.854-163.25 81.433 117.3 19.964 147.14 86.092 82.697 152.22-122.39 125.59-175.91-31.511-189.63-71.766-2.514-7.3797-3.6904-10.832-3.7077-7.8964-0.0174-2.9357-1.1937 0.51669-3.7077 7.8964-13.714 40.255-67.233 197.36-189.63 71.766-64.444-66.128-34.605-132.26 82.697-152.22-67.108 11.421-142.55-7.4491-163.25-81.433-5.9562-21.282-16.111-152.36-16.111-170.07 0-88.687 77.742-60.816 125.72-24.795z" fill="currentColor"/>
+          </svg>
+        </div>
+        <h1>Sign in to vote</h1>
         <p className="login-description">
-          Sign in with your Bluesky account to participate in feed governance.
-          You'll need an <strong>App Password</strong> from your Bluesky settings.
+          Connect your Bluesky account to participate in feed governance.
+          You'll need an app password from your Bluesky settings.
         </p>
 
         {error && <div className="error-message">{error}</div>}
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
-            <label htmlFor="handle">Bluesky Handle</label>
+            <label htmlFor="handle">Bluesky handle</label>
             <input
               type="text"
               id="handle"
@@ -59,7 +64,7 @@ export function Login() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="appPassword">App Password</label>
+            <label htmlFor="appPassword">App password</label>
             <input
               type="password"
               id="appPassword"
@@ -76,18 +81,18 @@ export function Login() {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Bluesky Settings → App Passwords
+                Bluesky Settings
               </a>
             </small>
           </div>
 
           <button type="submit" className="login-button" disabled={isSubmitting}>
-            {isSubmitting ? 'Signing in...' : 'Sign In'}
+            {isSubmitting ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
 
         <div className="login-info">
-          <h3>Why App Password?</h3>
+          <h3>Why app password?</h3>
           <p>
             App passwords are separate from your main password and can be revoked
             at any time. They provide secure access without exposing your main
@@ -96,141 +101,159 @@ export function Login() {
         </div>
       </div>
 
-      <style>{`
-        .login-page {
-          min-height: 100vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 1rem;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-
-        .login-container {
-          background: white;
-          border-radius: 12px;
-          padding: 2rem;
-          max-width: 400px;
-          width: 100%;
-          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-        }
-
-        .login-container h1 {
-          margin: 0 0 0.5rem 0;
-          color: #1a1a2e;
-          font-size: 1.75rem;
-        }
-
-        .login-description {
-          color: #666;
-          margin-bottom: 1.5rem;
-          line-height: 1.5;
-        }
-
-        .error-message {
-          background: #fee2e2;
-          border: 1px solid #fecaca;
-          color: #dc2626;
-          padding: 0.75rem 1rem;
-          border-radius: 8px;
-          margin-bottom: 1rem;
-          font-size: 0.875rem;
-        }
-
-        .login-form {
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-        }
-
-        .form-group {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-        }
-
-        .form-group label {
-          font-weight: 600;
-          color: #1a1a2e;
-          font-size: 0.875rem;
-        }
-
-        .form-group input {
-          padding: 0.75rem 1rem;
-          border: 2px solid #e5e7eb;
-          border-radius: 8px;
-          font-size: 1rem;
-          transition: border-color 0.2s;
-        }
-
-        .form-group input:focus {
-          outline: none;
-          border-color: #667eea;
-        }
-
-        .form-group input:disabled {
-          background: #f5f5f5;
-          cursor: not-allowed;
-        }
-
-        .form-help {
-          color: #666;
-          font-size: 0.75rem;
-        }
-
-        .form-help a {
-          color: #667eea;
-          text-decoration: none;
-        }
-
-        .form-help a:hover {
-          text-decoration: underline;
-        }
-
-        .login-button {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          border: none;
-          padding: 0.875rem 1.5rem;
-          border-radius: 8px;
-          font-size: 1rem;
-          font-weight: 600;
-          cursor: pointer;
-          margin-top: 0.5rem;
-          transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .login-button:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-
-        .login-button:disabled {
-          opacity: 0.7;
-          cursor: not-allowed;
-        }
-
-        .login-info {
-          margin-top: 2rem;
-          padding-top: 1.5rem;
-          border-top: 1px solid #e5e7eb;
-        }
-
-        .login-info h3 {
-          margin: 0 0 0.5rem 0;
-          color: #1a1a2e;
-          font-size: 0.875rem;
-        }
-
-        .login-info p {
-          color: #666;
-          font-size: 0.8rem;
-          line-height: 1.5;
-          margin: 0;
-        }
-      `}</style>
+      <style>{styles}</style>
     </div>
   );
 }
+
+const styles = `
+  .login-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-4);
+    background: var(--bg-app);
+  }
+
+  .login-container {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-xl);
+    padding: var(--space-8);
+    max-width: 400px;
+    width: 100%;
+  }
+
+  .login-logo {
+    display: flex;
+    justify-content: center;
+    margin-bottom: var(--space-6);
+    color: var(--accent-blue);
+  }
+
+  .login-container h1 {
+    margin: 0 0 var(--space-3) 0;
+    color: var(--text-primary);
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-semibold);
+    text-align: center;
+  }
+
+  .login-description {
+    color: var(--text-secondary);
+    margin-bottom: var(--space-6);
+    line-height: var(--leading-relaxed);
+    text-align: center;
+    font-size: var(--text-sm);
+  }
+
+  .error-message {
+    background: rgba(255, 69, 58, 0.1);
+    border: 1px solid rgba(255, 69, 58, 0.2);
+    color: var(--status-error);
+    padding: var(--space-4);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-4);
+    font-size: var(--text-sm);
+  }
+
+  .login-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .form-group label {
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+  }
+
+  .form-group input {
+    padding: var(--space-4);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    font-size: var(--text-base);
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    transition: border-color var(--transition-fast);
+  }
+
+  .form-group input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .form-group input:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+  }
+
+  .form-group input:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .form-help {
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
+  }
+
+  .form-help a {
+    color: var(--accent-blue);
+  }
+
+  .form-help a:hover {
+    color: var(--accent-blue-hover);
+  }
+
+  .login-button {
+    background: var(--accent-blue);
+    color: white;
+    border: none;
+    padding: var(--space-4);
+    border-radius: var(--radius-md);
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    margin-top: var(--space-2);
+    transition: background var(--transition-fast);
+  }
+
+  .login-button:hover:not(:disabled) {
+    background: var(--accent-blue-hover);
+  }
+
+  .login-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .login-info {
+    margin-top: var(--space-8);
+    padding-top: var(--space-6);
+    border-top: 1px solid var(--border-default);
+  }
+
+  .login-info h3 {
+    margin: 0 0 var(--space-2) 0;
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .login-info p {
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
+    line-height: var(--leading-relaxed);
+    margin: 0;
+  }
+`;
 
 export default Login;

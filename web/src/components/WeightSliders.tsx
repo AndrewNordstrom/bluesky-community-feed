@@ -40,7 +40,7 @@ const WEIGHT_LABELS: Record<keyof GovernanceWeights, { name: string; description
     description: 'How much to favor posts that appeal across different communities',
   },
   sourceDiversity: {
-    name: 'Source Diversity',
+    name: 'Source diversity',
     description: 'How much to penalize seeing too many posts from the same author',
   },
   relevance: {
@@ -153,10 +153,10 @@ export function WeightSliders({ initialWeights, onChange, disabled = false }: We
   return (
     <div className="weight-sliders">
       <div className="sliders-header">
-        <h3>Algorithm Weights</h3>
+        <h3>Algorithm weights</h3>
         <div className={`sum-indicator ${isValid ? 'valid' : 'invalid'}`}>
-          Total: {(sum * 100).toFixed(1)}%
-          {isValid ? ' ✓' : ' (must equal 100%)'}
+          Total: {(sum * 100).toFixed(0)}%
+          {isValid ? '' : ' (must equal 100%)'}
         </div>
       </div>
 
@@ -164,7 +164,7 @@ export function WeightSliders({ initialWeights, onChange, disabled = false }: We
         {WEIGHT_KEYS.map((key) => {
           const { name, description } = WEIGHT_LABELS[key];
           const value = weights[key];
-          const percentage = (value * 100).toFixed(1);
+          const percentage = Math.round(value * 100);
 
           return (
             <div key={key} className="slider-row">
@@ -172,17 +172,20 @@ export function WeightSliders({ initialWeights, onChange, disabled = false }: We
                 <span className="slider-name">{name}</span>
                 <span className="slider-value">{percentage}%</span>
               </div>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                step="1"
-                value={value * 100}
-                onChange={(e) => handleSliderChange(key, parseFloat(e.target.value) / 100)}
-                disabled={disabled}
-                className="slider-input"
-                aria-label={`${name} weight`}
-              />
+              <div className="slider-track-container">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={value * 100}
+                  onChange={(e) => handleSliderChange(key, parseFloat(e.target.value) / 100)}
+                  disabled={disabled}
+                  className="slider-input"
+                  aria-label={`${name} weight`}
+                  style={{ '--value': `${percentage}%` } as React.CSSProperties}
+                />
+              </div>
               <div className="slider-description">{description}</div>
             </div>
           );
@@ -191,50 +194,52 @@ export function WeightSliders({ initialWeights, onChange, disabled = false }: We
 
       <style>{`
         .weight-sliders {
-          padding: 1rem;
-          border-radius: 8px;
-          background: #f8f9fa;
+          padding: var(--space-6);
+          border-radius: var(--radius-lg);
+          background: var(--bg-elevated);
         }
 
         .sliders-header {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-bottom: 1.5rem;
+          margin-bottom: var(--space-6);
         }
 
         .sliders-header h3 {
           margin: 0;
-          font-size: 1.25rem;
-          color: #1a1a2e;
+          font-size: var(--text-lg);
+          font-weight: var(--font-weight-semibold);
+          color: var(--text-primary);
         }
 
         .sum-indicator {
-          font-size: 0.875rem;
-          padding: 0.25rem 0.75rem;
-          border-radius: 9999px;
+          font-size: var(--text-sm);
+          padding: var(--space-1) var(--space-3);
+          border-radius: var(--radius-full);
+          font-weight: var(--font-weight-medium);
         }
 
         .sum-indicator.valid {
-          background: #d4edda;
-          color: #155724;
+          background: rgba(52, 199, 89, 0.15);
+          color: var(--status-success);
         }
 
         .sum-indicator.invalid {
-          background: #f8d7da;
-          color: #721c24;
+          background: rgba(255, 69, 58, 0.15);
+          color: var(--status-error);
         }
 
         .sliders-container {
           display: flex;
           flex-direction: column;
-          gap: 1.25rem;
+          gap: var(--space-6);
         }
 
         .slider-row {
           display: flex;
           flex-direction: column;
-          gap: 0.5rem;
+          gap: var(--space-2);
         }
 
         .slider-label {
@@ -244,32 +249,49 @@ export function WeightSliders({ initialWeights, onChange, disabled = false }: We
         }
 
         .slider-name {
-          font-weight: 600;
-          color: #1a1a2e;
+          font-weight: var(--font-weight-medium);
+          color: var(--text-primary);
+          font-size: var(--text-base);
         }
 
         .slider-value {
-          font-family: monospace;
-          font-size: 0.875rem;
-          color: #0066cc;
-          background: #e7f0ff;
-          padding: 0.125rem 0.5rem;
-          border-radius: 4px;
+          font-size: var(--text-sm);
+          font-weight: var(--font-weight-semibold);
+          color: var(--accent-blue);
+          background: var(--accent-blue-subtle);
+          padding: var(--space-1) var(--space-3);
+          border-radius: var(--radius-md);
+          min-width: 48px;
+          text-align: center;
+        }
+
+        .slider-track-container {
+          position: relative;
+          height: 24px;
+          display: flex;
+          align-items: center;
         }
 
         .slider-input {
           width: 100%;
-          height: 8px;
-          border-radius: 4px;
-          background: #ddd;
+          height: 6px;
+          border-radius: var(--radius-full);
+          background: linear-gradient(
+            to right,
+            var(--accent-blue) 0%,
+            var(--accent-blue) var(--value),
+            var(--slider-track) var(--value),
+            var(--slider-track) 100%
+          );
           outline: none;
           -webkit-appearance: none;
           cursor: pointer;
+          transition: background var(--transition-fast);
         }
 
         .slider-input:disabled {
           cursor: not-allowed;
-          opacity: 0.6;
+          opacity: 0.5;
         }
 
         .slider-input::-webkit-slider-thumb {
@@ -278,35 +300,48 @@ export function WeightSliders({ initialWeights, onChange, disabled = false }: We
           width: 20px;
           height: 20px;
           border-radius: 50%;
-          background: #0066cc;
+          background: var(--slider-thumb);
           cursor: pointer;
-          border: 2px solid white;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+          border: none;
+          box-shadow: var(--shadow-md);
+          transition: transform var(--transition-fast);
+        }
+
+        .slider-input::-webkit-slider-thumb:hover {
+          transform: scale(1.1);
         }
 
         .slider-input::-moz-range-thumb {
           width: 20px;
           height: 20px;
           border-radius: 50%;
-          background: #0066cc;
+          background: var(--slider-thumb);
           cursor: pointer;
-          border: 2px solid white;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+          border: none;
+          box-shadow: var(--shadow-md);
+          transition: transform var(--transition-fast);
+        }
+
+        .slider-input::-moz-range-thumb:hover {
+          transform: scale(1.1);
         }
 
         .slider-input:disabled::-webkit-slider-thumb {
-          background: #999;
+          background: var(--text-muted);
           cursor: not-allowed;
+          transform: none;
         }
 
         .slider-input:disabled::-moz-range-thumb {
-          background: #999;
+          background: var(--text-muted);
           cursor: not-allowed;
+          transform: none;
         }
 
         .slider-description {
-          font-size: 0.75rem;
-          color: #666;
+          font-size: var(--text-sm);
+          color: var(--text-secondary);
+          line-height: var(--leading-relaxed);
         }
       `}</style>
     </div>

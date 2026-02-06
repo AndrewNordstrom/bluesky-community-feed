@@ -45,14 +45,18 @@ export function Dashboard() {
   const formatAction = (action: string) => {
     return action
       .split('_')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join(' ');
   };
 
   if (isLoading) {
     return (
       <div className="dashboard-page">
-        <div className="loading">Loading dashboard...</div>
+        <div className="loading">
+          <div className="loading-spinner" />
+          <span>Loading dashboard...</span>
+        </div>
+        <style>{styles}</style>
       </div>
     );
   }
@@ -61,10 +65,13 @@ export function Dashboard() {
     return (
       <div className="dashboard-page">
         <div className="error-container">
-          <h2>Error Loading Dashboard</h2>
+          <h2>Error loading dashboard</h2>
           <p>{error}</p>
-          <button onClick={() => window.location.reload()}>Retry</button>
+          <button onClick={() => window.location.reload()} className="retry-button">
+            Retry
+          </button>
         </div>
+        <style>{styles}</style>
       </div>
     );
   }
@@ -73,11 +80,14 @@ export function Dashboard() {
     <div className="dashboard-page">
       <header className="dashboard-header">
         <div className="header-content">
-          <h1>Feed Transparency Dashboard</h1>
-          <nav className="header-nav">
-            <Link to="/vote">Vote</Link>
-            <Link to="/history">History</Link>
-          </nav>
+          <div className="header-left">
+            <h1>Community feed</h1>
+            <nav className="header-nav">
+              <Link to="/vote" className="nav-link">Vote</Link>
+              <Link to="/dashboard" className="nav-link active">Dashboard</Link>
+              <Link to="/history" className="nav-link">History</Link>
+            </nav>
+          </div>
         </div>
       </header>
 
@@ -86,8 +96,8 @@ export function Dashboard() {
           <>
             <section className="weights-section">
               <div className="section-header">
-                <h2>Current Algorithm Weights</h2>
-                <span className="epoch-badge">Epoch #{stats.epoch.id}</span>
+                <h2>Current algorithm weights</h2>
+                <span className="epoch-badge">Epoch {stats.epoch.id}</span>
               </div>
               <div className="weights-content">
                 <div className="radar-container">
@@ -107,7 +117,7 @@ export function Dashboard() {
                   {Object.entries(stats.epoch.weights).map(([key, value]) => (
                     <div key={key} className="weight-item">
                       <span className="weight-name">
-                        {key === 'source_diversity' ? 'Source Diversity' : key.charAt(0).toUpperCase() + key.slice(1)}
+                        {key === 'source_diversity' ? 'Source diversity' : key.charAt(0).toUpperCase() + key.slice(1)}
                       </span>
                       <div className="weight-bar-container">
                         <div
@@ -123,28 +133,28 @@ export function Dashboard() {
             </section>
 
             <section className="stats-section">
-              <h2>Feed Statistics</h2>
+              <h2>Feed statistics</h2>
               <div className="stats-grid">
                 <div className="stat-card">
                   <span className="stat-value">{stats.feed_stats.total_posts_scored.toLocaleString()}</span>
-                  <span className="stat-label">Posts Scored</span>
+                  <span className="stat-label">Posts scored</span>
                 </div>
                 <div className="stat-card">
                   <span className="stat-value">{stats.feed_stats.unique_authors.toLocaleString()}</span>
-                  <span className="stat-label">Unique Authors</span>
+                  <span className="stat-label">Unique authors</span>
                 </div>
                 <div className="stat-card">
                   <span className="stat-value">{(stats.feed_stats.avg_bridging_score * 100).toFixed(1)}%</span>
-                  <span className="stat-label">Avg Bridging</span>
+                  <span className="stat-label">Avg bridging</span>
                 </div>
                 <div className="stat-card">
                   <span className="stat-value">{stats.governance.votes_this_epoch}</span>
-                  <span className="stat-label">Votes This Epoch</span>
+                  <span className="stat-label">Votes this epoch</span>
                 </div>
                 {stats.metrics?.author_gini !== null && stats.metrics?.author_gini !== undefined && (
                   <div className="stat-card">
                     <span className="stat-value">{(stats.metrics.author_gini * 100).toFixed(1)}%</span>
-                    <span className="stat-label">Author Concentration (Gini)</span>
+                    <span className="stat-label">Author concentration</span>
                   </div>
                 )}
               </div>
@@ -152,8 +162,8 @@ export function Dashboard() {
 
             <section className="audit-section">
               <div className="section-header">
-                <h2>Recent Governance Activity</h2>
-                <Link to="/history" className="view-all-link">View All</Link>
+                <h2>Recent governance activity</h2>
+                <Link to="/history" className="view-all-link">View all</Link>
               </div>
               <div className="audit-list">
                 {auditLog.length === 0 ? (
@@ -165,7 +175,7 @@ export function Dashboard() {
                       <div className="audit-meta">
                         <span className="audit-time">{formatDate(entry.created_at)}</span>
                         {entry.epoch_id && (
-                          <span className="audit-epoch">Epoch #{entry.epoch_id}</span>
+                          <span className="audit-epoch">Epoch {entry.epoch_id}</span>
                         )}
                       </div>
                     </div>
@@ -177,253 +187,317 @@ export function Dashboard() {
         )}
       </main>
 
-      <style>{`
-        .dashboard-page {
-          min-height: 100vh;
-          background: #f5f5f5;
-        }
-
-        .loading, .error-container {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          min-height: 100vh;
-          gap: 1rem;
-        }
-
-        .error-container button {
-          padding: 0.5rem 1rem;
-          background: #667eea;
-          color: white;
-          border: none;
-          border-radius: 6px;
-          cursor: pointer;
-        }
-
-        .dashboard-header {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          padding: 1rem;
-        }
-
-        .header-content {
-          max-width: 1000px;
-          margin: 0 auto;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-
-        .dashboard-header h1 {
-          margin: 0;
-          font-size: 1.5rem;
-        }
-
-        .header-nav {
-          display: flex;
-          gap: 1rem;
-        }
-
-        .header-nav a {
-          color: white;
-          text-decoration: none;
-          padding: 0.5rem 1rem;
-          border-radius: 6px;
-          background: rgba(255, 255, 255, 0.1);
-          transition: background 0.2s;
-        }
-
-        .header-nav a:hover {
-          background: rgba(255, 255, 255, 0.2);
-        }
-
-        .dashboard-main {
-          max-width: 1000px;
-          margin: 0 auto;
-          padding: 2rem 1rem;
-          display: flex;
-          flex-direction: column;
-          gap: 1.5rem;
-        }
-
-        section {
-          background: white;
-          border-radius: 8px;
-          padding: 1.5rem;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-
-        .section-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 1rem;
-        }
-
-        section h2 {
-          margin: 0;
-          font-size: 1.125rem;
-          color: #1a1a2e;
-        }
-
-        .epoch-badge {
-          background: #e7f0ff;
-          color: #667eea;
-          padding: 0.25rem 0.75rem;
-          border-radius: 9999px;
-          font-size: 0.75rem;
-          font-weight: 600;
-        }
-
-        .weights-content {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 2rem;
-          align-items: center;
-        }
-
-        .radar-container {
-          min-height: 280px;
-        }
-
-        .weights-list {
-          display: flex;
-          flex-direction: column;
-          gap: 0.75rem;
-        }
-
-        .weight-item {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-        }
-
-        .weight-name {
-          min-width: 120px;
-          font-size: 0.875rem;
-          color: #1a1a2e;
-        }
-
-        .weight-bar-container {
-          flex: 1;
-          height: 8px;
-          background: #e2e8f0;
-          border-radius: 4px;
-          overflow: hidden;
-        }
-
-        .weight-bar {
-          height: 100%;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          border-radius: 4px;
-        }
-
-        .weight-value {
-          min-width: 40px;
-          font-family: monospace;
-          font-size: 0.875rem;
-          color: #667eea;
-          text-align: right;
-        }
-
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-          gap: 1rem;
-        }
-
-        .stat-card {
-          background: #f8f9fa;
-          border-radius: 8px;
-          padding: 1rem;
-          text-align: center;
-        }
-
-        .stat-value {
-          display: block;
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: #1a1a2e;
-        }
-
-        .stat-label {
-          display: block;
-          font-size: 0.75rem;
-          color: #666;
-          margin-top: 0.25rem;
-        }
-
-        .view-all-link {
-          color: #667eea;
-          text-decoration: none;
-          font-size: 0.875rem;
-        }
-
-        .view-all-link:hover {
-          text-decoration: underline;
-        }
-
-        .audit-list {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-        }
-
-        .no-activity {
-          color: #666;
-          text-align: center;
-          padding: 1rem;
-        }
-
-        .audit-item {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 0.75rem;
-          background: #f8f9fa;
-          border-radius: 6px;
-        }
-
-        .audit-action {
-          font-weight: 500;
-          color: #1a1a2e;
-        }
-
-        .audit-meta {
-          display: flex;
-          gap: 1rem;
-          font-size: 0.75rem;
-          color: #666;
-        }
-
-        .audit-epoch {
-          background: #e7f0ff;
-          color: #667eea;
-          padding: 0.125rem 0.5rem;
-          border-radius: 4px;
-        }
-
-        @media (max-width: 700px) {
-          .header-content {
-            flex-direction: column;
-            gap: 1rem;
-            text-align: center;
-          }
-
-          .weights-content {
-            grid-template-columns: 1fr;
-          }
-
-          .audit-item {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 0.5rem;
-          }
-        }
-      `}</style>
+      <style>{styles}</style>
     </div>
   );
 }
+
+const styles = `
+  .dashboard-page {
+    min-height: 100vh;
+    background: var(--bg-app);
+  }
+
+  .loading, .error-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    gap: var(--space-4);
+    color: var(--text-secondary);
+  }
+
+  .loading-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border-default);
+    border-top-color: var(--accent-blue);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .error-container h2 {
+    color: var(--text-primary);
+    margin: 0;
+  }
+
+  .error-container p {
+    color: var(--text-secondary);
+  }
+
+  .retry-button {
+    background: var(--accent-blue);
+    color: white;
+    border: none;
+    padding: var(--space-3) var(--space-6);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .retry-button:hover {
+    background: var(--accent-blue-hover);
+  }
+
+  .dashboard-header {
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border-default);
+    padding: var(--space-4) var(--space-6);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .header-content {
+    max-width: 1000px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+  }
+
+  .dashboard-header h1 {
+    margin: 0;
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+  }
+
+  .header-nav {
+    display: flex;
+    gap: var(--space-1);
+  }
+
+  .nav-link {
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-medium);
+    transition: all var(--transition-fast);
+  }
+
+  .nav-link:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+
+  .nav-link.active {
+    color: var(--accent-blue);
+    background: var(--accent-blue-subtle);
+  }
+
+  .dashboard-main {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: var(--space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+
+  section {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+  }
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-5);
+  }
+
+  section h2 {
+    margin: 0;
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+  }
+
+  .epoch-badge {
+    background: var(--accent-blue-subtle);
+    color: var(--accent-blue);
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .weights-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-8);
+    align-items: center;
+  }
+
+  .radar-container {
+    min-height: 280px;
+  }
+
+  .weights-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .weight-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  .weight-name {
+    min-width: 120px;
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+  }
+
+  .weight-bar-container {
+    flex: 1;
+    height: 6px;
+    background: var(--border-default);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+  }
+
+  .weight-bar {
+    height: 100%;
+    background: var(--accent-blue);
+    border-radius: var(--radius-full);
+    transition: width var(--transition-base);
+  }
+
+  .weight-value {
+    min-width: 40px;
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--accent-blue);
+    text-align: right;
+  }
+
+  .stats-section h2 {
+    margin-bottom: var(--space-5);
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-4);
+  }
+
+  .stat-card {
+    background: var(--bg-elevated);
+    border-radius: var(--radius-md);
+    padding: var(--space-5);
+    text-align: center;
+  }
+
+  .stat-value {
+    display: block;
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+  }
+
+  .stat-label {
+    display: block;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    margin-top: var(--space-2);
+  }
+
+  .view-all-link {
+    color: var(--accent-blue);
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .view-all-link:hover {
+    color: var(--accent-blue-hover);
+  }
+
+  .audit-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .no-activity {
+    color: var(--text-secondary);
+    text-align: center;
+    padding: var(--space-6);
+  }
+
+  .audit-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-4);
+    background: var(--bg-elevated);
+    border-radius: var(--radius-md);
+  }
+
+  .audit-action {
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+  }
+
+  .audit-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+
+  .audit-epoch {
+    background: var(--accent-blue-subtle);
+    color: var(--accent-blue);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    font-weight: var(--font-weight-medium);
+  }
+
+  @media (max-width: 768px) {
+    .header-content {
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+
+    .header-left {
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+
+    .dashboard-main {
+      padding: var(--space-4);
+    }
+
+    .weights-content {
+      grid-template-columns: 1fr;
+    }
+
+    .audit-item {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: var(--space-2);
+    }
+  }
+`;
 
 export default Dashboard;
