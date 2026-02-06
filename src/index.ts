@@ -7,6 +7,8 @@ import { getLastScoringRunAt } from './scoring/pipeline.js';
 import { runStartupChecks } from './lib/startup-checks.js';
 import { registerShutdownHandlers } from './lib/shutdown.js';
 import { registerJetstreamHealth, registerScoringHealth, JetstreamHealth, ScoringHealth } from './lib/health.js';
+import { registerBotRoutes } from './bot/server.js';
+import { initializeBot } from './bot/agent.js';
 
 async function main() {
   logger.info('Starting Community Feed Generator...');
@@ -21,6 +23,9 @@ async function main() {
 
   // 1. Create and configure the HTTP server
   const app = await createServer();
+
+  // 1.5. Register bot routes (if enabled)
+  registerBotRoutes(app);
 
   // 2. Start HTTP server
   try {
@@ -88,6 +93,13 @@ async function main() {
   } catch (err) {
     logger.fatal({ err }, 'Failed to start scoring pipeline');
     process.exit(1);
+  }
+
+  // 6.5. Initialize announcement bot (if enabled, non-fatal)
+  try {
+    await initializeBot();
+  } catch (err) {
+    logger.warn({ err }, 'Bot initialization failed - will retry on first announcement');
   }
 
   // 7. Register graceful shutdown handlers

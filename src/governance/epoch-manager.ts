@@ -12,6 +12,7 @@ import { logger } from '../lib/logger.js';
 import { config } from '../config.js';
 import { aggregateVotes } from './aggregation.js';
 import { GovernanceWeights, weightsToVotePayload } from './governance.types.js';
+import { postAnnouncementSafe } from '../bot/safe-poster.js';
 
 /**
  * Open the voting period for the current epoch.
@@ -39,6 +40,9 @@ export async function openVotingPeriod(): Promise<void> {
   );
 
   logger.info({ epochId }, 'Voting period opened');
+
+  // Post announcement (fire-and-forget)
+  postAnnouncementSafe({ type: 'voting_opened', epochId }).catch(() => {});
 }
 
 /**
@@ -168,6 +172,16 @@ export async function closeCurrentEpochAndCreateNext(): Promise<number> {
       },
       'Governance epoch transition complete'
     );
+
+    // Post announcement (fire-and-forget)
+    postAnnouncementSafe({
+      type: 'epoch_transition',
+      oldEpochId: currentEpochId,
+      newEpochId,
+      voteCount,
+      oldWeights,
+      newWeights,
+    }).catch(() => {});
 
     return newEpochId;
   } catch (err) {
