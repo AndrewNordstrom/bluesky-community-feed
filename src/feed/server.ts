@@ -1,5 +1,9 @@
 import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { logger } from '../lib/logger.js';
 import { registerDescribeGenerator } from './routes/describe-generator.js';
 import { registerWellKnown } from './routes/well-known.js';
@@ -131,6 +135,41 @@ export async function createServer() {
       correlationId,
     });
   });
+
+  // Serve frontend static files (must be AFTER all API routes)
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const webDistPath = path.join(__dirname, '../../web/dist');
+
+  // Only register static serving if web/dist exists (production with built frontend)
+  if (fs.existsSync(webDistPath)) {
+    logger.info({ webDistPath }, 'Registering static file serving for frontend');
+
+    await app.register(fastifyStatic, {
+      root: webDistPath,
+      prefix: '/',
+      wildcard: false, // Don't match all routes, let API routes take precedence
+    });
+
+    // SPA fallback - serve index.html for frontend routes
+    app.setNotFoundHandler(async (request: FastifyRequest, reply: FastifyReply) => {
+      // Only serve index.html for GET requests to non-API routes
+      if (
+        request.method === 'GET' &&
+        !request.url.startsWith('/api/') &&
+        !request.url.startsWith('/xrpc/') &&
+        !request.url.startsWith('/.well-known/') &&
+        !request.url.startsWith('/health')
+      ) {
+        return reply.sendFile('index.html');
+      }
+      // For API 404s, return JSON error
+      return reply.status(404).send({
+        error: 'Not Found',
+        message: `Route ${request.method}:${request.url} not found`,
+        statusCode: 404,
+      });
+    });
+  }
 
   return app;
 }
