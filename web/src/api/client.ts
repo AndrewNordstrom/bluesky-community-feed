@@ -159,8 +159,25 @@ export const weightsApi = {
   },
 
   getCurrentEpoch: async (): Promise<EpochResponse> => {
-    const response = await api.get<EpochResponse>('/api/governance/epochs/current');
-    return response.data;
+    const response = await api.get<any>('/api/governance/epochs/current');
+    const e = response.data;
+    // Transform API response to match expected interface
+    return {
+      id: e.epoch_id ?? e.id,
+      status: e.status,
+      weights: {
+        recency: e.weights.recency,
+        engagement: e.weights.engagement,
+        bridging: e.weights.bridging,
+        source_diversity: e.weights.sourceDiversity ?? e.weights.source_diversity,
+        relevance: e.weights.relevance,
+      },
+      vote_count: e.vote_count,
+      subscriber_count: e.subscriber_count,
+      created_at: e.created_at,
+      closed_at: e.closed_at,
+      description: e.description,
+    };
   },
 };
 
@@ -328,9 +345,26 @@ export const transparencyApi = {
   },
 
   getEpochHistory: async (limit = 20): Promise<{ epochs: EpochResponse[] }> => {
-    const response = await api.get<{ epochs: EpochResponse[] }>('/api/governance/weights/history', {
+    const response = await api.get<{ epochs: any[] }>('/api/governance/weights/history', {
       params: { limit },
     });
-    return response.data;
+    // Transform API response to match expected interface
+    const epochs = response.data.epochs.map((e: any) => ({
+      id: e.epoch_id ?? e.id,
+      status: e.status,
+      weights: {
+        recency: e.weights.recency,
+        engagement: e.weights.engagement,
+        bridging: e.weights.bridging,
+        source_diversity: e.weights.sourceDiversity ?? e.weights.source_diversity,
+        relevance: e.weights.relevance,
+      },
+      vote_count: e.vote_count,
+      subscriber_count: e.subscriber_count,
+      created_at: e.created_at,
+      closed_at: e.closed_at,
+      description: e.description,
+    }));
+    return { epochs };
   },
 };

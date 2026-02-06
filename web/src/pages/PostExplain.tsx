@@ -295,6 +295,7 @@ export function PostExplain() {
           padding: 0.75rem;
           text-align: left;
           border-bottom: 1px solid #e2e8f0;
+          color: #1a1a2e;
         }
 
         .score-table th {
@@ -306,10 +307,12 @@ export function PostExplain() {
 
         .component-name {
           font-weight: 500;
+          color: #1a1a2e;
         }
 
         .score-cell, .weight-cell {
           font-family: monospace;
+          color: #1a1a2e;
         }
 
         .contribution-cell {

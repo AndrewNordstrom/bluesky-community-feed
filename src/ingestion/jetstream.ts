@@ -29,6 +29,34 @@ const WANTED_COLLECTIONS = [
 const CURSOR_SAVE_INTERVAL = 1000; // Save cursor every N events
 const MAX_RECONNECT_DELAY = 60_000; // 60 seconds max backoff
 const FALLBACK_THRESHOLD = 5; // Switch to fallback after N consecutive failures
+const MAX_CONCURRENT_EVENTS = 10; // Limit concurrent DB operations to leave pool room for API
+
+// Concurrency control — prevents ingestion from starving the DB pool
+let activeEventCount = 0;
+const eventQueue: (() => void)[] = [];
+
+/** Acquire a slot before processing an event (blocks if at limit). */
+function acquireSlot(): Promise<void> {
+  if (activeEventCount < MAX_CONCURRENT_EVENTS) {
+    activeEventCount++;
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => {
+    eventQueue.push(() => {
+      activeEventCount++;
+      resolve();
+    });
+  });
+}
+
+/** Release a slot after processing, unblocking the next queued event. */
+function releaseSlot(): void {
+  activeEventCount--;
+  if (eventQueue.length > 0) {
+    const next = eventQueue.shift()!;
+    next();
+  }
+}
 
 // State
 let ws: WebSocket | null = null;
@@ -112,6 +140,8 @@ function connect(cursor?: bigint): void {
   });
 
   ws.on('message', async (data: Buffer) => {
+    // Concurrency gate — wait for a slot so we don't exhaust the DB pool
+    await acquireSlot();
     try {
       const event = JSON.parse(data.toString()) as JetstreamEvent;
       await processEvent(event);
@@ -137,6 +167,8 @@ function connect(cursor?: bigint): void {
         { err, data: data.toString().substring(0, 200) },
         'Failed to process Jetstream event'
       );
+    } finally {
+      releaseSlot();
     }
   });
 
