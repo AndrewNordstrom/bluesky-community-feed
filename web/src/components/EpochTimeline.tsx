@@ -19,6 +19,8 @@ interface EpochTimelineProps {
   selectedEpochId?: number;
 }
 
+const WEIGHT_KEYS = ['recency', 'engagement', 'bridging', 'sourceDiversity', 'relevance'] as const;
+
 const WEIGHT_COLORS: Record<string, string> = {
   recency: '#667eea',
   engagement: '#764ba2',
@@ -62,9 +64,9 @@ export function EpochTimeline({ epochs, onEpochClick, selectedEpochId }: EpochTi
       <div className="timeline-header">
         <h3>Epoch History</h3>
         <div className="weight-legend">
-          {Object.entries(WEIGHT_COLORS).map(([key, color]) => (
+          {WEIGHT_KEYS.map((key) => (
             <span key={key} className="legend-item">
-              <span className="legend-dot" style={{ backgroundColor: color }} />
+              <span className="legend-dot" style={{ backgroundColor: WEIGHT_COLORS[key] }} />
               {key === 'sourceDiversity' ? 'Src Div' : key.charAt(0).toUpperCase() + key.slice(1)}
             </span>
           ))}
@@ -91,12 +93,12 @@ export function EpochTimeline({ epochs, onEpochClick, selectedEpochId }: EpochTi
             <div className="epoch-date">{formatDate(epoch.createdAt)}</div>
 
             <div className="weight-bars">
-              {Object.entries(epoch.weights).map(([key, value]) => (
+              {WEIGHT_KEYS.map((key) => (
                 <div key={key} className="weight-bar-container">
                   <div
                     className="weight-bar"
                     style={{
-                      width: `${value * 100}%`,
+                      width: `${(epoch.weights[key] || 0) * 100}%`,
                       backgroundColor: WEIGHT_COLORS[key] || '#e2e8f0',
                     }}
                   />
