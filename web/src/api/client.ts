@@ -1,8 +1,8 @@
 import axios from 'axios';
 import type { GovernanceWeights } from '../components/WeightSliders';
 
-// API base URL - defaults to local dev server
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+// API base URL - defaults to same origin in production, localhost in dev
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:3000');
 
 // Create axios instance
 export const api = axios.create({
