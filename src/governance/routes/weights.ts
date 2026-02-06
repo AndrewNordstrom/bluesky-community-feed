@@ -61,18 +61,27 @@ export function registerWeightsRoute(app: FastifyInstance): void {
       [limit]
     );
 
-    const epochs = result.rows.map((row) => {
-      const epoch = toEpochInfo(row);
-      return {
-        epoch_id: epoch.id,
-        status: epoch.status,
-        weights: epoch.weights,
-        vote_count: epoch.voteCount,
-        created_at: epoch.createdAt,
-        closed_at: epoch.closedAt,
-        description: epoch.description,
-      };
-    });
+    const epochs = await Promise.all(
+      result.rows.map(async (row) => {
+        const epoch = toEpochInfo(row);
+
+        // Get actual vote count from governance_votes table
+        const voteCount = await db.query(
+          `SELECT COUNT(*) as count FROM governance_votes WHERE epoch_id = $1`,
+          [epoch.id]
+        );
+
+        return {
+          epoch_id: epoch.id,
+          status: epoch.status,
+          weights: epoch.weights,
+          vote_count: parseInt(voteCount.rows[0].count),
+          created_at: epoch.createdAt,
+          closed_at: epoch.closedAt,
+          description: epoch.description,
+        };
+      })
+    );
 
     return reply.send({
       epochs,
