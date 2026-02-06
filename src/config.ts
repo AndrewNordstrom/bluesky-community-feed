@@ -42,6 +42,13 @@ const ConfigSchema = z.object({
   POLIS_CONVERSATION_ID: z.string().optional().default(''),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+
+  // Bot (optional)
+  BOT_ENABLED: z.coerce.boolean().default(false),
+  BOT_HANDLE: z.string().optional(),
+  BOT_APP_PASSWORD: z.string().optional(),
+  BOT_ADMIN_DIDS: z.string().optional().default(''),
+  BOT_PIN_TTL_HOURS: z.coerce.number().default(24),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

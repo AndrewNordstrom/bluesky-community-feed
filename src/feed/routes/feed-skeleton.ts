@@ -104,8 +104,27 @@ export function registerFeedSkeleton(app: FastifyInstance): void {
         postUris = rankedUris.slice(0, limit);
       }
 
-      // Build response
-      const feedItems = postUris.map((uri) => ({ post: uri }));
+      // Check for pinned announcement (first page only)
+      let pinnedUri: string | null = null;
+      if (offset === 0) {
+        const pinnedData = await redis.get('bot:latest_announcement');
+        if (pinnedData) {
+          try {
+            const { uri } = JSON.parse(pinnedData);
+            // Don't duplicate if already in feed
+            if (uri && !postUris.includes(uri)) {
+              pinnedUri = uri;
+            }
+          } catch {
+            // Ignore parse errors
+          }
+        }
+      }
+
+      // Build response with pinned post first
+      const feedItems = pinnedUri
+        ? [{ post: pinnedUri }, ...postUris.slice(0, limit - 1).map((uri) => ({ post: uri }))]
+        : postUris.map((uri) => ({ post: uri }));
 
       const nextOffset = offset + postUris.length;
       const hasMore = postUris.length === limit;
