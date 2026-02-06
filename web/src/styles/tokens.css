@@ -1,0 +1,85 @@
+/* Bluesky Design Tokens
+ * Based on Bluesky's design language for consistent theming
+ */
+
+:root {
+  /* Background colors */
+  --bg-app: #161718;
+  --bg-card: #1e1f21;
+  --bg-elevated: #252729;
+  --bg-hover: #2a2c2e;
+
+  /* Border colors */
+  --border-default: #2e3033;
+  --border-subtle: #252729;
+  --border-focus: #1083fe;
+
+  /* Text colors */
+  --text-primary: #f1f3f5;
+  --text-secondary: #828689;
+  --text-muted: #6b6e70;
+  --text-inverse: #161718;
+
+  /* Accent colors */
+  --accent-blue: #1083fe;
+  --accent-blue-hover: #0a74e8;
+  --accent-blue-subtle: rgba(16, 131, 254, 0.15);
+
+  /* Status colors */
+  --status-success: #34c759;
+  --status-warning: #ff9f0a;
+  --status-error: #ff453a;
+
+  /* Component-specific tokens */
+  --slider-track: #2e3033;
+  --slider-fill: #1083fe;
+  --slider-thumb: #f1f3f5;
+
+  /* Typography */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  /* Font sizes */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 32px;
+
+  /* Line heights */
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+
+  /* Spacing (8px grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Border radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.5);
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-base: 200ms ease;
+  --transition-slow: 300ms ease;
+}

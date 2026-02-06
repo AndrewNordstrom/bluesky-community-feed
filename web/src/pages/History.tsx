@@ -63,7 +63,7 @@ export function History() {
   const formatAction = (action: string) => {
     return action
       .split('_')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join(' ');
   };
 
@@ -75,7 +75,11 @@ export function History() {
   if (isLoading) {
     return (
       <div className="history-page">
-        <div className="loading">Loading history...</div>
+        <div className="loading">
+          <div className="loading-spinner" />
+          <span>Loading history...</span>
+        </div>
+        <style>{styles}</style>
       </div>
     );
   }
@@ -88,6 +92,7 @@ export function History() {
           <p>{error}</p>
           <Link to="/dashboard" className="back-link">Back to Dashboard</Link>
         </div>
+        <style>{styles}</style>
       </div>
     );
   }
@@ -96,17 +101,21 @@ export function History() {
     <div className="history-page">
       <header className="history-header">
         <div className="header-content">
-          <h1>Governance History</h1>
-          <nav className="header-nav">
-            <Link to="/dashboard">Dashboard</Link>
-            <Link to="/vote">Vote</Link>
-          </nav>
+          <div className="header-left">
+            <h1>Community feed</h1>
+            <nav className="header-nav">
+              <Link to="/vote" className="nav-link">Vote</Link>
+              <Link to="/dashboard" className="nav-link">Dashboard</Link>
+              <Link to="/history" className="nav-link active">History</Link>
+            </nav>
+          </div>
         </div>
       </header>
 
       <main className="history-main">
         <div className="history-layout">
           <aside className="timeline-sidebar">
+            <h2>Epochs</h2>
             <EpochTimeline
               epochs={epochs.map((e) => ({
                 id: e.id,
@@ -132,7 +141,7 @@ export function History() {
               <>
                 <section className="epoch-overview">
                   <div className="epoch-header">
-                    <h2>Epoch #{selectedEpoch.id}</h2>
+                    <h2>Epoch {selectedEpoch.id}</h2>
                     <span className={`status-badge ${selectedEpoch.status}`}>
                       {selectedEpoch.status}
                     </span>
@@ -150,7 +159,7 @@ export function History() {
                 </section>
 
                 <section className="weights-section">
-                  <h3>Weight Distribution</h3>
+                  <h3>Weight distribution</h3>
                   <div className="weights-content">
                     <div className="radar-container">
                       <ScoreRadar
@@ -170,7 +179,7 @@ export function History() {
                         <div key={key} className="weight-row">
                           <span className="weight-name">
                             {key === 'source_diversity'
-                              ? 'Source Diversity'
+                              ? 'Source diversity'
                               : key.charAt(0).toUpperCase() + key.slice(1)}
                           </span>
                           <span className="weight-value">{(value * 100).toFixed(0)}%</span>
@@ -182,7 +191,7 @@ export function History() {
 
                 {epochAuditEntries.length > 0 && (
                   <section className="audit-section">
-                    <h3>Activity Log</h3>
+                    <h3>Activity log</h3>
                     <div className="audit-list">
                       {epochAuditEntries.map((entry) => (
                         <div key={entry.id} className="audit-item">
@@ -199,7 +208,7 @@ export function History() {
         </div>
 
         <section className="full-audit-section">
-          <h2>Complete Audit Log</h2>
+          <h2>Complete audit log</h2>
           <div className="audit-table-container">
             <table className="audit-table">
               <thead>
@@ -219,7 +228,7 @@ export function History() {
                           className="epoch-link"
                           onClick={() => entry.epoch_id && handleEpochClick(entry.epoch_id)}
                         >
-                          #{entry.epoch_id}
+                          {entry.epoch_id}
                         </button>
                       ) : (
                         '-'
@@ -234,269 +243,344 @@ export function History() {
         </section>
       </main>
 
-      <style>{`
-        .history-page {
-          min-height: 100vh;
-          background: #f5f5f5;
-        }
-
-        .loading, .error-container {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          min-height: 100vh;
-          gap: 1rem;
-        }
-
-        .history-header {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          padding: 1rem;
-        }
-
-        .header-content {
-          max-width: 1200px;
-          margin: 0 auto;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-
-        .history-header h1 {
-          margin: 0;
-          font-size: 1.5rem;
-        }
-
-        .header-nav {
-          display: flex;
-          gap: 1rem;
-        }
-
-        .header-nav a {
-          color: white;
-          text-decoration: none;
-          padding: 0.5rem 1rem;
-          border-radius: 6px;
-          background: rgba(255, 255, 255, 0.1);
-          transition: background 0.2s;
-        }
-
-        .header-nav a:hover {
-          background: rgba(255, 255, 255, 0.2);
-        }
-
-        .history-main {
-          max-width: 1200px;
-          margin: 0 auto;
-          padding: 2rem 1rem;
-        }
-
-        .history-layout {
-          display: grid;
-          grid-template-columns: 350px 1fr;
-          gap: 1.5rem;
-          margin-bottom: 1.5rem;
-        }
-
-        .timeline-sidebar {
-          background: white;
-          border-radius: 8px;
-          padding: 1.5rem;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-          max-height: 600px;
-          overflow-y: auto;
-        }
-
-        .epoch-details {
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-        }
-
-        .epoch-details section {
-          background: white;
-          border-radius: 8px;
-          padding: 1.5rem;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-
-        .epoch-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 0.5rem;
-        }
-
-        .epoch-header h2 {
-          margin: 0;
-          font-size: 1.25rem;
-          color: #1a1a2e;
-        }
-
-        .status-badge {
-          font-size: 0.75rem;
-          padding: 0.25rem 0.75rem;
-          border-radius: 9999px;
-          text-transform: uppercase;
-          font-weight: 600;
-        }
-
-        .status-badge.active {
-          background: #c6f6d5;
-          color: #22543d;
-        }
-
-        .status-badge.voting {
-          background: #bee3f8;
-          color: #2a4365;
-        }
-
-        .status-badge.closed {
-          background: #e2e8f0;
-          color: #4a5568;
-        }
-
-        .epoch-meta {
-          display: flex;
-          gap: 1.5rem;
-          font-size: 0.875rem;
-          color: #666;
-          flex-wrap: wrap;
-        }
-
-        .epoch-description {
-          margin-top: 1rem;
-          color: #4a5568;
-          line-height: 1.5;
-        }
-
-        .weights-section h3, .audit-section h3 {
-          margin: 0 0 1rem 0;
-          font-size: 1rem;
-          color: #1a1a2e;
-        }
-
-        .weights-content {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 1.5rem;
-          align-items: center;
-        }
-
-        .weights-list {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-        }
-
-        .weight-row {
-          display: flex;
-          justify-content: space-between;
-          padding: 0.5rem;
-          background: #f8f9fa;
-          border-radius: 4px;
-        }
-
-        .weight-name {
-          font-size: 0.875rem;
-          color: #1a1a2e;
-        }
-
-        .weight-value {
-          font-family: monospace;
-          color: #667eea;
-          font-weight: 600;
-        }
-
-        .audit-list {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-        }
-
-        .audit-item {
-          display: flex;
-          justify-content: space-between;
-          padding: 0.5rem;
-          background: #f8f9fa;
-          border-radius: 4px;
-          font-size: 0.875rem;
-        }
-
-        .audit-action {
-          color: #1a1a2e;
-        }
-
-        .audit-time {
-          color: #666;
-        }
-
-        .full-audit-section {
-          background: white;
-          border-radius: 8px;
-          padding: 1.5rem;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-
-        .full-audit-section h2 {
-          margin: 0 0 1rem 0;
-          font-size: 1.125rem;
-          color: #1a1a2e;
-        }
-
-        .audit-table-container {
-          overflow-x: auto;
-        }
-
-        .audit-table {
-          width: 100%;
-          border-collapse: collapse;
-        }
-
-        .audit-table th, .audit-table td {
-          padding: 0.75rem;
-          text-align: left;
-          border-bottom: 1px solid #e2e8f0;
-        }
-
-        .audit-table th {
-          font-size: 0.75rem;
-          color: #666;
-          font-weight: 600;
-          text-transform: uppercase;
-        }
-
-        .epoch-link {
-          background: #e7f0ff;
-          color: #667eea;
-          border: none;
-          padding: 0.25rem 0.5rem;
-          border-radius: 4px;
-          cursor: pointer;
-          font-size: 0.875rem;
-        }
-
-        .epoch-link:hover {
-          background: #d1e3ff;
-        }
-
-        @media (max-width: 900px) {
-          .history-layout {
-            grid-template-columns: 1fr;
-          }
-
-          .timeline-sidebar {
-            max-height: none;
-          }
-
-          .weights-content {
-            grid-template-columns: 1fr;
-          }
-        }
-      `}</style>
+      <style>{styles}</style>
     </div>
   );
 }
+
+const styles = `
+  .history-page {
+    min-height: 100vh;
+    background: var(--bg-app);
+  }
+
+  .loading, .error-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    gap: var(--space-4);
+    color: var(--text-secondary);
+  }
+
+  .loading-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border-default);
+    border-top-color: var(--accent-blue);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .error-container h2 {
+    color: var(--text-primary);
+    margin: 0;
+  }
+
+  .back-link {
+    color: var(--accent-blue);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .history-header {
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border-default);
+    padding: var(--space-4) var(--space-6);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .header-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+  }
+
+  .history-header h1 {
+    margin: 0;
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+  }
+
+  .header-nav {
+    display: flex;
+    gap: var(--space-1);
+  }
+
+  .nav-link {
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-medium);
+    transition: all var(--transition-fast);
+  }
+
+  .nav-link:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+
+  .nav-link.active {
+    color: var(--accent-blue);
+    background: var(--accent-blue-subtle);
+  }
+
+  .history-main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: var(--space-6);
+  }
+
+  .history-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: var(--space-6);
+    margin-bottom: var(--space-6);
+  }
+
+  .timeline-sidebar {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    max-height: 600px;
+    overflow-y: auto;
+  }
+
+  .timeline-sidebar h2 {
+    margin: 0 0 var(--space-4) 0;
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+  }
+
+  .epoch-details {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+  }
+
+  .epoch-details section {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+  }
+
+  .epoch-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-3);
+  }
+
+  .epoch-header h2 {
+    margin: 0;
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+  }
+
+  .status-badge {
+    font-size: var(--text-xs);
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-full);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .status-badge.active {
+    background: rgba(52, 199, 89, 0.15);
+    color: var(--status-success);
+  }
+
+  .status-badge.voting {
+    background: var(--accent-blue-subtle);
+    color: var(--accent-blue);
+  }
+
+  .status-badge.closed {
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+  }
+
+  .epoch-meta {
+    display: flex;
+    gap: var(--space-5);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    flex-wrap: wrap;
+  }
+
+  .epoch-description {
+    margin-top: var(--space-4);
+    color: var(--text-secondary);
+    line-height: var(--leading-relaxed);
+  }
+
+  .weights-section h3, .audit-section h3 {
+    margin: 0 0 var(--space-4) 0;
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+  }
+
+  .weights-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-6);
+    align-items: center;
+  }
+
+  .radar-container {
+    min-height: 250px;
+  }
+
+  .weights-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .weight-row {
+    display: flex;
+    justify-content: space-between;
+    padding: var(--space-3) var(--space-4);
+    background: var(--bg-elevated);
+    border-radius: var(--radius-md);
+  }
+
+  .weight-name {
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+  }
+
+  .weight-value {
+    font-weight: var(--font-weight-semibold);
+    color: var(--accent-blue);
+  }
+
+  .audit-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .audit-item {
+    display: flex;
+    justify-content: space-between;
+    padding: var(--space-3) var(--space-4);
+    background: var(--bg-elevated);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+  }
+
+  .audit-action {
+    color: var(--text-primary);
+  }
+
+  .audit-time {
+    color: var(--text-secondary);
+  }
+
+  .full-audit-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+  }
+
+  .full-audit-section h2 {
+    margin: 0 0 var(--space-5) 0;
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+  }
+
+  .audit-table-container {
+    overflow-x: auto;
+  }
+
+  .audit-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .audit-table th, .audit-table td {
+    padding: var(--space-4);
+    text-align: left;
+    border-bottom: 1px solid var(--border-default);
+  }
+
+  .audit-table th {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .audit-table td {
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+  }
+
+  .epoch-link {
+    background: var(--accent-blue-subtle);
+    color: var(--accent-blue);
+    border: none;
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-medium);
+    transition: background var(--transition-fast);
+  }
+
+  .epoch-link:hover {
+    background: rgba(16, 131, 254, 0.25);
+  }
+
+  @media (max-width: 900px) {
+    .header-content {
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+
+    .header-left {
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+
+    .history-main {
+      padding: var(--space-4);
+    }
+
+    .history-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .timeline-sidebar {
+      max-height: none;
+    }
+
+    .weights-content {
+      grid-template-columns: 1fr;
+    }
+  }
+`;
 
 export default History;

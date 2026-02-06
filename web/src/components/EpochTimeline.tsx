@@ -21,14 +21,6 @@ interface EpochTimelineProps {
 
 const WEIGHT_KEYS = ['recency', 'engagement', 'bridging', 'sourceDiversity', 'relevance'] as const;
 
-const WEIGHT_COLORS: Record<string, string> = {
-  recency: '#667eea',
-  engagement: '#764ba2',
-  bridging: '#48bb78',
-  sourceDiversity: '#ed8936',
-  relevance: '#e53e3e',
-};
-
 /**
  * EpochTimeline Component
  *
@@ -46,33 +38,8 @@ export function EpochTimeline({ epochs, onEpochClick, selectedEpochId }: EpochTi
     });
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active':
-        return '#48bb78';
-      case 'voting':
-        return '#667eea';
-      case 'closed':
-        return '#a0aec0';
-      default:
-        return '#e2e8f0';
-    }
-  };
-
   return (
     <div className="epoch-timeline">
-      <div className="timeline-header">
-        <h3>Epoch History</h3>
-        <div className="weight-legend">
-          {WEIGHT_KEYS.map((key) => (
-            <span key={key} className="legend-item">
-              <span className="legend-dot" style={{ backgroundColor: WEIGHT_COLORS[key] }} />
-              {key === 'sourceDiversity' ? 'Src Div' : key.charAt(0).toUpperCase() + key.slice(1)}
-            </span>
-          ))}
-        </div>
-      </div>
-
       <div className="timeline-container">
         {sortedEpochs.map((epoch, index) => (
           <div
@@ -84,8 +51,8 @@ export function EpochTimeline({ epochs, onEpochClick, selectedEpochId }: EpochTi
           >
             <div className="epoch-header">
               <div className="epoch-id">
-                <span className="status-dot" style={{ backgroundColor: getStatusColor(epoch.status) }} />
-                Epoch #{epoch.id}
+                <span className={`status-dot ${epoch.status}`} />
+                Epoch {epoch.id}
               </div>
               <span className={`status-badge ${epoch.status}`}>{epoch.status}</span>
             </div>
@@ -99,7 +66,6 @@ export function EpochTimeline({ epochs, onEpochClick, selectedEpochId }: EpochTi
                     className="weight-bar"
                     style={{
                       width: `${(epoch.weights[key] || 0) * 100}%`,
-                      backgroundColor: WEIGHT_COLORS[key] || '#e2e8f0',
                     }}
                   />
                 </div>
@@ -120,118 +86,96 @@ export function EpochTimeline({ epochs, onEpochClick, selectedEpochId }: EpochTi
           width: 100%;
         }
 
-        .timeline-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 1rem;
-          flex-wrap: wrap;
-          gap: 0.5rem;
-        }
-
-        .timeline-header h3 {
-          margin: 0;
-          font-size: 1.125rem;
-          color: #1a1a2e;
-        }
-
-        .weight-legend {
-          display: flex;
-          gap: 0.75rem;
-          flex-wrap: wrap;
-        }
-
-        .legend-item {
-          display: flex;
-          align-items: center;
-          gap: 0.25rem;
-          font-size: 0.7rem;
-          color: #666;
-        }
-
-        .legend-dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-        }
-
         .timeline-container {
           display: flex;
           flex-direction: column;
-          gap: 0.5rem;
+          gap: var(--space-2);
         }
 
         .epoch-card {
           position: relative;
-          background: #f8f9fa;
-          border-radius: 8px;
-          padding: 1rem;
+          background: var(--bg-elevated);
+          border-radius: var(--radius-md);
+          padding: var(--space-4);
           cursor: pointer;
-          transition: all 0.2s;
-          border: 2px solid transparent;
+          transition: all var(--transition-fast);
+          border: 1px solid transparent;
         }
 
         .epoch-card:hover {
-          background: #f0f1f3;
+          background: var(--bg-hover);
         }
 
         .epoch-card.selected {
-          border-color: #667eea;
-          background: #f0f4ff;
+          border-color: var(--accent-blue);
+          background: var(--accent-blue-subtle);
         }
 
         .epoch-card.active {
-          border-left: 4px solid #48bb78;
+          border-left: 3px solid var(--status-success);
         }
 
         .epoch-header {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-bottom: 0.5rem;
+          margin-bottom: var(--space-2);
         }
 
         .epoch-id {
           display: flex;
           align-items: center;
-          gap: 0.5rem;
-          font-weight: 600;
-          color: #1a1a2e;
+          gap: var(--space-2);
+          font-weight: var(--font-weight-semibold);
+          color: var(--text-primary);
+          font-size: var(--text-sm);
         }
 
         .status-dot {
           width: 8px;
           height: 8px;
           border-radius: 50%;
+          background: var(--text-muted);
+        }
+
+        .status-dot.active {
+          background: var(--status-success);
+        }
+
+        .status-dot.voting {
+          background: var(--accent-blue);
+        }
+
+        .status-dot.closed {
+          background: var(--text-muted);
         }
 
         .status-badge {
-          font-size: 0.7rem;
-          padding: 0.125rem 0.5rem;
-          border-radius: 9999px;
-          text-transform: uppercase;
-          font-weight: 600;
+          font-size: var(--text-xs);
+          padding: 2px var(--space-2);
+          border-radius: var(--radius-full);
+          font-weight: var(--font-weight-medium);
         }
 
         .status-badge.active {
-          background: #c6f6d5;
-          color: #22543d;
+          background: rgba(52, 199, 89, 0.15);
+          color: var(--status-success);
         }
 
         .status-badge.voting {
-          background: #bee3f8;
-          color: #2a4365;
+          background: var(--accent-blue-subtle);
+          color: var(--accent-blue);
         }
 
         .status-badge.closed {
-          background: #e2e8f0;
-          color: #4a5568;
+          background: var(--bg-card);
+          color: var(--text-secondary);
         }
 
         .epoch-date {
-          font-size: 0.75rem;
-          color: #666;
-          margin-bottom: 0.75rem;
+          font-size: var(--text-xs);
+          color: var(--text-secondary);
+          margin-bottom: var(--space-3);
         }
 
         .weight-bars {
@@ -242,37 +186,31 @@ export function EpochTimeline({ epochs, onEpochClick, selectedEpochId }: EpochTi
 
         .weight-bar-container {
           height: 4px;
-          background: #e2e8f0;
-          border-radius: 2px;
+          background: var(--border-default);
+          border-radius: var(--radius-full);
           overflow: hidden;
         }
 
         .weight-bar {
           height: 100%;
-          border-radius: 2px;
-          transition: width 0.3s ease;
+          background: var(--accent-blue);
+          border-radius: var(--radius-full);
+          transition: width var(--transition-base);
         }
 
         .epoch-stats {
-          margin-top: 0.5rem;
-          font-size: 0.75rem;
-          color: #666;
+          margin-top: var(--space-3);
+          font-size: var(--text-xs);
+          color: var(--text-secondary);
         }
 
         .timeline-connector {
           position: absolute;
-          left: 1.5rem;
-          bottom: -0.5rem;
+          left: var(--space-5);
+          bottom: calc(-1 * var(--space-2));
           width: 2px;
-          height: 0.5rem;
-          background: #e2e8f0;
-        }
-
-        @media (max-width: 500px) {
-          .timeline-header {
-            flex-direction: column;
-            align-items: flex-start;
-          }
+          height: var(--space-2);
+          background: var(--border-default);
         }
       `}</style>
     </div>

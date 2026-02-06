@@ -32,7 +32,7 @@ const SCORE_LABELS: Record<keyof ScoreData, string> = {
   recency: 'Recency',
   engagement: 'Engagement',
   bridging: 'Bridging',
-  sourceDiversity: 'Source Diversity',
+  sourceDiversity: 'Source diversity',
   relevance: 'Relevance',
 };
 
@@ -55,29 +55,41 @@ export function ScoreRadar({
     weight: weights ? (weights[key as keyof ScoreData] * 100) : 0,
   }));
 
+  // Bluesky design tokens
+  const colors = {
+    blue: '#1083fe',
+    blueLight: 'rgba(16, 131, 254, 0.15)',
+    grid: '#2e3033',
+    text: '#828689',
+    textLight: '#6b6e70',
+    tooltipBg: '#1e1f21',
+    tooltipBorder: '#2e3033',
+  };
+
   return (
     <div className="score-radar">
       <ResponsiveContainer width="100%" height={height}>
         <RadarChart data={data} margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
-          <PolarGrid stroke="#e5e7eb" />
+          <PolarGrid stroke={colors.grid} />
           <PolarAngleAxis
             dataKey="component"
-            tick={{ fill: '#666', fontSize: 12 }}
+            tick={{ fill: colors.text, fontSize: 12 }}
             tickLine={false}
           />
           <PolarRadiusAxis
             angle={90}
             domain={[0, 100]}
-            tick={{ fill: '#999', fontSize: 10 }}
+            tick={{ fill: colors.textLight, fontSize: 10 }}
             tickCount={5}
+            axisLine={false}
           />
           {scores && (
             <Radar
               name="Score"
               dataKey="score"
-              stroke="#667eea"
-              fill="#667eea"
-              fillOpacity={0.5}
+              stroke={colors.blue}
+              fill={colors.blue}
+              fillOpacity={0.25}
               strokeWidth={2}
             />
           )}
@@ -85,29 +97,52 @@ export function ScoreRadar({
             <Radar
               name="Weight"
               dataKey="weight"
-              stroke="#764ba2"
-              fill="#764ba2"
-              fillOpacity={0.2}
+              stroke={colors.blue}
+              fill={colors.blue}
+              fillOpacity={0.15}
               strokeWidth={2}
-              strokeDasharray="5 5"
+              strokeDasharray="4 4"
             />
           )}
           <Tooltip
-            formatter={(value) => `${Number(value).toFixed(1)}%`}
+            formatter={(value) => `${Number(value).toFixed(0)}%`}
             contentStyle={{
-              backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              border: '1px solid #e5e7eb',
+              backgroundColor: colors.tooltipBg,
+              border: `1px solid ${colors.tooltipBorder}`,
               borderRadius: '8px',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.5)',
+              color: '#f1f3f5',
+              fontSize: '13px',
+            }}
+            labelStyle={{
+              color: '#f1f3f5',
+              fontWeight: 600,
+              marginBottom: '4px',
+            }}
+            itemStyle={{
+              color: '#f1f3f5',
             }}
           />
-          {(scores && showWeights && weights) && <Legend />}
+          {(scores && showWeights && weights) && (
+            <Legend
+              wrapperStyle={{
+                paddingTop: '12px',
+              }}
+              formatter={(value) => (
+                <span style={{ color: colors.text, fontSize: '12px' }}>{value}</span>
+              )}
+            />
+          )}
         </RadarChart>
       </ResponsiveContainer>
 
       <style>{`
         .score-radar {
           width: 100%;
+        }
+
+        .recharts-legend-item-text {
+          color: var(--text-secondary) !important;
         }
       `}</style>
     </div>
