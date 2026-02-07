@@ -9,6 +9,14 @@ import { db } from '../../db/client.js';
 
 export function registerStatusRoutes(app: FastifyInstance): void {
   /**
+   * GET /api/admin/ping
+   * Simple test endpoint
+   */
+  app.get('/ping', async (_request: FastifyRequest, reply: FastifyReply) => {
+    return reply.send({ pong: true, timestamp: new Date().toISOString() });
+  });
+
+  /**
    * GET /api/admin/status
    * Returns admin status check and system overview
    */
