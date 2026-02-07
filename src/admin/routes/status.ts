@@ -20,7 +20,6 @@ export function registerStatusRoutes(app: FastifyInstance): void {
       SELECT
         id,
         status,
-        voting_open,
         voting_ends_at,
         auto_transition,
         recency_weight,
@@ -75,7 +74,6 @@ export function registerStatusRoutes(app: FastifyInstance): void {
           ? {
               id: currentEpoch.id,
               status: currentEpoch.status,
-              votingOpen: currentEpoch.voting_open,
               votingEndsAt: currentEpoch.voting_ends_at,
               autoTransition: currentEpoch.auto_transition,
               voteCount,

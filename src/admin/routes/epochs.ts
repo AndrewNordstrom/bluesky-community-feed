@@ -17,7 +17,6 @@ import { forceEpochTransition } from '../../governance/epoch-manager.js';
 import { logger } from '../../lib/logger.js';
 
 const UpdateEpochSchema = z.object({
-  votingOpen: z.boolean().optional(),
   votingEndsAt: z.string().datetime().nullable().optional(),
   autoTransition: z.boolean().optional(),
 });
@@ -36,7 +35,6 @@ export function registerEpochRoutes(app: FastifyInstance): void {
       SELECT
         e.id,
         e.status,
-        e.voting_open,
         e.voting_ends_at,
         e.auto_transition,
         e.recency_weight,
@@ -59,7 +57,6 @@ export function registerEpochRoutes(app: FastifyInstance): void {
       epochs: result.rows.map((row) => ({
         id: row.id,
         status: row.status,
-        votingOpen: row.voting_open,
         votingEndsAt: row.voting_ends_at,
         autoTransition: row.auto_transition,
         weights: {
@@ -93,7 +90,7 @@ export function registerEpochRoutes(app: FastifyInstance): void {
 
     // Get current epoch
     const current = await db.query(`
-      SELECT id, voting_open FROM governance_epochs WHERE status = 'active' LIMIT 1
+      SELECT id FROM governance_epochs WHERE status = 'active' LIMIT 1
     `);
 
     if (current.rows.length === 0) {
@@ -104,11 +101,6 @@ export function registerEpochRoutes(app: FastifyInstance): void {
     const updates: string[] = [];
     const values: any[] = [];
     let paramIndex = 1;
-
-    if (body.votingOpen !== undefined) {
-      updates.push(`voting_open = $${paramIndex++}`);
-      values.push(body.votingOpen);
-    }
 
     if (body.votingEndsAt !== undefined) {
       // Validate future date if setting
@@ -152,7 +144,6 @@ export function registerEpochRoutes(app: FastifyInstance): void {
       epoch: {
         id: result.rows[0].id,
         status: result.rows[0].status,
-        votingOpen: result.rows[0].voting_open,
         votingEndsAt: result.rows[0].voting_ends_at,
         autoTransition: result.rows[0].auto_transition,
       },
@@ -222,7 +213,6 @@ export function registerEpochRoutes(app: FastifyInstance): void {
         newEpoch: {
           id: newEpochId,
           status: newEpoch.rows[0].status,
-          votingOpen: newEpoch.rows[0].voting_open,
         },
         voteCount,
       });
@@ -232,73 +222,6 @@ export function registerEpochRoutes(app: FastifyInstance): void {
     }
   });
 
-  /**
-   * POST /api/admin/epochs/close-voting
-   * Close voting without transitioning epoch
-   */
-  app.post('/epochs/close-voting', async (request: FastifyRequest, reply: FastifyReply) => {
-    const adminDid = getAdminDid(request);
-
-    const result = await db.query(`
-      UPDATE governance_epochs
-      SET voting_open = false
-      WHERE status = 'active'
-      RETURNING id, voting_open
-    `);
-
-    if (result.rows.length === 0) {
-      return reply.status(404).send({ error: 'No active epoch found' });
-    }
-
-    await db.query(
-      `INSERT INTO governance_audit_log (action, epoch_id, actor_did, details)
-       VALUES ('voting_closed', $1, $2, $3)`,
-      [result.rows[0].id, adminDid, JSON.stringify({ closedAt: new Date().toISOString() })]
-    );
-
-    logger.info({ epochId: result.rows[0].id, adminDid }, 'Voting closed by admin');
-
-    return reply.send({
-      success: true,
-      epoch: {
-        id: result.rows[0].id,
-        votingOpen: false,
-      },
-    });
-  });
-
-  /**
-   * POST /api/admin/epochs/open-voting
-   * Reopen voting on current epoch
-   */
-  app.post('/epochs/open-voting', async (request: FastifyRequest, reply: FastifyReply) => {
-    const adminDid = getAdminDid(request);
-
-    const result = await db.query(`
-      UPDATE governance_epochs
-      SET voting_open = true
-      WHERE status = 'active'
-      RETURNING id, voting_open
-    `);
-
-    if (result.rows.length === 0) {
-      return reply.status(404).send({ error: 'No active epoch found' });
-    }
-
-    await db.query(
-      `INSERT INTO governance_audit_log (action, epoch_id, actor_did, details)
-       VALUES ('voting_opened', $1, $2, $3)`,
-      [result.rows[0].id, adminDid, JSON.stringify({ openedAt: new Date().toISOString() })]
-    );
-
-    logger.info({ epochId: result.rows[0].id, adminDid }, 'Voting opened by admin');
-
-    return reply.send({
-      success: true,
-      epoch: {
-        id: result.rows[0].id,
-        votingOpen: true,
-      },
-    });
-  });
+  // Note: close-voting and open-voting endpoints removed
+  // The schema uses status='active'/'closed' instead of a separate voting_open column
 }
