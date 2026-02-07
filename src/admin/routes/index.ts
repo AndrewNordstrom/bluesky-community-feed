@@ -9,6 +9,9 @@ import { FastifyInstance } from 'fastify';
 import { requireAdmin } from '../../auth/admin.js';
 import { registerStatusRoutes } from './status.js';
 import { registerEpochRoutes } from './epochs.js';
+import { registerAnnouncementRoutes } from './announcements.js';
+import { registerFeedHealthRoutes } from './feed-health.js';
+import { registerAuditLogRoutes } from './audit-log.js';
 import { logger } from '../../lib/logger.js';
 
 export function registerAdminRoutes(app: FastifyInstance): void {
@@ -20,6 +23,9 @@ export function registerAdminRoutes(app: FastifyInstance): void {
       // Register route modules
       registerStatusRoutes(adminApp);
       registerEpochRoutes(adminApp);
+      registerAnnouncementRoutes(adminApp);
+      registerFeedHealthRoutes(adminApp);
+      registerAuditLogRoutes(adminApp);
 
       logger.info('Admin routes registered');
     },
