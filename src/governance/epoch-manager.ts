@@ -273,3 +273,162 @@ export async function triggerEpochTransition(): Promise<{ success: boolean; newE
     return { success: false, error: message };
   }
 }
+
+/**
+ * Force epoch transition (admin only).
+ * Skips vote count check - for testing and emergency use.
+ *
+ * @returns The ID of the newly created epoch
+ */
+export async function forceEpochTransition(): Promise<number> {
+  const client = await db.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // 1. Get current active/voting epoch
+    const current = await client.query(
+      `SELECT * FROM governance_epochs
+       WHERE status IN ('active', 'voting')
+       ORDER BY id DESC LIMIT 1
+       FOR UPDATE`
+    );
+
+    if (!current.rows[0]) {
+      throw new Error('No active epoch to close');
+    }
+
+    const currentEpoch = current.rows[0];
+    const currentEpochId = currentEpoch.id;
+
+    // Get vote count (for logging, not validation)
+    const voteCountResult = await client.query(
+      `SELECT COUNT(*) as count FROM governance_votes WHERE epoch_id = $1`,
+      [currentEpochId]
+    );
+    const voteCount = parseInt(voteCountResult.rows[0].count);
+
+    // NOTE: Skipping vote count check - this is a forced transition
+
+    // 2. Aggregate weight votes (use current epoch weights if no votes)
+    let newWeights = await aggregateVotes(currentEpochId);
+
+    if (!newWeights) {
+      // Use current epoch weights if aggregation fails
+      newWeights = {
+        recency: currentEpoch.recency_weight,
+        engagement: currentEpoch.engagement_weight,
+        bridging: currentEpoch.bridging_weight,
+        sourceDiversity: currentEpoch.source_diversity_weight,
+        relevance: currentEpoch.relevance_weight,
+      };
+    }
+
+    const newWeightsPayload = weightsToVotePayload(newWeights);
+
+    // 3. Aggregate content votes
+    const contentRules = await aggregateContentVotes(currentEpochId);
+
+    // 4. Close current epoch
+    await client.query(
+      `UPDATE governance_epochs
+       SET status = 'closed', closed_at = NOW()
+       WHERE id = $1`,
+      [currentEpochId]
+    );
+
+    // 5. Create new epoch with aggregated weights and content rules
+    const newEpoch = await client.query(
+      `INSERT INTO governance_epochs (
+        recency_weight, engagement_weight, bridging_weight,
+        source_diversity_weight, relevance_weight,
+        content_rules,
+        vote_count, description
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING id`,
+      [
+        newWeightsPayload.recency_weight,
+        newWeightsPayload.engagement_weight,
+        newWeightsPayload.bridging_weight,
+        newWeightsPayload.source_diversity_weight,
+        newWeightsPayload.relevance_weight,
+        JSON.stringify({
+          include_keywords: contentRules.includeKeywords,
+          exclude_keywords: contentRules.excludeKeywords,
+        }),
+        voteCount,
+        `FORCED transition from epoch ${currentEpochId} with ${voteCount} votes.`,
+      ]
+    );
+
+    const newEpochId = newEpoch.rows[0].id;
+
+    // 6. Audit log - epoch closed
+    const oldWeights: GovernanceWeights = {
+      recency: currentEpoch.recency_weight,
+      engagement: currentEpoch.engagement_weight,
+      bridging: currentEpoch.bridging_weight,
+      sourceDiversity: currentEpoch.source_diversity_weight,
+      relevance: currentEpoch.relevance_weight,
+    };
+
+    await client.query(
+      `INSERT INTO governance_audit_log (action, epoch_id, details)
+       VALUES ('epoch_closed', $1, $2)`,
+      [
+        currentEpochId,
+        JSON.stringify({
+          old_weights: oldWeights,
+          new_weights: newWeights,
+          vote_count: voteCount,
+          new_epoch_id: newEpochId,
+          forced: true,
+        }),
+      ]
+    );
+
+    // 7. Audit log - epoch created
+    await client.query(
+      `INSERT INTO governance_audit_log (action, epoch_id, details)
+       VALUES ('epoch_created', $1, $2)`,
+      [
+        newEpochId,
+        JSON.stringify({
+          weights: newWeights,
+          content_rules: contentRules,
+          derived_from_epoch: currentEpochId,
+          vote_count: voteCount,
+          forced: true,
+        }),
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    // Invalidate content rules cache so scoring pipeline picks up new rules
+    await invalidateContentRulesCache();
+
+    logger.warn(
+      {
+        closedEpoch: currentEpochId,
+        newEpoch: newEpochId,
+        voteCount,
+        oldWeights,
+        newWeights,
+        contentRules: {
+          includeKeywords: contentRules.includeKeywords,
+          excludeKeywords: contentRules.excludeKeywords,
+        },
+      },
+      'FORCED governance epoch transition complete'
+    );
+
+    return newEpochId;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    logger.error({ err }, 'Failed to force transition governance epoch');
+    throw err;
+  } finally {
+    client.release();
+  }
+}

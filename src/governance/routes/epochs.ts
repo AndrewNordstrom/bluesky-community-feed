@@ -3,11 +3,24 @@
  *
  * GET /api/governance/epochs - List all epochs
  * GET /api/governance/epochs/:id - Get single epoch details
+ * POST /api/governance/epochs/transition - Trigger epoch transition (admin only)
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { db } from '../../db/client.js';
+import { config } from '../../config.js';
+import { logger } from '../../lib/logger.js';
 import { toEpochInfo } from '../governance.types.js';
+import { getAuthenticatedDid } from '../auth.js';
+import { triggerEpochTransition, forceEpochTransition, getCurrentEpochStatus } from '../epoch-manager.js';
+
+/**
+ * Check if DID is an admin.
+ */
+function isAdmin(did: string): boolean {
+  const adminDids = config.BOT_ADMIN_DIDS?.split(',').map((d) => d.trim()) ?? [];
+  return adminDids.includes(did);
+}
 
 export function registerEpochsRoute(app: FastifyInstance): void {
   /**
@@ -201,5 +214,89 @@ export function registerEpochsRoute(app: FastifyInstance): void {
             }
           : null,
     });
+  });
+
+  /**
+   * POST /api/governance/epochs/transition
+   * Triggers epoch transition (admin only).
+   * Requires valid session with DID in BOT_ADMIN_DIDS.
+   *
+   * Query params:
+   * - force=true: Skip vote count check (for testing)
+   */
+  app.post('/api/governance/epochs/transition', async (request: FastifyRequest, reply: FastifyReply) => {
+    // Admin auth check
+    const requesterDid = getAuthenticatedDid(request);
+    if (!requesterDid) {
+      return reply.code(401).send({
+        error: 'Unauthorized',
+        message: 'Authentication required',
+      });
+    }
+
+    if (!isAdmin(requesterDid)) {
+      logger.warn({ did: requesterDid }, 'Non-admin attempted to trigger epoch transition');
+      return reply.code(403).send({
+        error: 'Forbidden',
+        message: 'Admin access required for epoch transitions',
+      });
+    }
+
+    const query = request.query as { force?: string };
+    const force = query.force === 'true';
+
+    try {
+      // Get current status first
+      const status = await getCurrentEpochStatus();
+      if (!status) {
+        return reply.code(400).send({
+          error: 'NoActiveEpoch',
+          message: 'No active epoch to transition',
+        });
+      }
+
+      if (force) {
+        logger.warn(
+          { adminDid: requesterDid, epochId: status.epochId, voteCount: status.voteCount },
+          'Admin forcing epoch transition'
+        );
+        const newEpochId = await forceEpochTransition();
+        return reply.send({
+          success: true,
+          newEpochId,
+          forced: true,
+          previousEpochId: status.epochId,
+          voteCount: status.voteCount,
+        });
+      }
+
+      const result = await triggerEpochTransition();
+      if (!result.success) {
+        return reply.code(400).send({
+          error: 'TransitionFailed',
+          message: result.error,
+          currentStatus: status,
+        });
+      }
+
+      logger.info(
+        { adminDid: requesterDid, newEpochId: result.newEpochId },
+        'Admin triggered epoch transition'
+      );
+
+      return reply.send({
+        success: true,
+        newEpochId: result.newEpochId,
+        forced: false,
+        previousEpochId: status.epochId,
+        voteCount: status.voteCount,
+      });
+    } catch (err) {
+      logger.error({ err, adminDid: requesterDid }, 'Failed to trigger epoch transition');
+      return reply.code(500).send({
+        error: 'InternalError',
+        message: 'Failed to trigger epoch transition',
+      });
+    }
   });
 }
