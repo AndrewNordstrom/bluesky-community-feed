@@ -28,15 +28,21 @@ export async function updateScoringStatus(status: ScoringStatus): Promise<void> 
 
 /**
  * Get the current scoring status.
+ * Returns default values if table doesn't exist or query fails.
  */
 export async function getScoringStatus(): Promise<ScoringStatus> {
-  const result = await db.query(
-    `SELECT value FROM system_status WHERE key = 'last_scoring_run'`
-  );
+  try {
+    const result = await db.query(
+      `SELECT value FROM system_status WHERE key = 'last_scoring_run'`
+    );
 
-  if (result.rows.length === 0) {
+    if (result.rows.length === 0) {
+      return { timestamp: null, duration_ms: null, posts_scored: 0, posts_filtered: 0 };
+    }
+
+    return result.rows[0].value as ScoringStatus;
+  } catch {
+    // Table may not exist if migration hasn't run
     return { timestamp: null, duration_ms: null, posts_scored: 0, posts_filtered: 0 };
   }
-
-  return result.rows[0].value as ScoringStatus;
 }
