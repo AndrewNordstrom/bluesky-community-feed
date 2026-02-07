@@ -66,9 +66,9 @@ export function registerStatusRoutes(app: FastifyInstance): void {
 
       // Get subscriber count
       logger.debug('Fetching subscriber count...');
-      const subResult = await db.query(`
-        SELECT COUNT(*) as count FROM subscribers WHERE is_active = true
-      `);
+      const subResult = await db.query(
+        `SELECT COUNT(*) as count FROM subscribers WHERE is_active = TRUE`
+      );
       logger.debug({ subCount: subResult.rows[0]?.count }, 'Subscriber count fetched');
 
       // Get scoring status
