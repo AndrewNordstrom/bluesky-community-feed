@@ -9,6 +9,7 @@ import { registerShutdownHandlers } from './lib/shutdown.js';
 import { registerJetstreamHealth, registerScoringHealth, JetstreamHealth, ScoringHealth } from './lib/health.js';
 import { registerBotRoutes } from './bot/server.js';
 import { initializeBot } from './bot/agent.js';
+import { startEpochScheduler, stopEpochScheduler } from './scheduler/epoch-scheduler.js';
 
 async function main() {
   logger.info('Starting Community Feed Generator...');
@@ -102,11 +103,15 @@ async function main() {
     logger.warn({ err }, 'Bot initialization failed - will retry on first announcement');
   }
 
+  // 6.6. Start epoch scheduler (for auto-transitions)
+  startEpochScheduler();
+
   // 7. Register graceful shutdown handlers
   registerShutdownHandlers({
     server: app,
     stopScoring,
     stopJetstream,
+    stopEpochScheduler,
   });
 
   // 8. Log startup complete
