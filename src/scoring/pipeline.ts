@@ -173,7 +173,8 @@ async function getPostsForScoring(): Promise<PostForScoring[]> {
      LEFT JOIN post_engagement pe ON p.uri = pe.post_uri
      WHERE p.deleted = FALSE
        AND p.created_at > $1
-     ORDER BY p.created_at DESC`,
+     ORDER BY p.created_at DESC
+     LIMIT 10000`,
     [cutoff.toISOString()]
   );
 
