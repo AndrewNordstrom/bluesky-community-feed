@@ -32,6 +32,7 @@ import {
   filterPosts,
   hasActiveContentRules,
 } from '../governance/content-filter.js';
+import { updateScoringStatus } from '../admin/status-tracker.js';
 
 // Maximum time allowed for a single scoring run (2 minutes)
 const SCORING_TIMEOUT_MS = 120_000;
@@ -135,6 +136,14 @@ async function runScoringPipelineInternal(): Promise<void> {
 
     // Track successful run for health checks
     lastSuccessfulRunAt = new Date();
+
+    // Update scoring status for admin dashboard
+    await updateScoringStatus({
+      timestamp: new Date().toISOString(),
+      duration_ms: elapsed,
+      posts_scored: posts.length,
+      posts_filtered: allPosts.length - posts.length,
+    });
   } catch (err) {
     logger.error({ err }, 'Scoring pipeline failed');
     throw err;
