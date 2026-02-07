@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ScoreRadar } from '../components/ScoreRadar';
+import { useAdminStatus } from '../hooks/useAdminStatus';
 import { transparencyApi } from '../api/client';
 import type { FeedStatsResponse, AuditLogEntry } from '../api/client';
 
 export function Dashboard() {
+  const { isAdmin } = useAdminStatus();
   const [stats, setStats] = useState<FeedStatsResponse | null>(null);
   const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -86,6 +88,7 @@ export function Dashboard() {
               <Link to="/vote" className="nav-link">Vote</Link>
               <Link to="/dashboard" className="nav-link active">Dashboard</Link>
               <Link to="/history" className="nav-link">History</Link>
+              {isAdmin && <Link to="/admin" className="nav-link">Admin</Link>}
             </nav>
           </div>
         </div>

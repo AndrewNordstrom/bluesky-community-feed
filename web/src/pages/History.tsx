@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { EpochTimeline } from '../components/EpochTimeline';
 import { ScoreRadar } from '../components/ScoreRadar';
+import { useAdminStatus } from '../hooks/useAdminStatus';
 import { transparencyApi } from '../api/client';
 import type { EpochResponse, AuditLogEntry } from '../api/client';
 
 export function History() {
+  const { isAdmin } = useAdminStatus();
   const [epochs, setEpochs] = useState<EpochResponse[]>([]);
   const [selectedEpoch, setSelectedEpoch] = useState<EpochResponse | null>(null);
   const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
@@ -106,7 +108,8 @@ export function History() {
             <nav className="header-nav">
               <Link to="/vote" className="nav-link">Vote</Link>
               <Link to="/dashboard" className="nav-link">Dashboard</Link>
-              <Link to="/history" className="nav-link active">History</Link>
+              <Link to="/history" className="nav-link">History</Link>
+              {isAdmin && <Link to="/admin" className="nav-link">Admin</Link>}
             </nav>
           </div>
         </div>
