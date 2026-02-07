@@ -11,6 +11,7 @@ import { registerFeedSkeleton } from './routes/feed-skeleton.js';
 import { registerGovernanceRoutes } from '../governance/server.js';
 import { registerTransparencyRoutes } from '../transparency/server.js';
 import { registerDebugRoutes } from './routes/debug.js';
+import { registerAdminRoutes } from '../admin/routes/index.js';
 import { getHealthStatus, isLive, isReady } from '../lib/health.js';
 import { generateCorrelationId } from '../lib/correlation.js';
 import { AppError, isAppError } from '../lib/errors.js';
@@ -71,6 +72,9 @@ export async function createServer() {
 
   // Register debug routes
   registerDebugRoutes(app);
+
+  // Register admin routes
+  registerAdminRoutes(app);
 
   // Deep health check endpoint - returns detailed component status
   app.get('/health', async () => {
