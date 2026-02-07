@@ -81,6 +81,78 @@ Follow `TASKING.md` for step-by-step work. One phase per conversation.
 ## Full Specification
 The complete 2,500-line implementation spec with database schemas, working code patterns, and detailed API contracts is in `docs/IMPLEMENTATION_SPEC.md`. Read the relevant section before implementing each layer.
 
+---
+
+## ⚠️ CURRENT TASK: Admin Dashboard
+
+**READ THIS SPEC FIRST:** `docs/ADMIN_DASHBOARD_SPEC.md`
+
+This is an 8-phase implementation plan for a protected admin interface. Follow these rules strictly:
+
+### How to Work Through the Spec
+
+1. **Work phase by phase** — Complete Phase 1 fully before starting Phase 2
+2. **Run ALL tests in each phase** — Every phase has a "Phase N Testing" section with curl commands and verification steps. Run them ALL and confirm they pass.
+3. **Don't proceed until tests pass** — If a phase's tests fail, fix the issues before moving on
+4. **Check existing code first** — Some modules already exist (audit, bot, session, logger, db). Import and integrate with them rather than duplicating
+5. **Match Vote page styling exactly** — Reference `web/src/pages/Vote.tsx` and existing CSS files. The admin UI must look like it belongs
+
+### Critical Implementation Rules
+
+1. **Auth is non-negotiable** — Every admin endpoint MUST use `requireAdmin` hook. Test with a non-admin user to verify 403.
+2. **Log everything to audit_log** — All admin actions must be logged. Verify in audit_log table after each action.
+3. **Handle edge cases** — Empty states, loading states, error states for all components
+4. **Type safety** — Use TypeScript strictly. Define interfaces for all API responses.
+5. **Mobile responsive** — Test all components at mobile widths
+6. **No orphan code** — Every new file must be imported/registered somewhere
+
+### Phase Checkpoints
+
+After each phase, verify:
+- [ ] All new files compile without errors (`npm run build`)
+- [ ] All tests in the "Phase N Testing" section pass
+- [ ] No regressions in existing functionality (feed still works, voting still works)
+- [ ] Audit log captures new actions (where applicable)
+
+### Design Tokens (MUST match Vote page)
+```css
+--bg-primary: #161718
+--bg-card: #1e1f21
+--accent-blue: #1083fe
+--text-primary: #f1f3f5
+--text-secondary: #787c7e
+--border: #2a2b2d
+--success: #10b981
+--error: #ef4444
+--warning: #f59e0b
+```
+
+### Existing Modules to Reuse
+
+Before creating new modules, check these existing files:
+- `src/db/index.ts` — getDb() for PostgreSQL
+- `src/db/redis.ts` — getRedis() for Redis  
+- `src/logger.ts` — logger instance
+- `src/auth/session.ts` — getSession() for user auth
+- `src/governance/audit.ts` — logAuditEvent() for audit logging
+- `src/bot/announcements.ts` — existing announcement functions
+- `src/governance/epoch-manager.ts` — closeCurrentEpochAndCreateNext()
+- `src/governance/content-filter.ts` — getCurrentContentRules()
+
+### Starting the Implementation
+
+Begin with this prompt:
+```
+Read docs/ADMIN_DASHBOARD_SPEC.md completely. Then implement Phase 1 (Database & Auth Foundation). After implementation, run all Phase 1 tests from the spec and report results. Do not start Phase 2 until I confirm Phase 1 is working.
+```
+
+After each phase passes tests, say:
+```
+Phase N tests pass. Proceed with Phase N+1.
+```
+
+---
+
 ## Key References
 - Fork from: github.com/bluesky-social/feed-generator
 - Architecture model: github.com/Skygest/PaperSkygest
