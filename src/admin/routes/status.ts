@@ -6,6 +6,8 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { db } from '../../db/client.js';
+import { redis } from '../../db/redis.js';
+import { getCurrentContentRules } from '../../governance/content-filter.js';
 
 export function registerStatusRoutes(app: FastifyInstance): void {
   /**
@@ -67,6 +69,35 @@ export function registerStatusRoutes(app: FastifyInstance): void {
       `SELECT COUNT(*) as count FROM subscribers WHERE is_active = TRUE`
     );
 
+    // Get scoring stats from system_status table
+    let lastScoringRun: string | null = null;
+    let lastScoringDuration: number | null = null;
+    let scoredPosts = 0;
+    try {
+      const scoringStatus = await db.query(
+        `SELECT value FROM system_status WHERE key = 'last_scoring_run'`
+      );
+      if (scoringStatus.rows[0]?.value) {
+        const val = scoringStatus.rows[0].value;
+        lastScoringRun = val.timestamp || null;
+        lastScoringDuration = val.duration_ms ? val.duration_ms / 1000 : null;
+        scoredPosts = val.posts_scored || 0;
+      }
+    } catch {
+      // system_status table might not exist
+    }
+
+    // Get feed size from Redis
+    let feedSize = 0;
+    try {
+      feedSize = await redis.zcard('feed:ranked');
+    } catch {
+      // Redis might not be connected
+    }
+
+    // Get current content rules
+    const contentRules = await getCurrentContentRules();
+
     return reply.send({
       isAdmin: true,
       system: {
@@ -74,8 +105,9 @@ export function registerStatusRoutes(app: FastifyInstance): void {
           ? {
               id: currentEpoch.id,
               status: currentEpoch.status,
+              votingOpen: currentEpoch.status === 'active',
               votingEndsAt: currentEpoch.voting_ends_at,
-              autoTransition: currentEpoch.auto_transition,
+              autoTransition: currentEpoch.auto_transition || false,
               voteCount,
               weights: {
                 recency: parseFloat(currentEpoch.recency_weight),
@@ -84,14 +116,21 @@ export function registerStatusRoutes(app: FastifyInstance): void {
                 sourceDiversity: parseFloat(currentEpoch.source_diversity_weight),
                 relevance: parseFloat(currentEpoch.relevance_weight),
               },
-              contentRules: currentEpoch.content_rules,
+              contentRules: currentEpoch.content_rules || { include_keywords: [], exclude_keywords: [] },
               createdAt: currentEpoch.created_at,
             }
           : null,
         feed: {
           totalPosts: parseInt(feedStats.rows[0].total_posts, 10),
           postsLast24h: parseInt(feedStats.rows[0].posts_24h, 10),
+          scoredPosts: feedSize || scoredPosts,
+          lastScoringRun,
+          lastScoringDuration,
           subscriberCount: parseInt(subResult.rows[0].count, 10),
+        },
+        contentRules: {
+          includeKeywords: contentRules.includeKeywords || [],
+          excludeKeywords: contentRules.excludeKeywords || [],
         },
       },
     });
