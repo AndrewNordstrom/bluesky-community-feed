@@ -17,6 +17,7 @@ export interface ShutdownDependencies {
   server: FastifyInstance;
   stopScoring: () => Promise<void>;
   stopJetstream: () => Promise<void>;
+  stopEpochScheduler?: () => void;
 }
 
 let isShuttingDown = false;
@@ -56,6 +57,13 @@ export async function gracefulShutdown(deps: ShutdownDependencies): Promise<void
     logger.info('Stopping Jetstream...');
     await deps.stopJetstream();
     logger.info('Jetstream stopped');
+
+    // 3.5. Stop epoch scheduler
+    if (deps.stopEpochScheduler) {
+      logger.info('Stopping epoch scheduler...');
+      deps.stopEpochScheduler();
+      logger.info('Epoch scheduler stopped');
+    }
 
     // 4. Close database pool
     logger.info('Closing PostgreSQL connection pool...');
