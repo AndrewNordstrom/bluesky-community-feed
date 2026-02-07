@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useAdminStatus } from '../hooks/useAdminStatus';
 import { WeightSliders } from '../components/WeightSliders';
 import { KeywordInput } from '../components/KeywordInput';
 import type { GovernanceWeights } from '../components/WeightSliders';
@@ -9,6 +10,7 @@ import type { EpochResponse, ContentVote, ContentRulesResponse } from '../api/cl
 
 export function Vote() {
   const { isAuthenticated, isLoading: authLoading, userHandle, logout } = useAuth();
+  const { isAdmin } = useAdminStatus();
   const navigate = useNavigate();
 
   const [currentEpoch, setCurrentEpoch] = useState<EpochResponse | null>(null);
@@ -177,6 +179,7 @@ export function Vote() {
               <Link to="/vote" className="nav-link active">Vote</Link>
               <Link to="/dashboard" className="nav-link">Dashboard</Link>
               <Link to="/history" className="nav-link">History</Link>
+              {isAdmin && <Link to="/admin" className="nav-link">Admin</Link>}
             </nav>
           </div>
           <div className="user-info">

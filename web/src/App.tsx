@@ -6,6 +6,7 @@ import { Vote } from './pages/Vote';
 import { Dashboard } from './pages/Dashboard';
 import { PostExplain } from './pages/PostExplain';
 import { History } from './pages/History';
+import { AdminPage } from './pages/Admin';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,6 +28,7 @@ function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/post/:uri" element={<PostExplain />} />
             <Route path="/history" element={<History />} />
+            <Route path="/admin" element={<AdminPage />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </BrowserRouter>
