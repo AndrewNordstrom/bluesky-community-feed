@@ -1,0 +1,213 @@
+/**
+ * Content Filter Module
+ *
+ * Applies epoch-specific content rules to filter posts during scoring.
+ * Uses Redis caching to minimize database queries.
+ */
+
+import { db } from '../db/client.js';
+import { redis } from '../db/redis.js';
+import { logger } from '../lib/logger.js';
+import {
+  ContentRules,
+  ContentFilterResult,
+  ContentRulesRow,
+  toContentRules,
+  emptyContentRules,
+} from './governance.types.js';
+
+// Cache TTL for content rules (5 minutes - matches scoring interval)
+const CACHE_TTL_SECONDS = 300;
+const CACHE_KEY = 'content_rules:current';
+
+/**
+ * Get current epoch's content rules with Redis caching.
+ */
+export async function getCurrentContentRules(): Promise<ContentRules> {
+  try {
+    // Check cache first
+    const cached = await redis.get(CACHE_KEY);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+
+    // Fetch from database
+    const result = await db.query<{ content_rules: ContentRulesRow | null }>(
+      `SELECT content_rules FROM governance_epochs
+       WHERE status IN ('active', 'voting')
+       ORDER BY id DESC LIMIT 1`
+    );
+
+    if (result.rows.length === 0) {
+      logger.warn('No active epoch found for content rules');
+      return emptyContentRules();
+    }
+
+    const contentRules = toContentRules(result.rows[0].content_rules);
+
+    // Cache for subsequent queries
+    await redis.set(CACHE_KEY, JSON.stringify(contentRules), 'EX', CACHE_TTL_SECONDS);
+
+    logger.debug(
+      {
+        includeCount: contentRules.includeKeywords.length,
+        excludeCount: contentRules.excludeKeywords.length,
+      },
+      'Content rules loaded from database'
+    );
+
+    return contentRules;
+  } catch (error) {
+    logger.error({ error }, 'Failed to get content rules, returning empty rules');
+    return emptyContentRules();
+  }
+}
+
+/**
+ * Invalidate the content rules cache.
+ * Call this when epoch changes or content rules are updated.
+ */
+export async function invalidateContentRulesCache(): Promise<void> {
+  try {
+    await redis.del(CACHE_KEY);
+    logger.debug('Content rules cache invalidated');
+  } catch (error) {
+    logger.error({ error }, 'Failed to invalidate content rules cache');
+  }
+}
+
+/**
+ * Check if a post's text matches the content rules.
+ *
+ * Logic:
+ * 1. If excludeKeywords is non-empty and post contains ANY exclude keyword -> filtered out
+ * 2. If includeKeywords is non-empty and post contains NO include keywords -> filtered out
+ * 3. Otherwise -> post passes
+ *
+ * Exclude takes precedence over include.
+ *
+ * @param text - The post text to check (case-insensitive matching)
+ * @param rules - Content rules to apply
+ * @returns Result with pass/fail, reason, and matched keyword
+ */
+export function checkContentRules(
+  text: string | null,
+  rules: ContentRules
+): ContentFilterResult {
+  // No rules = everything passes
+  if (rules.includeKeywords.length === 0 && rules.excludeKeywords.length === 0) {
+    return { passes: true };
+  }
+
+  // Posts without text (image-only)
+  if (!text) {
+    // If include rules exist, text-less posts fail
+    if (rules.includeKeywords.length > 0) {
+      return { passes: false, reason: 'no_text_with_include_filter' };
+    }
+    // No include rules and no text to check against exclude = passes
+    return { passes: true };
+  }
+
+  const lowerText = text.toLowerCase();
+
+  // Check excludes first (exclude takes precedence)
+  for (const keyword of rules.excludeKeywords) {
+    if (lowerText.includes(keyword)) {
+      return {
+        passes: false,
+        reason: 'excluded_keyword',
+        matchedKeyword: keyword,
+      };
+    }
+  }
+
+  // Check includes (if any are specified, post must match at least one)
+  if (rules.includeKeywords.length > 0) {
+    for (const keyword of rules.includeKeywords) {
+      if (lowerText.includes(keyword)) {
+        return { passes: true, matchedKeyword: keyword };
+      }
+    }
+    // No include keyword matched
+    return { passes: false, reason: 'no_include_match' };
+  }
+
+  // No include filter specified, post passes
+  return { passes: true };
+}
+
+/**
+ * Post type for filtering (minimal interface).
+ */
+export interface FilterablePost {
+  uri: string;
+  text: string | null;
+}
+
+/**
+ * Filtered post with reason.
+ */
+export interface FilteredPost<T extends FilterablePost> {
+  post: T;
+  reason: string;
+  matchedKeyword?: string;
+}
+
+/**
+ * Filter result containing passed and filtered posts.
+ */
+export interface FilterResult<T extends FilterablePost> {
+  passed: T[];
+  filtered: FilteredPost<T>[];
+}
+
+/**
+ * Filter an array of posts according to content rules.
+ * Returns posts that pass the filter and details about filtered posts.
+ */
+export function filterPosts<T extends FilterablePost>(
+  posts: T[],
+  rules: ContentRules
+): FilterResult<T> {
+  const passed: T[] = [];
+  const filtered: FilteredPost<T>[] = [];
+
+  // No filtering if no rules
+  if (rules.includeKeywords.length === 0 && rules.excludeKeywords.length === 0) {
+    return { passed: posts, filtered: [] };
+  }
+
+  for (const post of posts) {
+    const result = checkContentRules(post.text, rules);
+    if (result.passes) {
+      passed.push(post);
+    } else {
+      filtered.push({
+        post,
+        reason: result.reason ?? 'unknown',
+        matchedKeyword: result.matchedKeyword,
+      });
+    }
+  }
+
+  logger.debug(
+    {
+      total: posts.length,
+      passed: passed.length,
+      filtered: filtered.length,
+      includeKeywords: rules.includeKeywords.length,
+      excludeKeywords: rules.excludeKeywords.length,
+    },
+    'Content filtering complete'
+  );
+
+  return { passed, filtered };
+}
+
+/**
+ * Check if content rules are active (have any keywords).
+ */
+export function hasActiveContentRules(rules: ContentRules): boolean {
+  return rules.includeKeywords.length > 0 || rules.excludeKeywords.length > 0;
+}

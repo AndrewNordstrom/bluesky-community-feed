@@ -27,6 +27,11 @@ import {
   toGovernanceEpoch,
   toPostForScoring,
 } from './score.types.js';
+import {
+  getCurrentContentRules,
+  filterPosts,
+  hasActiveContentRules,
+} from '../governance/content-filter.js';
 
 // Maximum time allowed for a single scoring run (2 minutes)
 const SCORING_TIMEOUT_MS = 120_000;
@@ -77,13 +82,41 @@ async function runScoringPipelineInternal(): Promise<void> {
     logger.info({ epochId: epoch.id }, 'Using governance epoch');
 
     // 2. Get all non-deleted posts in the scoring window
-    const posts = await getPostsForScoring();
-    logger.info({ postCount: posts.length, epochId: epoch.id }, 'Scoring posts');
+    const allPosts = await getPostsForScoring();
+    logger.info({ postCount: allPosts.length, epochId: epoch.id }, 'Posts fetched for scoring');
 
-    if (posts.length === 0) {
+    if (allPosts.length === 0) {
       logger.warn('No posts to score in the window');
       return;
     }
+
+    // 2b. Apply content filtering based on governance rules
+    const contentRules = await getCurrentContentRules();
+    let posts = allPosts;
+
+    if (hasActiveContentRules(contentRules)) {
+      const filterResult = filterPosts(allPosts, contentRules);
+      posts = filterResult.passed;
+
+      logger.info(
+        {
+          epochId: epoch.id,
+          totalPosts: allPosts.length,
+          passedFilter: posts.length,
+          filteredOut: filterResult.filtered.length,
+          includeKeywords: contentRules.includeKeywords.length,
+          excludeKeywords: contentRules.excludeKeywords.length,
+        },
+        'Content filtering applied'
+      );
+
+      if (posts.length === 0) {
+        logger.warn('All posts filtered out by content rules');
+        return;
+      }
+    }
+
+    logger.info({ postCount: posts.length, epochId: epoch.id }, 'Scoring filtered posts');
 
     // 3. Score each post
     const scored = await scoreAllPosts(posts, epoch);

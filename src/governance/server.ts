@@ -11,6 +11,7 @@ import { registerWeightsRoute } from './routes/weights.js';
 import { registerEpochsRoute } from './routes/epochs.js';
 import { registerAuthRoute } from './routes/auth.js';
 import { registerPolisRoute } from './routes/polis.js';
+import { registerContentRulesRoute } from './routes/content-rules.js';
 import { logger } from '../lib/logger.js';
 
 /**
@@ -48,6 +49,9 @@ export function registerGovernanceRoutes(app: FastifyInstance): void {
 
   // Polis routes (placeholder)
   registerPolisRoute(app);
+
+  // Content rules route
+  registerContentRulesRoute(app);
 
   logger.info('Governance routes registered');
 }

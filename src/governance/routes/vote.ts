@@ -15,31 +15,78 @@ import { z } from 'zod';
 import { db } from '../../db/client.js';
 import { logger } from '../../lib/logger.js';
 import { getAuthenticatedDid } from '../auth.js';
-import { normalizeWeights, votePayloadToWeights, weightsToVotePayload } from '../governance.types.js';
+import {
+  normalizeWeights,
+  votePayloadToWeights,
+  weightsToVotePayload,
+  normalizeKeywords,
+} from '../governance.types.js';
 
 /**
  * Zod schema for vote validation.
  * Weights must be 0.0-1.0 and sum to 1.0.
+ * Keywords are optional - users can vote on weights only, keywords only, or both.
  */
 const VoteSchema = z
   .object({
-    recency_weight: z.number().min(0).max(1),
-    engagement_weight: z.number().min(0).max(1),
-    bridging_weight: z.number().min(0).max(1),
-    source_diversity_weight: z.number().min(0).max(1),
-    relevance_weight: z.number().min(0).max(1),
+    // Weight fields (optional for keyword-only votes)
+    recency_weight: z.number().min(0).max(1).optional(),
+    engagement_weight: z.number().min(0).max(1).optional(),
+    bridging_weight: z.number().min(0).max(1).optional(),
+    source_diversity_weight: z.number().min(0).max(1).optional(),
+    relevance_weight: z.number().min(0).max(1).optional(),
+    // Keyword fields (optional for weight-only votes)
+    include_keywords: z
+      .array(z.string().max(50, 'Keywords must be 50 characters or less'))
+      .max(20, 'Maximum 20 include keywords')
+      .optional(),
+    exclude_keywords: z
+      .array(z.string().max(50, 'Keywords must be 50 characters or less'))
+      .max(20, 'Maximum 20 exclude keywords')
+      .optional(),
   })
   .refine(
     (data) => {
+      // If any weight is provided, all must be provided and sum to 1.0
+      const hasAnyWeight =
+        data.recency_weight !== undefined ||
+        data.engagement_weight !== undefined ||
+        data.bridging_weight !== undefined ||
+        data.source_diversity_weight !== undefined ||
+        data.relevance_weight !== undefined;
+
+      if (!hasAnyWeight) return true; // Keywords-only vote is valid
+
+      // If any weight provided, all must be provided
+      const hasAllWeights =
+        data.recency_weight !== undefined &&
+        data.engagement_weight !== undefined &&
+        data.bridging_weight !== undefined &&
+        data.source_diversity_weight !== undefined &&
+        data.relevance_weight !== undefined;
+
+      if (!hasAllWeights) return false;
+
       const sum =
-        data.recency_weight +
-        data.engagement_weight +
-        data.bridging_weight +
-        data.source_diversity_weight +
-        data.relevance_weight;
+        data.recency_weight! +
+        data.engagement_weight! +
+        data.bridging_weight! +
+        data.source_diversity_weight! +
+        data.relevance_weight!;
       return Math.abs(sum - 1.0) < 0.01;
     },
-    { message: 'Weights must sum to 1.0' }
+    { message: 'If weights are provided, all must be present and sum to 1.0' }
+  )
+  .refine(
+    (data) => {
+      // At least one of weights or keywords must be provided
+      const hasWeights = data.recency_weight !== undefined;
+      const hasKeywords =
+        (data.include_keywords?.length ?? 0) > 0 ||
+        (data.exclude_keywords?.length ?? 0) > 0;
+      return hasWeights || hasKeywords;
+    },
+    { message: 'Must provide either weights or keywords (or both)' }
   );
 
 export function registerVoteRoute(app: FastifyInstance): void {
@@ -82,9 +129,27 @@ export function registerVoteRoute(app: FastifyInstance): void {
 
     const vote = parseResult.data;
 
-    // 4. Normalize weights to ensure exact sum of 1.0
-    const normalized = normalizeWeights(votePayloadToWeights(vote));
-    const normalizedPayload = weightsToVotePayload(normalized);
+    // 4. Normalize weights (if provided) and keywords
+    const hasWeights = vote.recency_weight !== undefined;
+    let normalized = null;
+    let normalizedPayload = null;
+
+    if (hasWeights) {
+      normalized = normalizeWeights(
+        votePayloadToWeights({
+          recency_weight: vote.recency_weight!,
+          engagement_weight: vote.engagement_weight!,
+          bridging_weight: vote.bridging_weight!,
+          source_diversity_weight: vote.source_diversity_weight!,
+          relevance_weight: vote.relevance_weight!,
+        })
+      );
+      normalizedPayload = weightsToVotePayload(normalized);
+    }
+
+    // Normalize keywords (lowercase, trim, dedupe, enforce limits)
+    const includeKeywords = normalizeKeywords(vote.include_keywords ?? []);
+    const excludeKeywords = normalizeKeywords(vote.exclude_keywords ?? []);
 
     // 5. Get current epoch (must be active or voting)
     const epoch = await db.query(
@@ -103,30 +168,36 @@ export function registerVoteRoute(app: FastifyInstance): void {
     const epochId = epoch.rows[0].id;
 
     try {
-      // 6. UPSERT vote (allows updating existing vote)
+      // 6. UPSERT vote with weights and/or keywords
       // Use xmax = 0 to detect if this was an INSERT (new) or UPDATE (existing)
+      // Use COALESCE to preserve existing values when only updating one aspect
       const voteResult = await db.query(
         `INSERT INTO governance_votes (
           voter_did, epoch_id,
           recency_weight, engagement_weight, bridging_weight,
-          source_diversity_weight, relevance_weight
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          source_diversity_weight, relevance_weight,
+          include_keywords, exclude_keywords
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT (voter_did, epoch_id) DO UPDATE SET
-          recency_weight = $3,
-          engagement_weight = $4,
-          bridging_weight = $5,
-          source_diversity_weight = $6,
-          relevance_weight = $7,
+          recency_weight = COALESCE($3, governance_votes.recency_weight),
+          engagement_weight = COALESCE($4, governance_votes.engagement_weight),
+          bridging_weight = COALESCE($5, governance_votes.bridging_weight),
+          source_diversity_weight = COALESCE($6, governance_votes.source_diversity_weight),
+          relevance_weight = COALESCE($7, governance_votes.relevance_weight),
+          include_keywords = COALESCE($8, governance_votes.include_keywords),
+          exclude_keywords = COALESCE($9, governance_votes.exclude_keywords),
           voted_at = NOW()
         RETURNING id, (xmax = 0) as is_new_vote`,
         [
           voterDid,
           epochId,
-          normalizedPayload.recency_weight,
-          normalizedPayload.engagement_weight,
-          normalizedPayload.bridging_weight,
-          normalizedPayload.source_diversity_weight,
-          normalizedPayload.relevance_weight,
+          normalizedPayload?.recency_weight ?? null,
+          normalizedPayload?.engagement_weight ?? null,
+          normalizedPayload?.bridging_weight ?? null,
+          normalizedPayload?.source_diversity_weight ?? null,
+          normalizedPayload?.relevance_weight ?? null,
+          includeKeywords.length > 0 ? includeKeywords : null,
+          excludeKeywords.length > 0 ? excludeKeywords : null,
         ]
       );
 
@@ -143,12 +214,34 @@ export function registerVoteRoute(app: FastifyInstance): void {
           epochId,
           JSON.stringify({
             weights: normalized,
-            original_weights: vote,
+            content_vote: {
+              include_keywords: includeKeywords,
+              exclude_keywords: excludeKeywords,
+            },
+            original_weights: hasWeights
+              ? {
+                  recency_weight: vote.recency_weight,
+                  engagement_weight: vote.engagement_weight,
+                  bridging_weight: vote.bridging_weight,
+                  source_diversity_weight: vote.source_diversity_weight,
+                  relevance_weight: vote.relevance_weight,
+                }
+              : null,
           }),
         ]
       );
 
-      logger.info({ voterDid, epochId, weights: normalized, isNewVote }, 'Vote recorded');
+      logger.info(
+        {
+          voterDid,
+          epochId,
+          weights: normalized,
+          includeKeywords: includeKeywords.length,
+          excludeKeywords: excludeKeywords.length,
+          isNewVote,
+        },
+        'Vote recorded'
+      );
 
       const message = isNewVote
         ? 'Your vote has been recorded.'
@@ -158,6 +251,10 @@ export function registerVoteRoute(app: FastifyInstance): void {
         success: true,
         epoch_id: epochId,
         weights: normalized,
+        content_vote: {
+          includeKeywords,
+          excludeKeywords,
+        },
         is_update: !isNewVote,
         message,
       });
@@ -196,17 +293,23 @@ export function registerVoteRoute(app: FastifyInstance): void {
 
     const epochId = epoch.rows[0].id;
 
-    // Get user's vote for this epoch
+    // Get user's vote for this epoch (including keywords)
     const vote = await db.query(
       `SELECT recency_weight, engagement_weight, bridging_weight,
-              source_diversity_weight, relevance_weight, voted_at
+              source_diversity_weight, relevance_weight,
+              include_keywords, exclude_keywords, voted_at
        FROM governance_votes
        WHERE voter_did = $1 AND epoch_id = $2`,
       [voterDid, epochId]
     );
 
     if (vote.rows.length === 0) {
-      return reply.send({ vote: null, epoch_id: epochId });
+      return reply.send({
+        vote: null,
+        contentVote: null,
+        voted_at: null,
+        epoch_id: epochId,
+      });
     }
 
     const v = vote.rows[0];
@@ -217,6 +320,10 @@ export function registerVoteRoute(app: FastifyInstance): void {
         bridging: v.bridging_weight,
         sourceDiversity: v.source_diversity_weight,
         relevance: v.relevance_weight,
+      },
+      contentVote: {
+        includeKeywords: v.include_keywords ?? [],
+        excludeKeywords: v.exclude_keywords ?? [],
       },
       voted_at: v.voted_at,
       epoch_id: epochId,
