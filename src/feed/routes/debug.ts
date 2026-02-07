@@ -6,8 +6,14 @@
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { z } from 'zod';
 import { db } from '../../db/client.js';
 import { redis } from '../../db/redis.js';
+import {
+  checkContentRules,
+  filterPosts,
+  getCurrentContentRules,
+} from '../../governance/content-filter.js';
 
 export function registerDebugRoutes(app: FastifyInstance): void {
   /**
@@ -163,5 +169,98 @@ export function registerDebugRoutes(app: FastifyInstance): void {
         message: 'Failed to fetch scoring weights',
       });
     }
+  });
+
+  /**
+   * GET /api/debug/content-rules
+   * Returns current active content rules from cache/DB.
+   */
+  app.get('/api/debug/content-rules', async (_request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const rules = await getCurrentContentRules();
+      return reply.send({
+        rules,
+        hasActiveRules: rules.includeKeywords.length > 0 || rules.excludeKeywords.length > 0,
+      });
+    } catch (err) {
+      return reply.code(500).send({
+        error: 'DebugError',
+        message: 'Failed to fetch content rules',
+      });
+    }
+  });
+
+  /**
+   * POST /api/debug/test-content-filter
+   * Tests content filtering with provided rules and sample posts.
+   *
+   * Body:
+   * - rules: { includeKeywords: string[], excludeKeywords: string[] }
+   * - posts: { uri: string, text: string | null }[]
+   *
+   * OR for single text check:
+   * - rules: { includeKeywords: string[], excludeKeywords: string[] }
+   * - text: string
+   */
+  const TestFilterSchema = z.object({
+    rules: z.object({
+      includeKeywords: z.array(z.string()).default([]),
+      excludeKeywords: z.array(z.string()).default([]),
+    }),
+    posts: z
+      .array(
+        z.object({
+          uri: z.string(),
+          text: z.string().nullable(),
+        })
+      )
+      .optional(),
+    text: z.string().optional(),
+  });
+
+  app.post('/api/debug/test-content-filter', async (request: FastifyRequest, reply: FastifyReply) => {
+    const parseResult = TestFilterSchema.safeParse(request.body);
+    if (!parseResult.success) {
+      return reply.code(400).send({
+        error: 'ValidationError',
+        message: 'Invalid request body',
+        details: parseResult.error.issues,
+      });
+    }
+
+    const { rules, posts, text } = parseResult.data;
+
+    // Single text check
+    if (text !== undefined) {
+      const result = checkContentRules(text, rules);
+      return reply.send({
+        text,
+        rules,
+        result,
+      });
+    }
+
+    // Batch post filtering
+    if (posts && posts.length > 0) {
+      const filterResult = filterPosts(posts, rules);
+      return reply.send({
+        rules,
+        input_count: posts.length,
+        passed_count: filterResult.passed.length,
+        filtered_count: filterResult.filtered.length,
+        passed: filterResult.passed,
+        filtered: filterResult.filtered.map((f) => ({
+          uri: f.post.uri,
+          text: f.post.text,
+          reason: f.reason,
+          matchedKeyword: f.matchedKeyword,
+        })),
+      });
+    }
+
+    return reply.code(400).send({
+      error: 'ValidationError',
+      message: 'Either "text" or "posts" must be provided',
+    });
   });
 }
