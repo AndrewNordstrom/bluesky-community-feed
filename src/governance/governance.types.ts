@@ -186,3 +186,82 @@ export function validateWeightsSum(weights: GovernanceWeights): boolean {
 
   return Math.abs(sum - 1.0) < 0.01;
 }
+
+// ============================================================================
+// Content Theme Governance Types
+// ============================================================================
+
+/**
+ * Content filtering rules derived from community votes.
+ * Applied during scoring to filter posts by keyword.
+ */
+export interface ContentRules {
+  /** Posts must contain at least one of these keywords (OR logic) */
+  includeKeywords: string[];
+  /** Posts containing any of these keywords are filtered out (OR logic, takes precedence) */
+  excludeKeywords: string[];
+}
+
+/**
+ * Content vote payload (snake_case to match DB schema).
+ */
+export interface ContentVotePayload {
+  include_keywords?: string[];
+  exclude_keywords?: string[];
+}
+
+/**
+ * Database row for content rules in governance_epochs.
+ */
+export interface ContentRulesRow {
+  include_keywords?: string[];
+  exclude_keywords?: string[];
+}
+
+/**
+ * Result of content filtering check.
+ */
+export interface ContentFilterResult {
+  passes: boolean;
+  reason?: 'excluded_keyword' | 'no_include_match' | 'no_text_with_include_filter';
+  matchedKeyword?: string;
+}
+
+/**
+ * Normalize keywords: lowercase, trim, dedupe, enforce limits.
+ * - Max 20 keywords per category
+ * - Max 50 characters per keyword
+ * - Removes empty strings and duplicates
+ */
+export function normalizeKeywords(keywords: string[]): string[] {
+  const seen = new Set<string>();
+  return keywords
+    .map((k) => k.toLowerCase().trim())
+    .filter((k) => k.length > 0 && k.length <= 50)
+    .filter((k) => {
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
+    .slice(0, 20);
+}
+
+/**
+ * Convert database row to ContentRules.
+ */
+export function toContentRules(row: ContentRulesRow | null): ContentRules {
+  return {
+    includeKeywords: row?.include_keywords ?? [],
+    excludeKeywords: row?.exclude_keywords ?? [],
+  };
+}
+
+/**
+ * Create empty content rules.
+ */
+export function emptyContentRules(): ContentRules {
+  return {
+    includeKeywords: [],
+    excludeKeywords: [],
+  };
+}

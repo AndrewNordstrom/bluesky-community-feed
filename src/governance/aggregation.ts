@@ -7,7 +7,7 @@
 
 import { db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
-import { GovernanceWeights, normalizeWeights } from './governance.types.js';
+import { GovernanceWeights, normalizeWeights, ContentRules, emptyContentRules } from './governance.types.js';
 
 /**
  * Weight component names for iteration.
@@ -196,4 +196,123 @@ function calculateMedian(values: number[]): number {
   }
 
   return sorted[mid];
+}
+
+// ============================================================================
+// Content Vote Aggregation
+// ============================================================================
+
+/** Threshold for keyword inclusion (30% of voters must include it) */
+const KEYWORD_THRESHOLD = 0.3;
+
+/**
+ * Aggregate content votes for an epoch.
+ * Keywords appearing in >= 30% of votes are included in the content rules.
+ *
+ * @param epochId - The epoch to aggregate content votes for
+ * @returns Aggregated content rules
+ */
+export async function aggregateContentVotes(epochId: number): Promise<ContentRules> {
+  const votes = await db.query(
+    `SELECT include_keywords, exclude_keywords
+     FROM governance_votes
+     WHERE epoch_id = $1
+       AND (
+         include_keywords IS NOT NULL AND array_length(include_keywords, 1) > 0
+         OR exclude_keywords IS NOT NULL AND array_length(exclude_keywords, 1) > 0
+       )`,
+    [epochId]
+  );
+
+  const n = votes.rows.length;
+
+  if (n === 0) {
+    logger.info({ epochId }, 'No content votes to aggregate');
+    return emptyContentRules();
+  }
+
+  // Calculate threshold - minimum votes needed for keyword to be included
+  const threshold = Math.max(1, Math.ceil(n * KEYWORD_THRESHOLD));
+
+  // Count keyword occurrences
+  const includeCounts = new Map<string, number>();
+  const excludeCounts = new Map<string, number>();
+
+  for (const row of votes.rows) {
+    for (const keyword of row.include_keywords ?? []) {
+      includeCounts.set(keyword, (includeCounts.get(keyword) ?? 0) + 1);
+    }
+    for (const keyword of row.exclude_keywords ?? []) {
+      excludeCounts.set(keyword, (excludeCounts.get(keyword) ?? 0) + 1);
+    }
+  }
+
+  // Filter to keywords meeting threshold and sort alphabetically
+  const includeKeywords = Array.from(includeCounts.entries())
+    .filter(([, count]) => count >= threshold)
+    .map(([keyword]) => keyword)
+    .sort();
+
+  const excludeKeywords = Array.from(excludeCounts.entries())
+    .filter(([, count]) => count >= threshold)
+    .map(([keyword]) => keyword)
+    .sort();
+
+  logger.info(
+    {
+      epochId,
+      voterCount: n,
+      threshold,
+      includeKeywordsCount: includeKeywords.length,
+      excludeKeywordsCount: excludeKeywords.length,
+      totalIncludeCandidates: includeCounts.size,
+      totalExcludeCandidates: excludeCounts.size,
+    },
+    'Content votes aggregated'
+  );
+
+  return { includeKeywords, excludeKeywords };
+}
+
+/**
+ * Get content vote statistics for transparency reporting.
+ */
+export async function getContentVoteStatistics(epochId: number): Promise<{
+  voterCount: number;
+  includeKeywordVotes: Record<string, number>;
+  excludeKeywordVotes: Record<string, number>;
+  threshold: number;
+}> {
+  const votes = await db.query(
+    `SELECT include_keywords, exclude_keywords
+     FROM governance_votes
+     WHERE epoch_id = $1
+       AND (
+         include_keywords IS NOT NULL AND array_length(include_keywords, 1) > 0
+         OR exclude_keywords IS NOT NULL AND array_length(exclude_keywords, 1) > 0
+       )`,
+    [epochId]
+  );
+
+  const includeKeywordVotes: Record<string, number> = {};
+  const excludeKeywordVotes: Record<string, number> = {};
+
+  for (const row of votes.rows) {
+    for (const keyword of row.include_keywords ?? []) {
+      includeKeywordVotes[keyword] = (includeKeywordVotes[keyword] ?? 0) + 1;
+    }
+    for (const keyword of row.exclude_keywords ?? []) {
+      excludeKeywordVotes[keyword] = (excludeKeywordVotes[keyword] ?? 0) + 1;
+    }
+  }
+
+  const voterCount = votes.rows.length;
+  const threshold = Math.max(1, Math.ceil(voterCount * KEYWORD_THRESHOLD));
+
+  return {
+    voterCount,
+    includeKeywordVotes,
+    excludeKeywordVotes,
+    threshold,
+  };
 }

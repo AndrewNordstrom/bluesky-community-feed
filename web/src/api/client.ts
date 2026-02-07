@@ -80,6 +80,12 @@ export interface VoteResponse {
   };
 }
 
+/** Content vote (keywords) */
+export interface ContentVote {
+  includeKeywords: string[];
+  excludeKeywords: string[];
+}
+
 export interface GetVoteResponse {
   vote: {
     recency: number;
@@ -88,26 +94,62 @@ export interface GetVoteResponse {
     sourceDiversity: number;
     relevance: number;
   } | null;
+  contentVote: ContentVote | null;
   voted_at: string | null;
   epoch_id: number | null;
 }
 
+/** Content rules response from API */
+export interface ContentRulesResponse {
+  epoch_id: number;
+  include_keywords: string[];
+  exclude_keywords: string[];
+  include_keyword_votes: Record<string, number>;
+  exclude_keyword_votes: Record<string, number>;
+  total_voters: number;
+  threshold: number;
+}
+
 // Vote API
 export const voteApi = {
-  submitVote: async (weights: GovernanceWeights): Promise<VoteResponse> => {
-    const payload: VotePayload = {
-      recency_weight: weights.recency,
-      engagement_weight: weights.engagement,
-      bridging_weight: weights.bridging,
-      source_diversity_weight: weights.sourceDiversity,
-      relevance_weight: weights.relevance,
-    };
+  /**
+   * Submit a vote with weights and/or content rules.
+   * @param weights - Algorithm weights (optional if submitting content vote only)
+   * @param contentVote - Content keywords (optional if submitting weights only)
+   */
+  submitVote: async (
+    weights: GovernanceWeights | null,
+    contentVote?: ContentVote
+  ): Promise<VoteResponse> => {
+    const payload: Record<string, unknown> = {};
+
+    // Add weights if provided
+    if (weights) {
+      payload.recency_weight = weights.recency;
+      payload.engagement_weight = weights.engagement;
+      payload.bridging_weight = weights.bridging;
+      payload.source_diversity_weight = weights.sourceDiversity;
+      payload.relevance_weight = weights.relevance;
+    }
+
+    // Add content vote if provided
+    if (contentVote) {
+      payload.include_keywords = contentVote.includeKeywords;
+      payload.exclude_keywords = contentVote.excludeKeywords;
+    }
+
     const response = await api.post<VoteResponse>('/api/governance/vote', payload);
     return response.data;
   },
 
   getVote: async (): Promise<GetVoteResponse> => {
     const response = await api.get<GetVoteResponse>('/api/governance/vote');
+    return response.data;
+  },
+
+  /** Get current community content rules and vote statistics */
+  getContentRules: async (): Promise<ContentRulesResponse> => {
+    const response = await api.get<ContentRulesResponse>('/api/governance/content-rules');
     return response.data;
   },
 };

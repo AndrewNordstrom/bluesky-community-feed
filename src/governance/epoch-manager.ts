@@ -10,9 +10,10 @@
 import { db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
 import { config } from '../config.js';
-import { aggregateVotes } from './aggregation.js';
-import { GovernanceWeights, weightsToVotePayload } from './governance.types.js';
+import { aggregateVotes, aggregateContentVotes } from './aggregation.js';
+import { GovernanceWeights, weightsToVotePayload, ContentRules } from './governance.types.js';
 import { postAnnouncementSafe } from '../bot/safe-poster.js';
+import { invalidateContentRulesCache } from './content-filter.js';
 
 /**
  * Open the voting period for the current epoch.
@@ -85,7 +86,7 @@ export async function closeCurrentEpochAndCreateNext(): Promise<number> {
       );
     }
 
-    // 3. Aggregate votes
+    // 3. Aggregate weight votes
     const newWeights = await aggregateVotes(currentEpochId);
 
     if (!newWeights) {
@@ -93,6 +94,9 @@ export async function closeCurrentEpochAndCreateNext(): Promise<number> {
     }
 
     const newWeightsPayload = weightsToVotePayload(newWeights);
+
+    // 3b. Aggregate content votes
+    const contentRules = await aggregateContentVotes(currentEpochId);
 
     // 4. Close current epoch
     await client.query(
@@ -102,13 +106,14 @@ export async function closeCurrentEpochAndCreateNext(): Promise<number> {
       [currentEpochId]
     );
 
-    // 5. Create new epoch with aggregated weights
+    // 5. Create new epoch with aggregated weights and content rules
     const newEpoch = await client.query(
       `INSERT INTO governance_epochs (
         recency_weight, engagement_weight, bridging_weight,
         source_diversity_weight, relevance_weight,
+        content_rules,
         vote_count, description
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING id`,
       [
         newWeightsPayload.recency_weight,
@@ -116,6 +121,10 @@ export async function closeCurrentEpochAndCreateNext(): Promise<number> {
         newWeightsPayload.bridging_weight,
         newWeightsPayload.source_diversity_weight,
         newWeightsPayload.relevance_weight,
+        JSON.stringify({
+          include_keywords: contentRules.includeKeywords,
+          exclude_keywords: contentRules.excludeKeywords,
+        }),
         voteCount,
         `Weights updated from epoch ${currentEpochId} based on ${voteCount} community votes.`,
       ]
@@ -154,6 +163,7 @@ export async function closeCurrentEpochAndCreateNext(): Promise<number> {
         newEpochId,
         JSON.stringify({
           weights: newWeights,
+          content_rules: contentRules,
           derived_from_epoch: currentEpochId,
           vote_count: voteCount,
         }),
@@ -162,6 +172,9 @@ export async function closeCurrentEpochAndCreateNext(): Promise<number> {
 
     await client.query('COMMIT');
 
+    // Invalidate content rules cache so scoring pipeline picks up new rules
+    await invalidateContentRulesCache();
+
     logger.info(
       {
         closedEpoch: currentEpochId,
@@ -169,6 +182,10 @@ export async function closeCurrentEpochAndCreateNext(): Promise<number> {
         voteCount,
         oldWeights,
         newWeights,
+        contentRules: {
+          includeKeywords: contentRules.includeKeywords.length,
+          excludeKeywords: contentRules.excludeKeywords.length,
+        },
       },
       'Governance epoch transition complete'
     );

@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { WeightSliders } from '../components/WeightSliders';
+import { KeywordInput } from '../components/KeywordInput';
 import type { GovernanceWeights } from '../components/WeightSliders';
 import { voteApi, weightsApi } from '../api/client';
-import type { EpochResponse } from '../api/client';
+import type { EpochResponse, ContentVote, ContentRulesResponse } from '../api/client';
 
 export function Vote() {
   const { isAuthenticated, isLoading: authLoading, userHandle, logout } = useAuth();
@@ -18,6 +19,14 @@ export function Vote() {
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Content rules state
+  const [activeTab, setActiveTab] = useState<'weights' | 'content'>('weights');
+  const [contentVote, setContentVote] = useState<ContentVote>({
+    includeKeywords: [],
+    excludeKeywords: [],
+  });
+  const [currentContentRules, setCurrentContentRules] = useState<ContentRulesResponse | null>(null);
 
   // Load current epoch and user's vote
   const loadData = useCallback(async () => {
@@ -54,10 +63,22 @@ export function Vote() {
               relevance: voteData.vote.relevance,
             });
           }
+          // Load user's content vote if exists
+          if (voteData.contentVote) {
+            setContentVote(voteData.contentVote);
+          }
         } catch {
           // User hasn't voted yet
           setHasVoted(false);
         }
+      }
+
+      // Load current community content rules
+      try {
+        const contentRules = await voteApi.getContentRules();
+        setCurrentContentRules(contentRules);
+      } catch {
+        // Content rules endpoint might not exist yet
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to load data');
@@ -83,22 +104,45 @@ export function Vote() {
   }, []);
 
   const handleSubmit = async () => {
-    if (!weights) return;
-
     setIsSubmitting(true);
     setError(null);
     setSuccessMessage(null);
 
     try {
-      const result = await voteApi.submitVote(weights);
-      const wasUpdate = hasVoted;
-      setHasVoted(true);
-      setLastVoteTime(new Date().toISOString());
-      setSuccessMessage(
-        wasUpdate || result.is_update
-          ? 'Your vote has been updated!'
-          : 'Your vote has been recorded! Thank you for participating in governance.'
-      );
+      // Submit based on active tab
+      if (activeTab === 'weights') {
+        if (!weights) return;
+        const result = await voteApi.submitVote(weights, undefined);
+        const wasUpdate = hasVoted;
+        setHasVoted(true);
+        setLastVoteTime(new Date().toISOString());
+        setSuccessMessage(
+          wasUpdate || result.is_update
+            ? 'Your weight vote has been updated!'
+            : 'Your weight vote has been recorded! Thank you for participating.'
+        );
+      } else {
+        // Submit content vote
+        const hasKeywords =
+          contentVote.includeKeywords.length > 0 ||
+          contentVote.excludeKeywords.length > 0;
+        if (!hasKeywords) {
+          setError('Please add at least one include or exclude keyword.');
+          setIsSubmitting(false);
+          return;
+        }
+        const result = await voteApi.submitVote(null, contentVote);
+        setHasVoted(true);
+        setLastVoteTime(new Date().toISOString());
+        setSuccessMessage(
+          result.is_update
+            ? 'Your content rules vote has been updated!'
+            : 'Your content rules vote has been recorded!'
+        );
+        // Refresh content rules
+        const updatedRules = await voteApi.getContentRules();
+        setCurrentContentRules(updatedRules);
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to submit vote');
     } finally {
@@ -164,51 +208,178 @@ export function Vote() {
           </div>
         )}
 
-        <section className="voting-section">
-          <h2>Your vote</h2>
-          <p className="vote-description">
-            Adjust the sliders to set your preferred algorithm weights. The sliders
-            are linked and will always sum to 100%. Your vote will influence how
-            the feed ranks posts in future epochs.
-          </p>
+        {/* Tab navigation */}
+        <div className="vote-tabs">
+          <button
+            className={`vote-tab ${activeTab === 'weights' ? 'active' : ''}`}
+            onClick={() => setActiveTab('weights')}
+          >
+            Algorithm Weights
+          </button>
+          <button
+            className={`vote-tab ${activeTab === 'content' ? 'active' : ''}`}
+            onClick={() => setActiveTab('content')}
+          >
+            Content Rules
+          </button>
+        </div>
 
-          {error && <div className="error-message">{error}</div>}
-          {successMessage && <div className="success-message">{successMessage}</div>}
+        {error && <div className="error-message">{error}</div>}
+        {successMessage && <div className="success-message">{successMessage}</div>}
 
-          {weights && (
-            <WeightSliders
-              initialWeights={weights}
-              onChange={handleWeightChange}
-              disabled={isSubmitting}
-            />
-          )}
+        {/* Weights tab */}
+        {activeTab === 'weights' && (
+          <section className="voting-section">
+            <h2>Your vote</h2>
+            <p className="vote-description">
+              Adjust the sliders to set your preferred algorithm weights. The sliders
+              are linked and will always sum to 100%. Your vote will influence how
+              the feed ranks posts in future epochs.
+            </p>
 
-          <div className="vote-actions">
-            <button
-              onClick={handleSubmit}
-              disabled={isSubmitting || !weights}
-              className="submit-button"
-            >
-              {isSubmitting
-                ? 'Submitting...'
-                : hasVoted
-                ? 'Update vote'
-                : 'Submit vote'}
-            </button>
-            {hasVoted && (
-              <span className="voted-indicator">
-                {lastVoteTime
-                  ? `Last voted ${new Date(lastVoteTime).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}. You can update your vote until voting closes.`
-                  : 'You have already voted this epoch'}
-              </span>
+            {weights && (
+              <WeightSliders
+                initialWeights={weights}
+                onChange={handleWeightChange}
+                disabled={isSubmitting}
+              />
             )}
-          </div>
-        </section>
+
+            <div className="vote-actions">
+              <button
+                onClick={handleSubmit}
+                disabled={isSubmitting || !weights}
+                className="submit-button"
+              >
+                {isSubmitting
+                  ? 'Submitting...'
+                  : hasVoted
+                  ? 'Update vote'
+                  : 'Submit vote'}
+              </button>
+              {hasVoted && (
+                <span className="voted-indicator">
+                  {lastVoteTime
+                    ? `Last voted ${new Date(lastVoteTime).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}. You can update your vote until voting closes.`
+                    : 'You have already voted this epoch'}
+                </span>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* Content rules tab */}
+        {activeTab === 'content' && (
+          <section className="voting-section">
+            <h2>Content rules vote</h2>
+            <p className="vote-description">
+              Vote on keywords to include or exclude from the feed. Keywords appearing
+              in at least 30% of votes will become active rules for the next epoch.
+            </p>
+
+            <KeywordInput
+              label="Include keywords"
+              description="Posts containing any of these keywords will be prioritized. Leave empty for no preference."
+              keywords={contentVote.includeKeywords}
+              onChange={(keywords) =>
+                setContentVote((prev) => ({ ...prev, includeKeywords: keywords }))
+              }
+              disabled={isSubmitting}
+              variant="include"
+              placeholder="Type a keyword and press Enter (e.g., AI, research)"
+            />
+
+            <KeywordInput
+              label="Exclude keywords"
+              description="Posts containing any of these keywords will be filtered out. Leave empty for no exclusions."
+              keywords={contentVote.excludeKeywords}
+              onChange={(keywords) =>
+                setContentVote((prev) => ({ ...prev, excludeKeywords: keywords }))
+              }
+              disabled={isSubmitting}
+              variant="exclude"
+              placeholder="Type a keyword and press Enter (e.g., spam, crypto)"
+            />
+
+            <div className="vote-actions">
+              <button
+                onClick={handleSubmit}
+                disabled={
+                  isSubmitting ||
+                  (contentVote.includeKeywords.length === 0 &&
+                    contentVote.excludeKeywords.length === 0)
+                }
+                className="submit-button"
+              >
+                {isSubmitting
+                  ? 'Submitting...'
+                  : hasVoted
+                  ? 'Update content vote'
+                  : 'Submit content vote'}
+              </button>
+              {hasVoted && lastVoteTime && (
+                <span className="voted-indicator">
+                  Last voted {new Date(lastVoteTime).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+              )}
+            </div>
+
+            {/* Current community content rules */}
+            {currentContentRules && (
+              <div className="current-content-rules">
+                <h3>Current community rules</h3>
+                <p className="rules-description">
+                  These rules are active based on {currentContentRules.total_voters} voter(s).
+                  Keywords need {currentContentRules.threshold}+ votes to be included.
+                </p>
+                {currentContentRules.include_keywords.length > 0 && (
+                  <div className="rules-group">
+                    <span className="rules-label">Include:</span>
+                    <div className="rules-keywords">
+                      {currentContentRules.include_keywords.map((kw) => (
+                        <span key={kw} className="rule-keyword include">
+                          {kw}
+                          <span className="keyword-votes">
+                            ({currentContentRules.include_keyword_votes[kw] || 0})
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {currentContentRules.exclude_keywords.length > 0 && (
+                  <div className="rules-group">
+                    <span className="rules-label">Exclude:</span>
+                    <div className="rules-keywords">
+                      {currentContentRules.exclude_keywords.map((kw) => (
+                        <span key={kw} className="rule-keyword exclude">
+                          {kw}
+                          <span className="keyword-votes">
+                            ({currentContentRules.exclude_keyword_votes[kw] || 0})
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {currentContentRules.include_keywords.length === 0 &&
+                  currentContentRules.exclude_keywords.length === 0 && (
+                    <p className="no-rules">No content rules active yet.</p>
+                  )}
+              </div>
+            )}
+          </section>
+        )}
 
         <section className="current-weights-section">
           <h2>Current algorithm weights</h2>
@@ -402,6 +573,39 @@ const styles = `
     color: var(--text-secondary);
   }
 
+  .vote-tabs {
+    display: flex;
+    gap: var(--space-2);
+    margin-bottom: var(--space-6);
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    padding: var(--space-2);
+  }
+
+  .vote-tab {
+    flex: 1;
+    padding: var(--space-3) var(--space-4);
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-medium);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .vote-tab:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+
+  .vote-tab.active {
+    color: var(--text-primary);
+    background: var(--bg-elevated);
+  }
+
   .voting-section, .current-weights-section {
     background: var(--bg-card);
     border: 1px solid var(--border-default);
@@ -502,6 +706,74 @@ const styles = `
     font-size: var(--text-2xl);
     font-weight: var(--font-weight-semibold);
     color: var(--text-primary);
+  }
+
+  /* Content rules styles */
+  .current-content-rules {
+    margin-top: var(--space-8);
+    padding-top: var(--space-6);
+    border-top: 1px solid var(--border-default);
+  }
+
+  .current-content-rules h3 {
+    margin: 0 0 var(--space-2) 0;
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+  }
+
+  .rules-description {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    margin-bottom: var(--space-4);
+  }
+
+  .rules-group {
+    margin-bottom: var(--space-3);
+  }
+
+  .rules-label {
+    display: block;
+    font-size: var(--text-xs);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-secondary);
+    margin-bottom: var(--space-2);
+  }
+
+  .rules-keywords {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .rule-keyword {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+  }
+
+  .rule-keyword.include {
+    background: rgba(52, 199, 89, 0.15);
+    color: #34c759;
+  }
+
+  .rule-keyword.exclude {
+    background: rgba(255, 69, 58, 0.15);
+    color: #ff453a;
+  }
+
+  .keyword-votes {
+    font-size: var(--text-xs);
+    opacity: 0.7;
+  }
+
+  .no-rules {
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    font-style: italic;
   }
 
   @media (max-width: 768px) {
