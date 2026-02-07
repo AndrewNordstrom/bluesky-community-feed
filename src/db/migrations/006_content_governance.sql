@@ -20,6 +20,24 @@ ADD COLUMN content_rules JSONB DEFAULT '{"include_keywords": [], "exclude_keywor
 CREATE INDEX idx_votes_include_keywords ON governance_votes USING GIN (include_keywords);
 CREATE INDEX idx_votes_exclude_keywords ON governance_votes USING GIN (exclude_keywords);
 
+-- Make weight columns nullable to allow keyword-only votes
+ALTER TABLE governance_votes ALTER COLUMN recency_weight DROP NOT NULL;
+ALTER TABLE governance_votes ALTER COLUMN engagement_weight DROP NOT NULL;
+ALTER TABLE governance_votes ALTER COLUMN bridging_weight DROP NOT NULL;
+ALTER TABLE governance_votes ALTER COLUMN source_diversity_weight DROP NOT NULL;
+ALTER TABLE governance_votes ALTER COLUMN relevance_weight DROP NOT NULL;
+
+-- Update check constraint: weights must sum to 1.0 ONLY when all are present
+-- Allows keyword-only votes (all weights null) or weight votes (all weights set)
+ALTER TABLE governance_votes DROP CONSTRAINT IF EXISTS vote_weights_sum_to_one;
+ALTER TABLE governance_votes ADD CONSTRAINT vote_weights_sum_to_one
+  CHECK (
+    (recency_weight IS NULL AND engagement_weight IS NULL AND bridging_weight IS NULL AND source_diversity_weight IS NULL AND relevance_weight IS NULL)
+    OR
+    (recency_weight IS NOT NULL AND engagement_weight IS NOT NULL AND bridging_weight IS NOT NULL AND source_diversity_weight IS NOT NULL AND relevance_weight IS NOT NULL
+     AND abs(recency_weight + engagement_weight + bridging_weight + source_diversity_weight + relevance_weight - 1.0) < 0.01)
+  );
+
 -- Comment for documentation
 COMMENT ON COLUMN governance_votes.include_keywords IS 'Keywords voter wants to include in feed (OR logic)';
 COMMENT ON COLUMN governance_votes.exclude_keywords IS 'Keywords voter wants to exclude from feed (OR logic, takes precedence)';
