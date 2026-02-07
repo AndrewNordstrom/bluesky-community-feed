@@ -12,145 +12,19 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AdminGuard } from '../components/admin/AdminGuard';
-import { useAdminStatus } from '../hooks/useAdminStatus';
+import { OverviewPanel } from '../components/admin/OverviewPanel';
+import { EpochManager } from '../components/admin/EpochManager';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/admin.css';
 
 type AdminTab = 'overview' | 'epochs' | 'announcements' | 'health' | 'audit';
 
-// Placeholder panels - will be replaced with full implementations in Phase 6
-function OverviewPanel({ onNavigate }: { onNavigate: (tab: AdminTab) => void }) {
-  const { status, refetch } = useAdminStatus();
-
-  if (!status) {
-    return <div className="admin-card"><p>Loading...</p></div>;
-  }
-
-  const { currentEpoch, feed, contentRules } = status.system;
-
-  return (
-    <div className="overview-grid">
-      <div className="stat-card" onClick={() => onNavigate('epochs')} style={{ cursor: 'pointer' }}>
-        <div className="stat-card-header">
-          <h3>Current Epoch</h3>
-          {currentEpoch && (
-            <span className={`status-badge ${currentEpoch.status}`}>
-              {currentEpoch.status}
-            </span>
-          )}
-        </div>
-        {currentEpoch ? (
-          <>
-            <div className="stat-value">#{currentEpoch.id}</div>
-            <div className="stat-row">
-              <span>Votes</span>
-              <strong>{currentEpoch.voteCount}</strong>
-            </div>
-            <div className="stat-row">
-              <span>Voting</span>
-              <strong>{currentEpoch.votingOpen ? 'Open' : 'Closed'}</strong>
-            </div>
-          </>
-        ) : (
-          <p className="no-rules">No active epoch</p>
-        )}
-      </div>
-
-      <div className="stat-card" onClick={() => onNavigate('health')} style={{ cursor: 'pointer' }}>
-        <div className="stat-card-header">
-          <h3>Feed Status</h3>
-        </div>
-        <div className="stat-value">{feed.totalPosts.toLocaleString()}</div>
-        <div className="stat-row">
-          <span>Posts (total)</span>
-          <strong>{feed.totalPosts.toLocaleString()}</strong>
-        </div>
-        <div className="stat-row">
-          <span>Last 24h</span>
-          <strong>{feed.postsLast24h.toLocaleString()}</strong>
-        </div>
-        <div className="stat-row">
-          <span>Subscribers</span>
-          <strong>{feed.subscriberCount.toLocaleString()}</strong>
-        </div>
-      </div>
-
-      <div className="stat-card">
-        <div className="stat-card-header">
-          <h3>Content Rules</h3>
-        </div>
-        <div className="keyword-section">
-          <label>Include</label>
-          <div className="keyword-pills">
-            {contentRules.includeKeywords.length > 0 ? (
-              contentRules.includeKeywords.map(kw => (
-                <span key={kw} className="pill pill-include">{kw}</span>
-              ))
-            ) : (
-              <span className="no-rules">None</span>
-            )}
-          </div>
-        </div>
-        <div className="keyword-section">
-          <label>Exclude</label>
-          <div className="keyword-pills">
-            {contentRules.excludeKeywords.length > 0 ? (
-              contentRules.excludeKeywords.map(kw => (
-                <span key={kw} className="pill pill-exclude">{kw}</span>
-              ))
-            ) : (
-              <span className="no-rules">None</span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="stat-card">
-        <div className="stat-card-header">
-          <h3>Scoring Pipeline</h3>
-        </div>
-        <div className="stat-row">
-          <span>Last run</span>
-          <strong>
-            {feed.lastScoringRun
-              ? new Date(feed.lastScoringRun).toLocaleTimeString()
-              : 'Never'}
-          </strong>
-        </div>
-        <div className="stat-row">
-          <span>Duration</span>
-          <strong>
-            {feed.lastScoringDuration !== null
-              ? `${feed.lastScoringDuration.toFixed(1)}s`
-              : '-'}
-          </strong>
-        </div>
-        <div className="stat-row">
-          <span>Posts scored</span>
-          <strong>{feed.scoredPosts.toLocaleString()}</strong>
-        </div>
-        <button className="btn-secondary" onClick={() => refetch()} style={{ marginTop: '12px', width: '100%' }}>
-          Refresh
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function EpochManager() {
-  return (
-    <div className="admin-card">
-      <h2>Epoch Management</h2>
-      <p className="empty-state">Epoch management panel - coming in Phase 6</p>
-    </div>
-  );
-}
-
+// Placeholder panels - will be replaced in Phase 7
 function AnnouncementPanel() {
   return (
     <div className="admin-card">
       <h2>Announcements</h2>
-      <p className="empty-state">Announcements panel - coming in Phase 6</p>
+      <p className="empty-state">Announcements panel - coming in Phase 7</p>
     </div>
   );
 }
@@ -159,7 +33,7 @@ function FeedHealthPanel() {
   return (
     <div className="admin-card">
       <h2>Feed Health</h2>
-      <p className="empty-state">Feed health panel - coming in Phase 6</p>
+      <p className="empty-state">Feed health panel - coming in Phase 7</p>
     </div>
   );
 }
@@ -168,7 +42,7 @@ function AuditLogPanel() {
   return (
     <div className="admin-card">
       <h2>Audit Log</h2>
-      <p className="empty-state">Audit log panel - coming in Phase 6</p>
+      <p className="empty-state">Audit log panel - coming in Phase 7</p>
     </div>
   );
 }
@@ -230,7 +104,7 @@ export function AdminPage() {
           </nav>
 
           <main className="admin-content">
-            {activeTab === 'overview' && <OverviewPanel onNavigate={setActiveTab} />}
+            {activeTab === 'overview' && <OverviewPanel onNavigate={(tab) => setActiveTab(tab as AdminTab)} />}
             {activeTab === 'epochs' && <EpochManager />}
             {activeTab === 'announcements' && <AnnouncementPanel />}
             {activeTab === 'health' && <FeedHealthPanel />}
