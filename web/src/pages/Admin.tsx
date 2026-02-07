@@ -14,38 +14,13 @@ import { Link } from 'react-router-dom';
 import { AdminGuard } from '../components/admin/AdminGuard';
 import { OverviewPanel } from '../components/admin/OverviewPanel';
 import { EpochManager } from '../components/admin/EpochManager';
+import { AnnouncementPanel } from '../components/admin/AnnouncementPanel';
+import { FeedHealth } from '../components/admin/FeedHealth';
+import { AuditLog } from '../components/admin/AuditLog';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/admin.css';
 
 type AdminTab = 'overview' | 'epochs' | 'announcements' | 'health' | 'audit';
-
-// Placeholder panels - will be replaced in Phase 7
-function AnnouncementPanel() {
-  return (
-    <div className="admin-card">
-      <h2>Announcements</h2>
-      <p className="empty-state">Announcements panel - coming in Phase 7</p>
-    </div>
-  );
-}
-
-function FeedHealthPanel() {
-  return (
-    <div className="admin-card">
-      <h2>Feed Health</h2>
-      <p className="empty-state">Feed health panel - coming in Phase 7</p>
-    </div>
-  );
-}
-
-function AuditLogPanel() {
-  return (
-    <div className="admin-card">
-      <h2>Audit Log</h2>
-      <p className="empty-state">Audit log panel - coming in Phase 7</p>
-    </div>
-  );
-}
 
 export function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -107,8 +82,8 @@ export function AdminPage() {
             {activeTab === 'overview' && <OverviewPanel onNavigate={(tab) => setActiveTab(tab as AdminTab)} />}
             {activeTab === 'epochs' && <EpochManager />}
             {activeTab === 'announcements' && <AnnouncementPanel />}
-            {activeTab === 'health' && <FeedHealthPanel />}
-            {activeTab === 'audit' && <AuditLogPanel />}
+            {activeTab === 'health' && <FeedHealth />}
+            {activeTab === 'audit' && <AuditLog />}
           </main>
         </div>
       </div>
