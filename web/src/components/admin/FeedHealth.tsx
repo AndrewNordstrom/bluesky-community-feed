@@ -166,7 +166,7 @@ export function FeedHealth() {
         <div className="keyword-section">
           <label>Include keywords:</label>
           <div className="keyword-pills">
-            {health.contentRules.includeKeywords.length > 0 ? (
+            {health.contentRules?.includeKeywords?.length > 0 ? (
               health.contentRules.includeKeywords.map(k => (
                 <span key={k} className="pill pill-include">{k}</span>
               ))
@@ -178,7 +178,7 @@ export function FeedHealth() {
         <div className="keyword-section">
           <label>Exclude keywords:</label>
           <div className="keyword-pills">
-            {health.contentRules.excludeKeywords.length > 0 ? (
+            {health.contentRules?.excludeKeywords?.length > 0 ? (
               health.contentRules.excludeKeywords.map(k => (
                 <span key={k} className="pill pill-exclude">{k}</span>
               ))
@@ -187,7 +187,7 @@ export function FeedHealth() {
             )}
           </div>
         </div>
-        {health.contentRules.lastUpdated && (
+        {health.contentRules?.lastUpdated && (
           <p className="help-text" style={{ marginTop: '12px' }}>
             Last updated: {formatRelative(health.contentRules.lastUpdated)}
           </p>
