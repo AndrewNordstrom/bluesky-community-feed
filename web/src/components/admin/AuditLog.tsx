@@ -26,10 +26,12 @@ export function AuditLog() {
     setIsLoading(true);
     try {
       const data = await adminApi.getAuditLog(filter);
-      setEntries(data.entries);
-      setTotal(data.total);
+      setEntries(data.entries || []);
+      setTotal(data.total || 0);
     } catch (err) {
       console.error('Failed to fetch audit log', err);
+      setEntries([]);
+      setTotal(0);
     } finally {
       setIsLoading(false);
     }
