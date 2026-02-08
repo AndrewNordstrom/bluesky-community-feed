@@ -3,21 +3,34 @@
  *
  * Handles authentication for governance actions using Bluesky's createSession API.
  * Users authenticate with their Bluesky handle and app password.
- *
- * For the feed skeleton, we just decode the JWT from Bluesky's AppView.
- * For governance voting, we need stronger auth - verifying the user controls the DID.
  */
 
 import { FastifyRequest } from 'fastify';
 import { AtpAgent } from '@atproto/api';
+import { randomBytes } from 'crypto';
 import { logger } from '../lib/logger.js';
 import { SessionInfo } from './governance.types.js';
-
-// In-memory session store (for MVP - use Redis in production)
-const sessions = new Map<string, SessionInfo>();
+import { deleteSession, getSessionByToken, saveSession } from './session-store.js';
 
 // Session expiration time (24 hours)
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
+export class SessionStoreUnavailableError extends Error {
+  constructor(message = 'Session store unavailable') {
+    super(message);
+    this.name = 'SessionStoreUnavailableError';
+  }
+}
+
+export function extractBearerToken(request: FastifyRequest): string | null {
+  const authHeader = request.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return null;
+  }
+
+  const token = authHeader.slice('Bearer '.length).trim();
+  return token.length > 0 ? token : null;
+}
 
 /**
  * Authenticate a user with Bluesky using handle + app password.
@@ -44,20 +57,28 @@ export async function authenticateWithBluesky(
       return null;
     }
 
+    const sessionToken = randomBytes(32).toString('base64url');
     const sessionInfo: SessionInfo = {
       did: response.data.did,
       handle: response.data.handle,
-      accessJwt: response.data.accessJwt,
+      accessJwt: sessionToken,
       expiresAt: new Date(Date.now() + SESSION_TTL_MS),
     };
 
-    // Store session by access token
-    sessions.set(response.data.accessJwt, sessionInfo);
+    try {
+      await saveSession(sessionToken, sessionInfo);
+    } catch (err) {
+      logger.error({ err, did: sessionInfo.did }, 'Failed to persist session in Redis');
+      throw new SessionStoreUnavailableError();
+    }
 
     logger.info({ did: response.data.did, handle }, 'User authenticated');
 
     return sessionInfo;
   } catch (err) {
+    if (err instanceof SessionStoreUnavailableError) {
+      throw err;
+    }
     logger.error({ err, handle }, 'Bluesky authentication error');
     return null;
   }
@@ -70,27 +91,9 @@ export async function authenticateWithBluesky(
  * @param request - Fastify request
  * @returns The user's DID if authenticated, null otherwise
  */
-export function getAuthenticatedDid(request: FastifyRequest): string | null {
-  const authHeader = request.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return null;
-  }
-
-  const token = authHeader.slice('Bearer '.length);
-  const session = sessions.get(token);
-
-  if (!session) {
-    return null;
-  }
-
-  // Check if session expired
-  if (session.expiresAt < new Date()) {
-    sessions.delete(token);
-    return null;
-  }
-
-  return session.did;
+export async function getAuthenticatedDid(request: FastifyRequest): Promise<string | null> {
+  const session = await getSession(request);
+  return session?.did ?? null;
 }
 
 /**
@@ -99,27 +102,18 @@ export function getAuthenticatedDid(request: FastifyRequest): string | null {
  * @param request - Fastify request
  * @returns Session info if authenticated, null otherwise
  */
-export function getSession(request: FastifyRequest): SessionInfo | null {
-  const authHeader = request.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+export async function getSession(request: FastifyRequest): Promise<SessionInfo | null> {
+  const token = extractBearerToken(request);
+  if (!token) {
     return null;
   }
 
-  const token = authHeader.slice('Bearer '.length);
-  const session = sessions.get(token);
-
-  if (!session) {
-    return null;
+  try {
+    return await getSessionByToken(token);
+  } catch (err) {
+    logger.error({ err }, 'Failed to read session from Redis');
+    throw new SessionStoreUnavailableError();
   }
-
-  // Check if session expired
-  if (session.expiresAt < new Date()) {
-    sessions.delete(token);
-    return null;
-  }
-
-  return session;
 }
 
 /**
@@ -127,29 +121,11 @@ export function getSession(request: FastifyRequest): SessionInfo | null {
  *
  * @param token - The session token to invalidate
  */
-export function invalidateSession(token: string): void {
-  sessions.delete(token);
-}
-
-/**
- * Clean up expired sessions.
- * Call this periodically to prevent memory leaks.
- */
-export function cleanupExpiredSessions(): void {
-  const now = new Date();
-  let cleaned = 0;
-
-  for (const [token, session] of sessions.entries()) {
-    if (session.expiresAt < now) {
-      sessions.delete(token);
-      cleaned++;
-    }
-  }
-
-  if (cleaned > 0) {
-    logger.debug({ cleaned }, 'Cleaned up expired sessions');
+export async function invalidateSession(token: string): Promise<void> {
+  try {
+    await deleteSession(token);
+  } catch (err) {
+    logger.error({ err }, 'Failed to delete session from Redis');
+    throw new SessionStoreUnavailableError();
   }
 }
-
-// Clean up expired sessions every hour
-setInterval(cleanupExpiredSessions, 60 * 60 * 1000);

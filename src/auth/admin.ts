@@ -6,7 +6,7 @@
  */
 
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { getSession } from '../governance/auth.js';
+import { getSession, SessionStoreUnavailableError } from '../governance/auth.js';
 import { logger } from '../lib/logger.js';
 import { config } from '../config.js';
 
@@ -24,8 +24,8 @@ export function isAdmin(did: string): boolean {
 /**
  * Get the current user's DID from session, or null if not logged in.
  */
-export function getCurrentUserDid(request: FastifyRequest): string | null {
-  const session = getSession(request);
+export async function getCurrentUserDid(request: FastifyRequest): Promise<string | null> {
+  const session = await getSession(request);
   return session?.did || null;
 }
 
@@ -37,7 +37,16 @@ export async function requireAdmin(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
-  const did = getCurrentUserDid(request);
+  let did: string | null;
+  try {
+    did = await getCurrentUserDid(request);
+  } catch (err) {
+    if (err instanceof SessionStoreUnavailableError) {
+      logger.error({ err, path: request.url }, 'Admin auth check failed due to unavailable session store');
+      return reply.status(503).send({ error: 'Authentication service temporarily unavailable' });
+    }
+    throw err;
+  }
 
   if (!did) {
     logger.warn({ path: request.url }, 'Admin access attempted without login');
