@@ -539,6 +539,7 @@ const styles = `
     max-width: 900px;
     margin: 0 auto;
     padding: var(--space-6);
+    position: relative;
   }
 
   .epoch-info {
