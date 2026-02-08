@@ -3,7 +3,7 @@
  *
  * Main admin interface with tabbed navigation for:
  * - Overview: System status summary
- * - Epochs: Epoch management and transitions
+ * - Governance: Round management and direct overrides
  * - Announcements: Bot announcements
  * - Feed Health: System health monitoring
  * - Audit Log: Activity logging
@@ -13,7 +13,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AdminGuard } from '../components/admin/AdminGuard';
 import { OverviewPanel } from '../components/admin/OverviewPanel';
-import { EpochManager } from '../components/admin/EpochManager';
+import { GovernancePanel } from '../components/admin/GovernancePanel';
 import { AnnouncementPanel } from '../components/admin/AnnouncementPanel';
 import { FeedHealth } from '../components/admin/FeedHealth';
 import { AuditLog } from '../components/admin/AuditLog';
@@ -21,7 +21,7 @@ import { TabPanel } from '../components/TabPanel';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/admin.css';
 
-type AdminTab = 'overview' | 'epochs' | 'announcements' | 'health' | 'audit';
+type AdminTab = 'overview' | 'governance' | 'announcements' | 'health' | 'audit';
 
 export function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -64,7 +64,7 @@ export function AdminPage() {
           <nav className="admin-tabs">
             {[
               { id: 'overview', label: 'Overview' },
-              { id: 'epochs', label: 'Epochs' },
+              { id: 'governance', label: 'Governance' },
               { id: 'announcements', label: 'Announcements' },
               { id: 'health', label: 'Feed Health' },
               { id: 'audit', label: 'Audit Log' }
@@ -84,8 +84,8 @@ export function AdminPage() {
               <TabPanel isActive={activeTab === 'overview'} tabKey="overview">
                 <OverviewPanel onNavigate={(tab) => setActiveTab(tab as AdminTab)} />
               </TabPanel>
-              <TabPanel isActive={activeTab === 'epochs'} tabKey="epochs">
-                <EpochManager />
+              <TabPanel isActive={activeTab === 'governance'} tabKey="governance">
+                <GovernancePanel />
               </TabPanel>
               <TabPanel isActive={activeTab === 'announcements'} tabKey="announcements">
                 <AnnouncementPanel />

@@ -13,6 +13,13 @@ const ACTION_TYPES = [
   { value: 'voting_opened', label: 'Voting Opened' },
   { value: 'voting_closed', label: 'Voting Closed' },
   { value: 'epoch_updated', label: 'Epoch Updated' },
+  { value: 'admin_rules_override', label: 'Rules Overrides' },
+  { value: 'admin_keyword_added', label: 'Keywords Added' },
+  { value: 'admin_keyword_removed', label: 'Keywords Removed' },
+  { value: 'admin_weights_override', label: 'Weight Overrides' },
+  { value: 'admin_apply_results', label: 'Apply Results' },
+  { value: 'admin_extend_voting', label: 'Extend Voting' },
+  { value: 'admin_end_round', label: 'Round Transitions' },
   { value: 'announcement_posted', label: 'Announcements' },
   { value: 'manual_rescore', label: 'Manual Rescores' },
 ];

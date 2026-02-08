@@ -20,7 +20,7 @@ export function OverviewPanel({ onNavigate }: OverviewPanelProps) {
     <div className="overview-grid content-loaded">
       <div className="stat-card">
         <div className="stat-card-header">
-          <h3>Current Epoch</h3>
+          <h3>Current Round</h3>
           {epoch && (
             <span className={`status-badge ${epoch.votingOpen ? 'open' : 'closed'}`}>
               {epoch.votingOpen ? 'Voting Open' : 'Voting Closed'}
@@ -29,7 +29,7 @@ export function OverviewPanel({ onNavigate }: OverviewPanelProps) {
         </div>
         {epoch ? (
           <>
-            <div className="stat-value">Epoch {epoch.id}</div>
+            <div className="stat-value">Round {epoch.id}</div>
             <div className="stat-row">
               <span>Votes cast</span>
               <strong>{epoch.voteCount}</strong>
@@ -45,7 +45,7 @@ export function OverviewPanel({ onNavigate }: OverviewPanelProps) {
               <strong>{epoch.autoTransition ? 'Enabled' : 'Disabled'}</strong>
             </div>
             <div className="button-group" style={{ marginTop: '16px' }}>
-              <button className="btn-secondary" onClick={() => onNavigate('epochs')}>
+              <button className="btn-secondary" onClick={() => onNavigate('governance')}>
                 Manage
               </button>
             </div>
@@ -111,8 +111,8 @@ export function OverviewPanel({ onNavigate }: OverviewPanelProps) {
       <div className="stat-card">
         <h3>Quick Actions</h3>
         <div className="button-group-vertical">
-          <button className="btn-primary" onClick={() => onNavigate('epochs')}>
-            Manage Epoch
+          <button className="btn-primary" onClick={() => onNavigate('governance')}>
+            Manage Governance
           </button>
           <button className="btn-secondary" onClick={() => onNavigate('announcements')}>
             Post Announcement

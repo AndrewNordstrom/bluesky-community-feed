@@ -90,7 +90,11 @@ export function registerEpochRoutes(app: FastifyInstance): void {
 
     // Get current epoch
     const current = await db.query(`
-      SELECT id FROM governance_epochs WHERE status = 'active' LIMIT 1
+      SELECT id
+      FROM governance_epochs
+      WHERE status IN ('active', 'voting')
+      ORDER BY id DESC
+      LIMIT 1
     `);
 
     if (current.rows.length === 0) {
@@ -169,7 +173,8 @@ export function registerEpochRoutes(app: FastifyInstance): void {
       SELECT id,
         (SELECT COUNT(*) FROM governance_votes WHERE epoch_id = governance_epochs.id) as vote_count
       FROM governance_epochs
-      WHERE status = 'active'
+      WHERE status IN ('active', 'voting')
+      ORDER BY id DESC
       LIMIT 1
     `);
 

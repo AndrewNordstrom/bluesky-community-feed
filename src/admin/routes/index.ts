@@ -13,6 +13,7 @@ import { registerAnnouncementRoutes } from './announcements.js';
 import { registerFeedHealthRoutes } from './feed-health.js';
 import { registerAuditLogRoutes } from './audit-log.js';
 import { registerSchedulerRoutes } from './scheduler.js';
+import { registerGovernanceRoutes } from './governance.js';
 import { logger } from '../../lib/logger.js';
 
 export function registerAdminRoutes(app: FastifyInstance): void {
@@ -28,6 +29,7 @@ export function registerAdminRoutes(app: FastifyInstance): void {
       registerFeedHealthRoutes(adminApp);
       registerAuditLogRoutes(adminApp);
       registerSchedulerRoutes(adminApp);
+      registerGovernanceRoutes(adminApp);
 
       logger.info('Admin routes registered');
     },

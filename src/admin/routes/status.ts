@@ -38,7 +38,7 @@ export function registerStatusRoutes(app: FastifyInstance): void {
         content_rules,
         created_at
       FROM governance_epochs
-      WHERE status = 'active'
+      WHERE status IN ('active', 'voting')
       ORDER BY id DESC
       LIMIT 1
     `);
@@ -105,7 +105,7 @@ export function registerStatusRoutes(app: FastifyInstance): void {
           ? {
               id: currentEpoch.id,
               status: currentEpoch.status,
-              votingOpen: currentEpoch.status === 'active',
+              votingOpen: currentEpoch.status === 'active' || currentEpoch.status === 'voting',
               votingEndsAt: currentEpoch.voting_ends_at,
               autoTransition: currentEpoch.auto_transition || false,
               voteCount,

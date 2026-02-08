@@ -72,7 +72,7 @@ export function registerFeedHealthRoutes(app: FastifyInstance): void {
     const epochResult = await db.query(`
       SELECT content_rules, created_at as rules_updated
       FROM governance_epochs
-      WHERE status = 'active'
+      WHERE status IN ('active', 'voting')
       LIMIT 1
     `);
 

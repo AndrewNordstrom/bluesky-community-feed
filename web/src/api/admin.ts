@@ -8,6 +8,64 @@
 import { api } from './client';
 
 // Types
+export interface GovernanceWeights {
+  recency: number;
+  engagement: number;
+  bridging: number;
+  sourceDiversity: number;
+  relevance: number;
+}
+
+export interface ContentRules {
+  includeKeywords: string[];
+  excludeKeywords: string[];
+}
+
+export interface RoundSummary {
+  id: number;
+  status: string;
+  voteCount: number;
+  createdAt: string;
+  closedAt: string | null;
+  votingEndsAt: string | null;
+  autoTransition: boolean;
+  weights: GovernanceWeights;
+  contentRules: ContentRules;
+}
+
+export interface GovernanceStatus {
+  currentRound: RoundSummary | null;
+  rounds: RoundSummary[];
+  weights: GovernanceWeights | null;
+  includeKeywords: string[];
+  excludeKeywords: string[];
+  votingEndsAt: string | null;
+  autoTransition: boolean;
+}
+
+export interface RoundDetails {
+  round: RoundSummary;
+  startingWeights: GovernanceWeights;
+  endingWeights: GovernanceWeights;
+  startingRules: ContentRules;
+  endingRules: ContentRules;
+  voteCount: number;
+  weightConfigurations: Array<{
+    count: number;
+    weights: GovernanceWeights | null;
+  }>;
+  duration: {
+    startedAt: string;
+    endedAt: string | null;
+    durationMs: number;
+  };
+  auditTrail: Array<{
+    action: string;
+    details: Record<string, unknown> | null;
+    created_at: string;
+  }>;
+}
+
 export interface AdminStatus {
   isAdmin: boolean;
   system: {
@@ -18,7 +76,7 @@ export interface AdminStatus {
       votingEndsAt: string | null;
       autoTransition: boolean;
       voteCount: number;
-      weights: Record<string, number>;
+      weights: GovernanceWeights;
       contentRules: { include_keywords: string[]; exclude_keywords: string[] };
       createdAt: string;
     } | null;
@@ -130,7 +188,7 @@ export const adminApi = {
   async updateEpoch(data: {
     votingOpen?: boolean;
     votingEndsAt?: string | null;
-    autoTransition?: boolean
+    autoTransition?: boolean;
   }): Promise<{ success: boolean; epoch: Partial<Epoch> }> {
     const response = await api.patch('/api/admin/epochs/current', data);
     return response.data;
@@ -198,6 +256,76 @@ export const adminApi = {
     errors: number;
   }> {
     const response = await api.post('/api/admin/scheduler/check');
+    return response.data;
+  },
+
+  async getGovernanceStatus(): Promise<GovernanceStatus> {
+    const response = await api.get('/api/admin/governance');
+    return response.data;
+  },
+
+  async updateContentRules(contentRules: {
+    includeKeywords?: string[];
+    excludeKeywords?: string[];
+  }): Promise<{ success: boolean; rules: ContentRules; rescoreTriggered: boolean }> {
+    const response = await api.patch('/api/admin/governance/content-rules', contentRules);
+    return response.data;
+  },
+
+  async addKeyword(type: 'include' | 'exclude', keyword: string): Promise<{
+    success: boolean;
+    rules: ContentRules;
+    rescoreTriggered: boolean;
+  }> {
+    const response = await api.post('/api/admin/governance/content-rules/keyword', { type, keyword });
+    return response.data;
+  },
+
+  async removeKeyword(
+    type: 'include' | 'exclude',
+    keyword: string,
+    confirm?: boolean
+  ): Promise<{ success: boolean; rules: ContentRules; rescoreTriggered: boolean }> {
+    const response = await api.delete('/api/admin/governance/content-rules/keyword', {
+      data: { type, keyword, confirm },
+    });
+    return response.data;
+  },
+
+  async updateWeights(weights: Partial<GovernanceWeights>): Promise<{
+    success: boolean;
+    weights: GovernanceWeights;
+    rescoreTriggered: boolean;
+  }> {
+    const response = await api.patch('/api/admin/governance/weights', weights);
+    return response.data;
+  },
+
+  async extendVoting(hours: number): Promise<{ success: boolean; round: RoundSummary }> {
+    const response = await api.post('/api/admin/governance/extend-voting', { hours });
+    return response.data;
+  },
+
+  async applyResults(): Promise<{
+    success: boolean;
+    voteCount: number;
+    appliedWeights: boolean;
+    weights: GovernanceWeights;
+    contentRules: ContentRules;
+    round: RoundSummary;
+    rescoreTriggered: boolean;
+  }> {
+    const response = await api.post('/api/admin/governance/apply-results');
+    return response.data;
+  },
+
+  async getRoundDetails(id: number): Promise<RoundDetails> {
+    const response = await api.get(`/api/admin/governance/rounds/${id}`);
+    return response.data;
+  },
+
+  async endRound(force = false): Promise<{ success: boolean; newRoundId: number }> {
+    const response = await api.post('/api/admin/governance/end-round', { force });
     return response.data;
   },
 };
