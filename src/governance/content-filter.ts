@@ -20,6 +20,7 @@ import {
 const CACHE_TTL_SECONDS = 300;
 const CACHE_KEY = 'content_rules:current';
 const ASCII_KEYWORD_PATTERN = /^[a-z0-9][a-z0-9\s-]*$/;
+const UNICODE_WORD_CLASS = '\\p{L}\\p{N}';
 const keywordMatcherCache = new Map<string, (text: string) => boolean>();
 
 function escapeRegex(value: string): string {
@@ -47,7 +48,10 @@ function getKeywordMatcher(keyword: string): (text: string) => boolean {
     .map(escapeRegex)
     .join('[\\s_-]+');
 
-  const regex = new RegExp(`(^|[^a-z0-9])${phrasePattern}(?=$|[^a-z0-9])`);
+  const regex = new RegExp(
+    `(^|[^${UNICODE_WORD_CLASS}])${phrasePattern}(?=$|[^${UNICODE_WORD_CLASS}])`,
+    'u'
+  );
   const matcher = (text: string) => regex.test(text);
   keywordMatcherCache.set(normalizedKeyword, matcher);
   return matcher;

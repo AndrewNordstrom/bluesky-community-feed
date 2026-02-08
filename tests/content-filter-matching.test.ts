@@ -60,4 +60,13 @@ describe('content filter keyword matching', () => {
 
     expect(result).toEqual({ passes: false, reason: 'no_include_match' });
   });
+
+  it('does not treat accented letters as boundaries for ASCII keywords', () => {
+    const result = checkContentRules('Le Fosse Mortel est different de Fossé', {
+      includeKeywords: ['foss'],
+      excludeKeywords: [],
+    });
+
+    expect(result).toEqual({ passes: false, reason: 'no_include_match' });
+  });
 });
