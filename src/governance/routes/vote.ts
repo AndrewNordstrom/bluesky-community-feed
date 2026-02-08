@@ -14,7 +14,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../db/client.js';
 import { logger } from '../../lib/logger.js';
-import { getAuthenticatedDid } from '../auth.js';
+import { getAuthenticatedDid, SessionStoreUnavailableError } from '../auth.js';
 import {
   normalizeWeights,
   votePayloadToWeights,
@@ -96,7 +96,18 @@ export function registerVoteRoute(app: FastifyInstance): void {
    */
   app.post('/api/governance/vote', async (request: FastifyRequest, reply: FastifyReply) => {
     // 1. Authenticate voter
-    const voterDid = getAuthenticatedDid(request);
+    let voterDid: string | null;
+    try {
+      voterDid = await getAuthenticatedDid(request);
+    } catch (err) {
+      if (err instanceof SessionStoreUnavailableError) {
+        return reply.code(503).send({
+          error: 'SessionStoreUnavailable',
+          message: 'Authentication service is temporarily unavailable. Please try again.',
+        });
+      }
+      throw err;
+    }
     if (!voterDid) {
       return reply.code(401).send({
         error: 'Unauthorized',
@@ -272,7 +283,18 @@ export function registerVoteRoute(app: FastifyInstance): void {
    * Get the current user's vote for the active epoch.
    */
   app.get('/api/governance/vote', async (request: FastifyRequest, reply: FastifyReply) => {
-    const voterDid = getAuthenticatedDid(request);
+    let voterDid: string | null;
+    try {
+      voterDid = await getAuthenticatedDid(request);
+    } catch (err) {
+      if (err instanceof SessionStoreUnavailableError) {
+        return reply.code(503).send({
+          error: 'SessionStoreUnavailable',
+          message: 'Authentication service is temporarily unavailable. Please try again.',
+        });
+      }
+      throw err;
+    }
     if (!voterDid) {
       return reply.code(401).send({
         error: 'Unauthorized',

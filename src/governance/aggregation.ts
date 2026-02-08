@@ -144,32 +144,107 @@ export async function aggregateVotes(epochId: number): Promise<GovernanceWeights
  */
 export async function getVoteStatistics(epochId: number): Promise<{
   count: number;
+  weightVoteCount: number;
+  contentVoteCount: number;
   average: GovernanceWeights;
   median: GovernanceWeights;
   stdDev: GovernanceWeights;
 } | null> {
   const result = await db.query(
     `SELECT
-      COUNT(*) as count,
-      AVG(recency_weight) as avg_recency,
-      AVG(engagement_weight) as avg_engagement,
-      AVG(bridging_weight) as avg_bridging,
-      AVG(source_diversity_weight) as avg_source_diversity,
-      AVG(relevance_weight) as avg_relevance,
-      STDDEV(recency_weight) as std_recency,
-      STDDEV(engagement_weight) as std_engagement,
-      STDDEV(bridging_weight) as std_bridging,
-      STDDEV(source_diversity_weight) as std_source_diversity,
-      STDDEV(relevance_weight) as std_relevance
+      COUNT(*) FILTER (
+        WHERE recency_weight IS NOT NULL
+          AND engagement_weight IS NOT NULL
+          AND bridging_weight IS NOT NULL
+          AND source_diversity_weight IS NOT NULL
+          AND relevance_weight IS NOT NULL
+      ) as weight_vote_count,
+      COUNT(*) FILTER (
+        WHERE
+          (include_keywords IS NOT NULL AND array_length(include_keywords, 1) > 0)
+          OR
+          (exclude_keywords IS NOT NULL AND array_length(exclude_keywords, 1) > 0)
+      ) as content_vote_count,
+      AVG(recency_weight) FILTER (
+        WHERE recency_weight IS NOT NULL
+          AND engagement_weight IS NOT NULL
+          AND bridging_weight IS NOT NULL
+          AND source_diversity_weight IS NOT NULL
+          AND relevance_weight IS NOT NULL
+      ) as avg_recency,
+      AVG(engagement_weight) FILTER (
+        WHERE recency_weight IS NOT NULL
+          AND engagement_weight IS NOT NULL
+          AND bridging_weight IS NOT NULL
+          AND source_diversity_weight IS NOT NULL
+          AND relevance_weight IS NOT NULL
+      ) as avg_engagement,
+      AVG(bridging_weight) FILTER (
+        WHERE recency_weight IS NOT NULL
+          AND engagement_weight IS NOT NULL
+          AND bridging_weight IS NOT NULL
+          AND source_diversity_weight IS NOT NULL
+          AND relevance_weight IS NOT NULL
+      ) as avg_bridging,
+      AVG(source_diversity_weight) FILTER (
+        WHERE recency_weight IS NOT NULL
+          AND engagement_weight IS NOT NULL
+          AND bridging_weight IS NOT NULL
+          AND source_diversity_weight IS NOT NULL
+          AND relevance_weight IS NOT NULL
+      ) as avg_source_diversity,
+      AVG(relevance_weight) FILTER (
+        WHERE recency_weight IS NOT NULL
+          AND engagement_weight IS NOT NULL
+          AND bridging_weight IS NOT NULL
+          AND source_diversity_weight IS NOT NULL
+          AND relevance_weight IS NOT NULL
+      ) as avg_relevance,
+      STDDEV(recency_weight) FILTER (
+        WHERE recency_weight IS NOT NULL
+          AND engagement_weight IS NOT NULL
+          AND bridging_weight IS NOT NULL
+          AND source_diversity_weight IS NOT NULL
+          AND relevance_weight IS NOT NULL
+      ) as std_recency,
+      STDDEV(engagement_weight) FILTER (
+        WHERE recency_weight IS NOT NULL
+          AND engagement_weight IS NOT NULL
+          AND bridging_weight IS NOT NULL
+          AND source_diversity_weight IS NOT NULL
+          AND relevance_weight IS NOT NULL
+      ) as std_engagement,
+      STDDEV(bridging_weight) FILTER (
+        WHERE recency_weight IS NOT NULL
+          AND engagement_weight IS NOT NULL
+          AND bridging_weight IS NOT NULL
+          AND source_diversity_weight IS NOT NULL
+          AND relevance_weight IS NOT NULL
+      ) as std_bridging,
+      STDDEV(source_diversity_weight) FILTER (
+        WHERE recency_weight IS NOT NULL
+          AND engagement_weight IS NOT NULL
+          AND bridging_weight IS NOT NULL
+          AND source_diversity_weight IS NOT NULL
+          AND relevance_weight IS NOT NULL
+      ) as std_source_diversity,
+      STDDEV(relevance_weight) FILTER (
+        WHERE recency_weight IS NOT NULL
+          AND engagement_weight IS NOT NULL
+          AND bridging_weight IS NOT NULL
+          AND source_diversity_weight IS NOT NULL
+          AND relevance_weight IS NOT NULL
+      ) as std_relevance
      FROM governance_votes
      WHERE epoch_id = $1`,
     [epochId]
   );
 
   const row = result.rows[0];
-  const count = parseInt(row.count);
+  const weightVoteCount = parseInt(row.weight_vote_count);
+  const contentVoteCount = parseInt(row.content_vote_count);
 
-  if (count === 0) {
+  if (weightVoteCount === 0) {
     return null;
   }
 
@@ -178,7 +253,12 @@ export async function getVoteStatistics(epochId: number): Promise<{
     `SELECT recency_weight, engagement_weight, bridging_weight,
             source_diversity_weight, relevance_weight
      FROM governance_votes
-     WHERE epoch_id = $1`,
+     WHERE epoch_id = $1
+       AND recency_weight IS NOT NULL
+       AND engagement_weight IS NOT NULL
+       AND bridging_weight IS NOT NULL
+       AND source_diversity_weight IS NOT NULL
+       AND relevance_weight IS NOT NULL`,
     [epochId]
   );
 
@@ -193,7 +273,9 @@ export async function getVoteStatistics(epochId: number): Promise<{
   };
 
   return {
-    count,
+    count: weightVoteCount,
+    weightVoteCount,
+    contentVoteCount,
     average: {
       recency: parseFloat(row.avg_recency) || 0,
       engagement: parseFloat(row.avg_engagement) || 0,

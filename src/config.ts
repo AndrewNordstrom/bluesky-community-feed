@@ -24,6 +24,11 @@ const ConfigSchema = z.object({
   // Redis
   REDIS_URL: z.string().startsWith('redis://'),
 
+  // Feed requester JWT verification
+  FEED_JWT_AUDIENCE: z.string().default(''),
+  FEED_JWT_ALLOWED_ISSUER_PREFIXES: z.string().default('did:plc:,did:web:'),
+  FEED_JWT_MAX_FUTURE_SKEW_SECONDS: z.coerce.number().default(300),
+
   // Scoring
   SCORING_INTERVAL_CRON: z.string().default('*/5 * * * *'),
   SCORING_INTERVAL_MS: z.coerce.number().default(300_000), // 5 minutes in milliseconds
@@ -42,6 +47,20 @@ const ConfigSchema = z.object({
   POLIS_CONVERSATION_ID: z.string().optional().default(''),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  CORS_ALLOWED_ORIGINS: z.string().default(''),
+
+  // API rate limiting
+  RATE_LIMIT_ENABLED: z.coerce.boolean().default(true),
+  RATE_LIMIT_GLOBAL_MAX: z.coerce.number().default(200),
+  RATE_LIMIT_GLOBAL_WINDOW_MS: z.coerce.number().default(60_000),
+  RATE_LIMIT_LOGIN_MAX: z.coerce.number().default(10),
+  RATE_LIMIT_LOGIN_WINDOW_MS: z.coerce.number().default(60_000),
+  RATE_LIMIT_VOTE_MAX: z.coerce.number().default(20),
+  RATE_LIMIT_VOTE_WINDOW_MS: z.coerce.number().default(60_000),
+  RATE_LIMIT_ADMIN_MAX: z.coerce.number().default(30),
+  RATE_LIMIT_ADMIN_WINDOW_MS: z.coerce.number().default(60_000),
+  RATE_LIMIT_ADMIN_CRITICAL_MAX: z.coerce.number().default(10),
+  RATE_LIMIT_ADMIN_CRITICAL_WINDOW_MS: z.coerce.number().default(60_000),
 
   // Bot (optional)
   BOT_ENABLED: z.coerce.boolean().default(false),

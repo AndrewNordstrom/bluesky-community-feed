@@ -8,7 +8,13 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { authenticateWithBluesky, getSession, invalidateSession } from '../auth.js';
+import {
+  authenticateWithBluesky,
+  extractBearerToken,
+  getSession,
+  invalidateSession,
+  SessionStoreUnavailableError,
+} from '../auth.js';
 import { logger } from '../../lib/logger.js';
 
 const LoginSchema = z.object({
@@ -55,6 +61,12 @@ export function registerAuthRoute(app: FastifyInstance): void {
         expiresAt: session.expiresAt.toISOString(),
       });
     } catch (err) {
+      if (err instanceof SessionStoreUnavailableError) {
+        return reply.code(503).send({
+          error: 'SessionStoreUnavailable',
+          message: 'Authentication service is temporarily unavailable. Please try again.',
+        });
+      }
       logger.error({ err, handle }, 'Login error');
       return reply.code(500).send({
         error: 'InternalError',
@@ -68,7 +80,18 @@ export function registerAuthRoute(app: FastifyInstance): void {
    * Get current session info if authenticated.
    */
   app.get('/api/governance/auth/session', async (request: FastifyRequest, reply: FastifyReply) => {
-    const session = getSession(request);
+    let session;
+    try {
+      session = await getSession(request);
+    } catch (err) {
+      if (err instanceof SessionStoreUnavailableError) {
+        return reply.code(503).send({
+          error: 'SessionStoreUnavailable',
+          message: 'Authentication service is temporarily unavailable. Please try again.',
+        });
+      }
+      throw err;
+    }
 
     if (!session) {
       return reply.code(401).send({
@@ -90,14 +113,22 @@ export function registerAuthRoute(app: FastifyInstance): void {
    * Invalidate the current session.
    */
   app.post('/api/governance/auth/logout', async (request: FastifyRequest, reply: FastifyReply) => {
-    const authHeader = request.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const token = extractBearerToken(request);
+    if (!token) {
       return reply.send({ success: true, message: 'No session to invalidate' });
     }
 
-    const token = authHeader.slice('Bearer '.length);
-    invalidateSession(token);
+    try {
+      await invalidateSession(token);
+    } catch (err) {
+      if (err instanceof SessionStoreUnavailableError) {
+        return reply.code(503).send({
+          error: 'SessionStoreUnavailable',
+          message: 'Authentication service is temporarily unavailable. Please try again.',
+        });
+      }
+      throw err;
+    }
 
     logger.info('User logged out');
 

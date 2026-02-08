@@ -11,7 +11,7 @@ import { db } from '../../db/client.js';
 import { config } from '../../config.js';
 import { logger } from '../../lib/logger.js';
 import { toEpochInfo } from '../governance.types.js';
-import { getAuthenticatedDid } from '../auth.js';
+import { getAuthenticatedDid, SessionStoreUnavailableError } from '../auth.js';
 import { triggerEpochTransition, forceEpochTransition, getCurrentEpochStatus } from '../epoch-manager.js';
 
 /**
@@ -226,7 +226,18 @@ export function registerEpochsRoute(app: FastifyInstance): void {
    */
   app.post('/api/governance/epochs/transition', async (request: FastifyRequest, reply: FastifyReply) => {
     // Admin auth check
-    const requesterDid = getAuthenticatedDid(request);
+    let requesterDid: string | null;
+    try {
+      requesterDid = await getAuthenticatedDid(request);
+    } catch (err) {
+      if (err instanceof SessionStoreUnavailableError) {
+        return reply.code(503).send({
+          error: 'SessionStoreUnavailable',
+          message: 'Authentication service is temporarily unavailable. Please try again.',
+        });
+      }
+      throw err;
+    }
     if (!requesterDid) {
       return reply.code(401).send({
         error: 'Unauthorized',

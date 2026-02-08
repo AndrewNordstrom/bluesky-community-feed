@@ -8,7 +8,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { config } from '../../config.js';
 import { logger } from '../../lib/logger.js';
-import { getAuthenticatedDid } from '../../governance/auth.js';
+import { getAuthenticatedDid, SessionStoreUnavailableError } from '../../governance/auth.js';
 import { isBotEnabled, getBotDid } from '../agent.js';
 import { postAnnouncement, getPinnedAnnouncement, unpinAnnouncement, getRecentAnnouncements } from '../poster.js';
 import { getRetryQueueLength, clearRetryQueue, processRetryQueue } from '../safe-poster.js';
@@ -48,7 +48,18 @@ export function registerAnnounceRoute(app: FastifyInstance): void {
    */
   app.post('/api/bot/announce', async (request: FastifyRequest, reply: FastifyReply) => {
     // Authenticate
-    const requesterDid = getAuthenticatedDid(request);
+    let requesterDid: string | null;
+    try {
+      requesterDid = await getAuthenticatedDid(request);
+    } catch (err) {
+      if (err instanceof SessionStoreUnavailableError) {
+        return reply.code(503).send({
+          error: 'SessionStoreUnavailable',
+          message: 'Authentication service is temporarily unavailable. Please try again.',
+        });
+      }
+      throw err;
+    }
     if (!requesterDid) {
       return reply.code(401).send({
         error: 'Unauthorized',
@@ -116,7 +127,18 @@ export function registerAnnounceRoute(app: FastifyInstance): void {
    * Unpin the current announcement. Requires admin DID.
    */
   app.delete('/api/bot/unpin', async (request: FastifyRequest, reply: FastifyReply) => {
-    const requesterDid = getAuthenticatedDid(request);
+    let requesterDid: string | null;
+    try {
+      requesterDid = await getAuthenticatedDid(request);
+    } catch (err) {
+      if (err instanceof SessionStoreUnavailableError) {
+        return reply.code(503).send({
+          error: 'SessionStoreUnavailable',
+          message: 'Authentication service is temporarily unavailable. Please try again.',
+        });
+      }
+      throw err;
+    }
     if (!requesterDid) {
       return reply.code(401).send({
         error: 'Unauthorized',
@@ -166,7 +188,18 @@ export function registerAnnounceRoute(app: FastifyInstance): void {
    * Process retry queue. Requires admin DID.
    */
   app.post('/api/bot/retry', async (request: FastifyRequest, reply: FastifyReply) => {
-    const requesterDid = getAuthenticatedDid(request);
+    let requesterDid: string | null;
+    try {
+      requesterDid = await getAuthenticatedDid(request);
+    } catch (err) {
+      if (err instanceof SessionStoreUnavailableError) {
+        return reply.code(503).send({
+          error: 'SessionStoreUnavailable',
+          message: 'Authentication service is temporarily unavailable. Please try again.',
+        });
+      }
+      throw err;
+    }
     if (!requesterDid) {
       return reply.code(401).send({
         error: 'Unauthorized',
@@ -195,7 +228,18 @@ export function registerAnnounceRoute(app: FastifyInstance): void {
    * Clear retry queue. Requires admin DID.
    */
   app.delete('/api/bot/retry', async (request: FastifyRequest, reply: FastifyReply) => {
-    const requesterDid = getAuthenticatedDid(request);
+    let requesterDid: string | null;
+    try {
+      requesterDid = await getAuthenticatedDid(request);
+    } catch (err) {
+      if (err instanceof SessionStoreUnavailableError) {
+        return reply.code(503).send({
+          error: 'SessionStoreUnavailable',
+          message: 'Authentication service is temporarily unavailable. Please try again.',
+        });
+      }
+      throw err;
+    }
     if (!requesterDid) {
       return reply.code(401).send({
         error: 'Unauthorized',

@@ -1,10 +1,12 @@
 import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
+import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { logger } from '../lib/logger.js';
+import { config } from '../config.js';
 import { registerDescribeGenerator } from './routes/describe-generator.js';
 import { registerWellKnown } from './routes/well-known.js';
 import { registerFeedSkeleton } from './routes/feed-skeleton.js';
@@ -15,6 +17,8 @@ import { registerAdminRoutes } from '../admin/routes/index.js';
 import { getHealthStatus, isLive, isReady } from '../lib/health.js';
 import { generateCorrelationId } from '../lib/correlation.js';
 import { AppError, isAppError } from '../lib/errors.js';
+import { redis } from '../db/redis.js';
+import { getAuthenticatedDid } from '../governance/auth.js';
 
 // Extend FastifyRequest to include correlationId
 declare module 'fastify' {
@@ -33,10 +37,100 @@ export async function createServer() {
     trustProxy: true,
   });
 
+  const allowedOrigins = parseAllowedOrigins();
+
   // Register CORS for cross-origin requests
   await app.register(cors, {
-    origin: true,
+    origin: (origin, cb) => {
+      if (!origin) {
+        cb(null, true);
+        return;
+      }
+
+      cb(null, allowedOrigins.has(origin));
+    },
   });
+
+  if (config.RATE_LIMIT_ENABLED) {
+    await app.register(fastifyRateLimit, {
+      global: true,
+      redis,
+      max: config.RATE_LIMIT_GLOBAL_MAX,
+      timeWindow: config.RATE_LIMIT_GLOBAL_WINDOW_MS,
+      keyGenerator: (request) => request.ip,
+      errorResponseBuilder: (_request, context) => ({
+        error: 'TooManyRequests',
+        message: 'Rate limit exceeded. Please retry later.',
+        retryAfterSeconds: Math.max(1, Math.ceil(context.ttl / 1000)),
+      }),
+    });
+
+    app.addHook('onRoute', (routeOptions) => {
+      const url = routeOptions.url;
+      if (url === '/api/governance/auth/login') {
+        routeOptions.config = {
+          ...routeOptions.config,
+          rateLimit: {
+            max: config.RATE_LIMIT_LOGIN_MAX,
+            timeWindow: config.RATE_LIMIT_LOGIN_WINDOW_MS,
+          },
+        };
+        return;
+      }
+
+      if (url === '/api/governance/vote') {
+        routeOptions.config = {
+          ...routeOptions.config,
+          rateLimit: {
+            max: config.RATE_LIMIT_VOTE_MAX,
+            timeWindow: config.RATE_LIMIT_VOTE_WINDOW_MS,
+            keyGenerator: async (request) => {
+              try {
+                const did = await getAuthenticatedDid(request);
+                return did ?? request.ip;
+              } catch {
+                return request.ip;
+              }
+            },
+          },
+        };
+        return;
+      }
+
+      if (url.startsWith('/api/admin/')) {
+        const isCriticalAdminAction =
+          url === '/api/admin/epochs/transition' ||
+          url === '/api/admin/feed/rescore' ||
+          url === '/api/admin/scheduler/check';
+        routeOptions.config = {
+          ...routeOptions.config,
+          rateLimit: {
+            max: isCriticalAdminAction
+              ? config.RATE_LIMIT_ADMIN_CRITICAL_MAX
+              : config.RATE_LIMIT_ADMIN_MAX,
+            timeWindow: isCriticalAdminAction
+              ? config.RATE_LIMIT_ADMIN_CRITICAL_WINDOW_MS
+              : config.RATE_LIMIT_ADMIN_WINDOW_MS,
+          },
+        };
+        return;
+      }
+
+      if (
+        url === '/api/bot/announce' ||
+        url === '/api/bot/retry' ||
+        url === '/api/bot/unpin'
+      ) {
+        routeOptions.config = {
+          ...routeOptions.config,
+          rateLimit: {
+            max: config.RATE_LIMIT_ADMIN_CRITICAL_MAX,
+            timeWindow: config.RATE_LIMIT_ADMIN_CRITICAL_WINDOW_MS,
+          },
+        };
+      }
+    });
+  }
 
   // Add correlation ID to every request
   app.addHook('onRequest', (request: FastifyRequest, reply: FastifyReply, done) => {
@@ -180,4 +274,28 @@ export async function createServer() {
   }
 
   return app;
+}
+
+function parseAllowedOrigins(): Set<string> {
+  const configured = config.CORS_ALLOWED_ORIGINS
+    .split(',')
+    .map((origin: string) => origin.trim())
+    .filter(Boolean);
+
+  if (configured.length > 0) {
+    return new Set(configured);
+  }
+
+  const defaults =
+    config.NODE_ENV === 'production'
+      ? [`https://${config.FEEDGEN_HOSTNAME}`]
+      : [
+          `https://${config.FEEDGEN_HOSTNAME}`,
+          'http://localhost:5173',
+          'http://127.0.0.1:5173',
+          'http://localhost:3000',
+          'http://127.0.0.1:3000',
+        ];
+
+  return new Set(defaults);
 }
