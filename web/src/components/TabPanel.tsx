@@ -1,66 +1,37 @@
-import type { ReactNode, CSSProperties } from 'react';
-import { useEffect, useState, useRef } from 'react';
+import type { ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 
 interface TabPanelProps {
   children: ReactNode;
   isActive: boolean;
   tabKey: string;
+  keepMounted?: boolean;
 }
 
 /**
- * TabPanel - Wraps tab content with smooth fade transitions
- *
- * Uses CSS opacity transitions for smooth fade in/out effect
- * when switching between tabs.
+ * TabPanel - Lazy mounts once and keeps inactive tabs mounted.
+ * This avoids remount flicker and preserves local state between tab switches.
  */
-export function TabPanel({ children, isActive, tabKey }: TabPanelProps) {
-  const [shouldRender, setShouldRender] = useState(isActive);
-  const [isVisible, setIsVisible] = useState(isActive);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+export function TabPanel({ children, isActive, tabKey, keepMounted = true }: TabPanelProps) {
+  const [hasBeenActive, setHasBeenActive] = useState(isActive);
 
   useEffect(() => {
-    // Clear any existing timeout
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-
     if (isActive) {
-      // Tab becoming active - render immediately, then fade in
-      setShouldRender(true);
-      // Small delay to ensure DOM is ready before triggering transition
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          setIsVisible(true);
-        });
-      });
-    } else {
-      // Tab becoming inactive - fade out, then unmount
-      setIsVisible(false);
-      timeoutRef.current = setTimeout(() => {
-        setShouldRender(false);
-      }, 200); // Match the CSS transition duration
+      setHasBeenActive(true);
     }
-
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
   }, [isActive]);
 
-  if (!shouldRender) return null;
+  if (!hasBeenActive && keepMounted) {
+    return null;
+  }
 
-  const style: CSSProperties = {
-    opacity: isVisible ? 1 : 0,
-    transition: 'opacity 200ms ease-out',
-    // Prevent layout shift during transition
-    ...(isActive ? {} : { position: 'absolute' as const, pointerEvents: 'none' as const }),
-  };
+  if (!keepMounted && !isActive) {
+    return null;
+  }
 
   return (
     <div
-      className="tab-content"
-      style={style}
+      className={`tab-content ${isActive ? 'active' : 'inactive'}`}
       role="tabpanel"
       aria-hidden={!isActive}
       data-tab-key={tabKey}
