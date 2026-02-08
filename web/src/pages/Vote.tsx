@@ -243,159 +243,161 @@ export function Vote() {
         {error && <div className="error-message">{error}</div>}
         {successMessage && <div className="success-message">{successMessage}</div>}
 
-        {/* Weights tab */}
-        <TabPanel isActive={activeTab === 'weights'} tabKey="weights">
-          <section className="voting-section">
-            <h2>Your vote</h2>
-            <p className="vote-description">
-              Adjust the sliders to set your preferred algorithm weights. The sliders
-              are linked and will always sum to 100%. Your vote will influence how
-              the feed ranks posts in future epochs.
-            </p>
+        <div className="tab-panel-wrapper">
+          {/* Weights tab */}
+          <TabPanel isActive={activeTab === 'weights'} tabKey="weights">
+            <section className="voting-section">
+              <h2>Your vote</h2>
+              <p className="vote-description">
+                Adjust the sliders to set your preferred algorithm weights. The sliders
+                are linked and will always sum to 100%. Your vote will influence how
+                the feed ranks posts in future epochs.
+              </p>
 
-            {weights && (
-              <WeightSliders
-                initialWeights={weights}
-                onChange={handleWeightChange}
-                disabled={isSubmitting}
-              />
-            )}
-
-            <div className="vote-actions">
-              <button
-                onClick={handleSubmit}
-                disabled={isSubmitting || !weights}
-                className="submit-button"
-              >
-                {isSubmitting
-                  ? 'Submitting...'
-                  : hasVoted
-                  ? 'Update vote'
-                  : 'Submit vote'}
-              </button>
-              {hasVoted && (
-                <span className="voted-indicator">
-                  {lastVoteTime
-                    ? `Last voted ${new Date(lastVoteTime).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}. You can update your vote until voting closes.`
-                    : 'You have already voted this epoch'}
-                </span>
+              {weights && (
+                <WeightSliders
+                  initialWeights={weights}
+                  onChange={handleWeightChange}
+                  disabled={isSubmitting}
+                />
               )}
-            </div>
-          </section>
-        </TabPanel>
 
-        {/* Content rules tab */}
-        <TabPanel isActive={activeTab === 'content'} tabKey="content">
-          <section className="voting-section">
-            <h2>Content rules vote</h2>
-            <p className="vote-description">
-              Vote on keywords to include or exclude from the feed. Keywords appearing
-              in at least 30% of votes will become active rules for the next epoch.
-            </p>
-
-            <KeywordInput
-              label="Include keywords"
-              description="Posts containing any of these keywords will be prioritized. Leave empty for no preference."
-              keywords={contentVote.includeKeywords}
-              onChange={(keywords) =>
-                setContentVote((prev) => ({ ...prev, includeKeywords: keywords }))
-              }
-              disabled={isSubmitting}
-              variant="include"
-              placeholder="Type a keyword and press Enter (e.g., AI, research)"
-            />
-
-            <KeywordInput
-              label="Exclude keywords"
-              description="Posts containing any of these keywords will be filtered out. Leave empty for no exclusions."
-              keywords={contentVote.excludeKeywords}
-              onChange={(keywords) =>
-                setContentVote((prev) => ({ ...prev, excludeKeywords: keywords }))
-              }
-              disabled={isSubmitting}
-              variant="exclude"
-              placeholder="Type a keyword and press Enter (e.g., spam, crypto)"
-            />
-
-            <div className="vote-actions">
-              <button
-                onClick={handleSubmit}
-                disabled={
-                  isSubmitting ||
-                  (contentVote.includeKeywords.length === 0 &&
-                    contentVote.excludeKeywords.length === 0)
-                }
-                className="submit-button"
-              >
-                {isSubmitting
-                  ? 'Submitting...'
-                  : hasVoted
-                  ? 'Update content vote'
-                  : 'Submit content vote'}
-              </button>
-              {hasVoted && lastVoteTime && (
-                <span className="voted-indicator">
-                  Last voted {new Date(lastVoteTime).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </span>
-              )}
-            </div>
-
-            {/* Current community content rules */}
-            {currentContentRules && (
-              <div className="current-content-rules">
-                <h3>Current community rules</h3>
-                <p className="rules-description">
-                  These rules are active based on {currentContentRules.total_voters} voter(s).
-                  Keywords need {currentContentRules.threshold}+ votes to be included.
-                </p>
-                {currentContentRules.include_keywords.length > 0 && (
-                  <div className="rules-group">
-                    <span className="rules-label">Include:</span>
-                    <div className="rules-keywords">
-                      {currentContentRules.include_keywords.map((kw) => (
-                        <span key={kw} className="rule-keyword include">
-                          {kw}
-                          <span className="keyword-votes">
-                            ({currentContentRules.include_keyword_votes[kw] || 0})
-                          </span>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
+              <div className="vote-actions">
+                <button
+                  onClick={handleSubmit}
+                  disabled={isSubmitting || !weights}
+                  className="submit-button"
+                >
+                  {isSubmitting
+                    ? 'Submitting...'
+                    : hasVoted
+                    ? 'Update vote'
+                    : 'Submit vote'}
+                </button>
+                {hasVoted && (
+                  <span className="voted-indicator">
+                    {lastVoteTime
+                      ? `Last voted ${new Date(lastVoteTime).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}. You can update your vote until voting closes.`
+                      : 'You have already voted this epoch'}
+                  </span>
                 )}
-                {currentContentRules.exclude_keywords.length > 0 && (
-                  <div className="rules-group">
-                    <span className="rules-label">Exclude:</span>
-                    <div className="rules-keywords">
-                      {currentContentRules.exclude_keywords.map((kw) => (
-                        <span key={kw} className="rule-keyword exclude">
-                          {kw}
-                          <span className="keyword-votes">
-                            ({currentContentRules.exclude_keyword_votes[kw] || 0})
-                          </span>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {currentContentRules.include_keywords.length === 0 &&
-                  currentContentRules.exclude_keywords.length === 0 && (
-                    <p className="no-rules">No content rules active yet.</p>
-                  )}
               </div>
-            )}
-          </section>
-        </TabPanel>
+            </section>
+          </TabPanel>
+
+          {/* Content rules tab */}
+          <TabPanel isActive={activeTab === 'content'} tabKey="content">
+            <section className="voting-section">
+              <h2>Content rules vote</h2>
+              <p className="vote-description">
+                Vote on keywords to include or exclude from the feed. Keywords appearing
+                in at least 30% of votes will become active rules for the next epoch.
+              </p>
+
+              <KeywordInput
+                label="Include keywords"
+                description="Posts containing any of these keywords will be prioritized. Leave empty for no preference."
+                keywords={contentVote.includeKeywords}
+                onChange={(keywords) =>
+                  setContentVote((prev) => ({ ...prev, includeKeywords: keywords }))
+                }
+                disabled={isSubmitting}
+                variant="include"
+                placeholder="Type a keyword and press Enter (e.g., AI, research)"
+              />
+
+              <KeywordInput
+                label="Exclude keywords"
+                description="Posts containing any of these keywords will be filtered out. Leave empty for no exclusions."
+                keywords={contentVote.excludeKeywords}
+                onChange={(keywords) =>
+                  setContentVote((prev) => ({ ...prev, excludeKeywords: keywords }))
+                }
+                disabled={isSubmitting}
+                variant="exclude"
+                placeholder="Type a keyword and press Enter (e.g., spam, crypto)"
+              />
+
+              <div className="vote-actions">
+                <button
+                  onClick={handleSubmit}
+                  disabled={
+                    isSubmitting ||
+                    (contentVote.includeKeywords.length === 0 &&
+                      contentVote.excludeKeywords.length === 0)
+                  }
+                  className="submit-button"
+                >
+                  {isSubmitting
+                    ? 'Submitting...'
+                    : hasVoted
+                    ? 'Update content vote'
+                    : 'Submit content vote'}
+                </button>
+                {hasVoted && lastVoteTime && (
+                  <span className="voted-indicator">
+                    Last voted {new Date(lastVoteTime).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                )}
+              </div>
+
+              {/* Current community content rules */}
+              {currentContentRules && (
+                <div className="current-content-rules">
+                  <h3>Current community rules</h3>
+                  <p className="rules-description">
+                    These rules are active based on {currentContentRules.total_voters} voter(s).
+                    Keywords need {currentContentRules.threshold}+ votes to be included.
+                  </p>
+                  {currentContentRules.include_keywords.length > 0 && (
+                    <div className="rules-group">
+                      <span className="rules-label">Include:</span>
+                      <div className="rules-keywords">
+                        {currentContentRules.include_keywords.map((kw) => (
+                          <span key={kw} className="rule-keyword include">
+                            {kw}
+                            <span className="keyword-votes">
+                              ({currentContentRules.include_keyword_votes[kw] || 0})
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {currentContentRules.exclude_keywords.length > 0 && (
+                    <div className="rules-group">
+                      <span className="rules-label">Exclude:</span>
+                      <div className="rules-keywords">
+                        {currentContentRules.exclude_keywords.map((kw) => (
+                          <span key={kw} className="rule-keyword exclude">
+                            {kw}
+                            <span className="keyword-votes">
+                              ({currentContentRules.exclude_keyword_votes[kw] || 0})
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {currentContentRules.include_keywords.length === 0 &&
+                    currentContentRules.exclude_keywords.length === 0 && (
+                      <p className="no-rules">No content rules active yet.</p>
+                    )}
+                </div>
+              )}
+            </section>
+          </TabPanel>
+        </div>
 
         <section className="current-weights-section">
           <h2>Current algorithm weights</h2>
