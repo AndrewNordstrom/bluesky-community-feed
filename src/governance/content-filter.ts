@@ -19,6 +19,48 @@ import {
 // Cache TTL for content rules (5 minutes - matches scoring interval)
 const CACHE_TTL_SECONDS = 300;
 const CACHE_KEY = 'content_rules:current';
+const ASCII_KEYWORD_PATTERN = /^[a-z0-9][a-z0-9\s-]*$/;
+const keywordMatcherCache = new Map<string, (text: string) => boolean>();
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getKeywordMatcher(keyword: string): (text: string) => boolean {
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  const cached = keywordMatcherCache.get(normalizedKeyword);
+  if (cached) {
+    return cached;
+  }
+
+  // Keep substring matching for non-ASCII keywords/symbol-heavy values.
+  // Most governance keywords are normalized ASCII terms and use strict boundaries.
+  if (!ASCII_KEYWORD_PATTERN.test(normalizedKeyword)) {
+    const matcher = (text: string) => text.includes(normalizedKeyword);
+    keywordMatcherCache.set(normalizedKeyword, matcher);
+    return matcher;
+  }
+
+  const phrasePattern = normalizedKeyword
+    .split(/\s+/)
+    .filter((part) => part.length > 0)
+    .map(escapeRegex)
+    .join('[\\s_-]+');
+
+  const regex = new RegExp(`(^|[^a-z0-9])${phrasePattern}(?=$|[^a-z0-9])`);
+  const matcher = (text: string) => regex.test(text);
+  keywordMatcherCache.set(normalizedKeyword, matcher);
+  return matcher;
+}
+
+function matchesKeyword(text: string, keyword: string): boolean {
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  if (normalizedKeyword.length === 0) {
+    return false;
+  }
+
+  return getKeywordMatcher(normalizedKeyword)(text);
+}
 
 /**
  * Get current epoch's content rules with Redis caching.
@@ -151,7 +193,7 @@ export function checkContentRules(
 
   // Check excludes first (exclude takes precedence)
   for (const keyword of rules.excludeKeywords) {
-    if (lowerText.includes(keyword)) {
+    if (matchesKeyword(lowerText, keyword)) {
       return {
         passes: false,
         reason: 'excluded_keyword',
@@ -163,7 +205,7 @@ export function checkContentRules(
   // Check includes (if any are specified, post must match at least one)
   if (rules.includeKeywords.length > 0) {
     for (const keyword of rules.includeKeywords) {
-      if (lowerText.includes(keyword)) {
+      if (matchesKeyword(lowerText, keyword)) {
         return { passes: true, matchedKeyword: keyword };
       }
     }
