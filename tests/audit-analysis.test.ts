@@ -1,8 +1,9 @@
 import Fastify from 'fastify';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { dbQueryMock } = vi.hoisted(() => ({
+const { dbQueryMock, redisZRevRangeMock } = vi.hoisted(() => ({
   dbQueryMock: vi.fn(),
+  redisZRevRangeMock: vi.fn(),
 }));
 
 vi.mock('../src/db/client.js', () => ({
@@ -11,15 +12,23 @@ vi.mock('../src/db/client.js', () => ({
   },
 }));
 
+vi.mock('../src/db/redis.js', () => ({
+  redis: {
+    zrevrange: redisZRevRangeMock,
+  },
+}));
+
 import { registerAuditAnalysisRoutes } from '../src/admin/routes/audit-analysis.js';
 
 describe('admin weight impact audit endpoint', () => {
   beforeEach(() => {
     dbQueryMock.mockReset();
+    redisZRevRangeMock.mockReset();
   });
 
   it('returns 404 when no active/voting epoch exists', async () => {
     dbQueryMock.mockResolvedValueOnce({ rows: [] });
+    redisZRevRangeMock.mockResolvedValue([]);
 
     const app = Fastify();
     registerAuditAnalysisRoutes(app);
@@ -38,6 +47,15 @@ describe('admin weight impact audit endpoint', () => {
   });
 
   it('returns ranked decomposition and sensitivity metrics', async () => {
+    redisZRevRangeMock.mockResolvedValue([
+      'at://did:plc:b/post/2',
+      '0.901',
+      'at://did:plc:a/post/1',
+      '0.899',
+      'at://did:plc:c/post/3',
+      '0.700',
+    ]);
+
     dbQueryMock
       .mockResolvedValueOnce({
         rows: [
@@ -62,13 +80,6 @@ describe('admin weight impact audit endpoint', () => {
             bridging_score: 0.9,
             source_diversity_score: 0.6,
             relevance_score: 0.5,
-            recency_weighted: 0.209,
-            engagement_weighted: 0.14,
-            bridging_weighted: 0.288,
-            source_diversity_weighted: 0.096,
-            relevance_weighted: 0.05,
-            current_rank: 1,
-            equal_rank: 2,
           },
           {
             post_uri: 'at://did:plc:b/post/2',
@@ -79,13 +90,6 @@ describe('admin weight impact audit endpoint', () => {
             bridging_score: 0.7,
             source_diversity_score: 0.7,
             relevance_score: 0.5,
-            recency_weighted: 0.198,
-            engagement_weighted: 0.17,
-            bridging_weighted: 0.224,
-            source_diversity_weighted: 0.112,
-            relevance_weighted: 0.05,
-            current_rank: 2,
-            equal_rank: 1,
           },
           {
             post_uri: 'at://did:plc:c/post/3',
@@ -96,13 +100,6 @@ describe('admin weight impact audit endpoint', () => {
             bridging_score: 0.8,
             source_diversity_score: 0.8,
             relevance_score: 0.5,
-            recency_weighted: 0.176,
-            engagement_weighted: 0.08,
-            bridging_weighted: 0.256,
-            source_diversity_weighted: 0.128,
-            relevance_weighted: 0.05,
-            current_rank: 3,
-            equal_rank: 3,
           },
         ],
       });
@@ -122,12 +119,17 @@ describe('admin weight impact audit endpoint', () => {
     expect(body.topPosts).toHaveLength(2);
     expect(body.topPosts[0]).toMatchObject({
       rank: 1,
-      dominantFactor: 'bridging',
-      wouldRankWithEqualWeights: 2,
+      uri: 'at://did:plc:b/post/2',
+    });
+    expect(body.topPosts[1]).toMatchObject({
+      rank: 2,
+      uri: 'at://did:plc:a/post/1',
     });
     expect(body.weightSensitivity).toHaveProperty('recency');
     expect(body.weightSensitivity).toHaveProperty('engagement');
     expect(body.analyzedPosts).toBe(3);
+    expect(redisZRevRangeMock).toHaveBeenCalledWith('feed:current', 0, 99, 'WITHSCORES');
+    expect(dbQueryMock).toHaveBeenCalledTimes(2);
 
     await app.close();
   });

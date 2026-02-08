@@ -7,6 +7,7 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../db/client.js';
+import { redis } from '../../db/redis.js';
 import { GovernanceWeights, normalizeWeights } from '../../governance/governance.types.js';
 
 type ComponentKey = keyof GovernanceWeights;
@@ -23,6 +24,8 @@ const QuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 
+const SENSITIVITY_SAMPLE_SIZE = 100;
+
 interface EpochRow {
   id: number;
   recency_weight: number | string;
@@ -32,7 +35,7 @@ interface EpochRow {
   relevance_weight: number | string;
 }
 
-interface RankedScoreRow {
+interface ScoreRow {
   post_uri: string;
   text: string | null;
   total_score: number | string;
@@ -41,13 +44,6 @@ interface RankedScoreRow {
   bridging_score: number | string;
   source_diversity_score: number | string;
   relevance_score: number | string;
-  recency_weighted: number | string;
-  engagement_weighted: number | string;
-  bridging_weighted: number | string;
-  source_diversity_weighted: number | string;
-  relevance_weighted: number | string;
-  current_rank: number | string;
-  equal_rank: number | string;
 }
 
 interface ScoreVector {
@@ -58,8 +54,25 @@ interface ScoreVector {
   relevance: number;
 }
 
-function toNumber(value: number | string): number {
-  return typeof value === 'number' ? value : parseFloat(value);
+interface AnalyzedRow {
+  uri: string;
+  text: string | null;
+  currentRank: number;
+  currentScore: number;
+  raw: ScoreVector;
+}
+
+function toNumber(value: unknown): number {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
 }
 
 function toWeights(row: EpochRow): GovernanceWeights {
@@ -72,7 +85,7 @@ function toWeights(row: EpochRow): GovernanceWeights {
   };
 }
 
-function extractRawScores(row: RankedScoreRow): ScoreVector {
+function toRawScores(row: ScoreRow): ScoreVector {
   return {
     recency: toNumber(row.recency_score),
     engagement: toNumber(row.engagement_score),
@@ -90,6 +103,28 @@ function scoreWithWeights(raw: ScoreVector, weights: GovernanceWeights): number 
     raw.sourceDiversity * weights.sourceDiversity +
     raw.relevance * weights.relevance
   );
+}
+
+function weightedComponents(raw: ScoreVector, weights: GovernanceWeights): Record<ComponentKey, number> {
+  return {
+    recency: raw.recency * weights.recency,
+    engagement: raw.engagement * weights.engagement,
+    bridging: raw.bridging * weights.bridging,
+    sourceDiversity: raw.sourceDiversity * weights.sourceDiversity,
+    relevance: raw.relevance * weights.relevance,
+  };
+}
+
+function getDominantFactor(weighted: Record<ComponentKey, number>): ComponentKey {
+  let dominant: ComponentKey = 'recency';
+
+  for (const key of COMPONENT_KEYS) {
+    if (weighted[key] > weighted[dominant]) {
+      dominant = key;
+    }
+  }
+
+  return dominant;
 }
 
 function shiftSingleWeight(
@@ -138,27 +173,27 @@ function shiftSingleWeight(
 }
 
 function simulateRankMap(
-  rows: RankedScoreRow[],
+  rows: AnalyzedRow[],
   weights: GovernanceWeights
 ): Map<string, number> {
   const scored = rows
     .map((row) => ({
-      uri: row.post_uri,
-      simulatedScore: scoreWithWeights(extractRawScores(row), weights),
+      uri: row.uri,
+      score: scoreWithWeights(row.raw, weights),
     }))
     .sort((a, b) => {
-      if (b.simulatedScore !== a.simulatedScore) {
-        return b.simulatedScore - a.simulatedScore;
+      if (b.score !== a.score) {
+        return b.score - a.score;
       }
       return a.uri.localeCompare(b.uri);
     });
 
-  const rankMap = new Map<string, number>();
+  const ranks = new Map<string, number>();
   scored.forEach((item, index) => {
-    rankMap.set(item.uri, index + 1);
+    ranks.set(item.uri, index + 1);
   });
 
-  return rankMap;
+  return ranks;
 }
 
 function computeScenarioMetrics(
@@ -189,25 +224,6 @@ function computeScenarioMetrics(
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
-}
-
-function getDominantFactor(row: RankedScoreRow): ComponentKey {
-  const weightedValues: Record<ComponentKey, number> = {
-    recency: toNumber(row.recency_weighted),
-    engagement: toNumber(row.engagement_weighted),
-    bridging: toNumber(row.bridging_weighted),
-    sourceDiversity: toNumber(row.source_diversity_weighted),
-    relevance: toNumber(row.relevance_weighted),
-  };
-
-  let dominant: ComponentKey = 'recency';
-  for (const key of COMPONENT_KEYS) {
-    if (weightedValues[key] > weightedValues[dominant]) {
-      dominant = key;
-    }
-  }
-
-  return dominant;
 }
 
 function toTextPreview(text: string | null): string | null {
@@ -260,46 +276,19 @@ export function registerAuditAnalysisRoutes(app: FastifyInstance): void {
     const epoch = epochResult.rows[0];
     const currentWeights = toWeights(epoch);
 
-    const rankedResult = await db.query<RankedScoreRow>(
-      `WITH ranked AS (
-         SELECT
-           ps.post_uri,
-           p.text,
-           ps.total_score,
-           ps.recency_score,
-           ps.engagement_score,
-           ps.bridging_score,
-           ps.source_diversity_score,
-           ps.relevance_score,
-           ps.recency_weighted,
-           ps.engagement_weighted,
-           ps.bridging_weighted,
-           ps.source_diversity_weighted,
-           ps.relevance_weighted,
-           ROW_NUMBER() OVER (ORDER BY ps.total_score DESC, ps.post_uri) AS current_rank,
-           ROW_NUMBER() OVER (
-             ORDER BY (
-               ps.recency_score * 0.2 +
-               ps.engagement_score * 0.2 +
-               ps.bridging_score * 0.2 +
-               ps.source_diversity_score * 0.2 +
-               ps.relevance_score * 0.2
-             ) DESC,
-             ps.post_uri
-           ) AS equal_rank
-         FROM post_scores ps
-         LEFT JOIN posts p ON p.uri = ps.post_uri
-         WHERE ps.epoch_id = $1
-       )
-       SELECT *
-       FROM ranked
-       ORDER BY current_rank`,
-      [epoch.id]
-    );
+    let feedEntries: string[];
+    try {
+      const sampleSize = Math.max(limit, SENSITIVITY_SAMPLE_SIZE);
+      feedEntries = await redis.zrevrange('feed:current', 0, sampleSize - 1, 'WITHSCORES');
+    } catch (error) {
+      return reply.code(503).send({
+        error: 'RedisUnavailable',
+        message: 'Unable to load live feed ranking for audit analysis',
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
 
-    const rows = rankedResult.rows;
-
-    if (rows.length === 0) {
+    if (feedEntries.length === 0) {
       return reply.send({
         currentEpochId: epoch.id,
         currentWeights,
@@ -310,43 +299,96 @@ export function registerAuditAnalysisRoutes(app: FastifyInstance): void {
       });
     }
 
-    const topPosts = rows
-      .filter((row) => toNumber(row.current_rank) <= limit)
-      .map((row) => ({
-        uri: row.post_uri,
-        textPreview: toTextPreview(row.text),
-        rank: toNumber(row.current_rank),
-        totalScore: toNumber(row.total_score),
-        components: {
-          recency: {
-            raw: toNumber(row.recency_score),
-            weighted: toNumber(row.recency_weighted),
-          },
-          engagement: {
-            raw: toNumber(row.engagement_score),
-            weighted: toNumber(row.engagement_weighted),
-          },
-          bridging: {
-            raw: toNumber(row.bridging_score),
-            weighted: toNumber(row.bridging_weighted),
-          },
-          sourceDiversity: {
-            raw: toNumber(row.source_diversity_score),
-            weighted: toNumber(row.source_diversity_weighted),
-          },
-          relevance: {
-            raw: toNumber(row.relevance_score),
-            weighted: toNumber(row.relevance_weighted),
-          },
-        },
-        dominantFactor: getDominantFactor(row),
-        wouldRankWithEqualWeights: toNumber(row.equal_rank),
-      }));
+    const rankedFeed = [] as Array<{ uri: string; rank: number; score: number }>;
+    for (let index = 0; index < feedEntries.length; index += 2) {
+      const uri = feedEntries[index];
+      const score = toNumber(feedEntries[index + 1]);
+      rankedFeed.push({
+        uri,
+        rank: index / 2 + 1,
+        score,
+      });
+    }
 
-    const sensitivityBaseRows = rows.filter((row) => toNumber(row.current_rank) <= 100);
-    const baselineRankMap = new Map<string, number>(
-      sensitivityBaseRows.map((row) => [row.post_uri, toNumber(row.current_rank)])
+    const uris = rankedFeed.map((entry) => entry.uri);
+
+    const scoreResult = await db.query<ScoreRow>(
+      `SELECT
+        ps.post_uri,
+        p.text,
+        ps.total_score,
+        ps.recency_score,
+        ps.engagement_score,
+        ps.bridging_score,
+        ps.source_diversity_score,
+        ps.relevance_score
+       FROM post_scores ps
+       LEFT JOIN posts p ON p.uri = ps.post_uri
+       WHERE ps.epoch_id = $1
+         AND ps.post_uri = ANY($2::text[])`,
+      [epoch.id, uris]
     );
+
+    const scoreMap = new Map(scoreResult.rows.map((row) => [row.post_uri, row]));
+
+    const analyzedRows: AnalyzedRow[] = rankedFeed
+      .map((entry) => {
+        const row = scoreMap.get(entry.uri);
+        if (!row) {
+          return null;
+        }
+
+        return {
+          uri: entry.uri,
+          text: row.text,
+          currentRank: entry.rank,
+          currentScore: entry.score,
+          raw: toRawScores(row),
+        };
+      })
+      .filter((row): row is AnalyzedRow => row !== null);
+
+    if (analyzedRows.length === 0) {
+      return reply.send({
+        currentEpochId: epoch.id,
+        currentWeights,
+        topPosts: [],
+        weightSensitivity: {},
+        analyzedPosts: 0,
+        generatedAt: new Date().toISOString(),
+      });
+    }
+
+    const equalRanks = simulateRankMap(analyzedRows, {
+      recency: 0.2,
+      engagement: 0.2,
+      bridging: 0.2,
+      sourceDiversity: 0.2,
+      relevance: 0.2,
+    });
+
+    const topPosts = analyzedRows.slice(0, limit).map((row) => {
+      const weighted = weightedComponents(row.raw, currentWeights);
+
+      return {
+        uri: row.uri,
+        textPreview: toTextPreview(row.text),
+        rank: row.currentRank,
+        totalScore: row.currentScore,
+        components: {
+          recency: { raw: row.raw.recency, weighted: weighted.recency },
+          engagement: { raw: row.raw.engagement, weighted: weighted.engagement },
+          bridging: { raw: row.raw.bridging, weighted: weighted.bridging },
+          sourceDiversity: { raw: row.raw.sourceDiversity, weighted: weighted.sourceDiversity },
+          relevance: { raw: row.raw.relevance, weighted: weighted.relevance },
+        },
+        dominantFactor: getDominantFactor(weighted),
+        wouldRankWithEqualWeights: equalRanks.get(row.uri) ?? row.currentRank,
+      };
+    });
+
+    const sensitivityRows = analyzedRows.slice(0, SENSITIVITY_SAMPLE_SIZE);
+    const baselineRankMap = new Map(sensitivityRows.map((row) => [row.uri, row.currentRank]));
 
     const weightSensitivity = Object.fromEntries(
       COMPONENT_KEYS.map((key) => {
@@ -355,11 +397,11 @@ export function registerAuditAnalysisRoutes(app: FastifyInstance): void {
 
         const plusMetrics = computeScenarioMetrics(
           baselineRankMap,
-          simulateRankMap(sensitivityBaseRows, plusWeights)
+          simulateRankMap(sensitivityRows, plusWeights)
         );
         const minusMetrics = computeScenarioMetrics(
           baselineRankMap,
-          simulateRankMap(sensitivityBaseRows, minusWeights)
+          simulateRankMap(sensitivityRows, minusWeights)
         );
 
         return [
@@ -377,7 +419,7 @@ export function registerAuditAnalysisRoutes(app: FastifyInstance): void {
       currentWeights,
       topPosts,
       weightSensitivity,
-      analyzedPosts: sensitivityBaseRows.length,
+      analyzedPosts: sensitivityRows.length,
       generatedAt: new Date().toISOString(),
     });
   });
