@@ -177,6 +177,7 @@
 /* Content Area */
 .admin-content {
   animation: fadeIn 0.2s ease;
+  position: relative;
 }
 
 @keyframes fadeIn {

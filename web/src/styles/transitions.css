@@ -56,7 +56,21 @@
 
 /* Apply to tab panel content */
 .tab-content {
-  animation: tabFadeIn var(--transition-fast) ease-out;
+  animation: tabFadeIn 200ms ease-out forwards;
+}
+
+/* Tab panel wrapper for smooth transitions */
+.tab-panel-wrapper {
+  position: relative;
+}
+
+.tab-panel-wrapper .tab-content {
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+
+.tab-panel-wrapper .tab-content.active {
+  opacity: 1;
 }
 
 /* Apply when data finishes loading */

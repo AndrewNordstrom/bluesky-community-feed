@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, CSSProperties } from 'react';
 import { useEffect, useState, useRef } from 'react';
 
 interface TabPanelProps {
@@ -10,37 +10,57 @@ interface TabPanelProps {
 /**
  * TabPanel - Wraps tab content with smooth fade transitions
  *
- * Usage:
- *   <TabPanel isActive={activeTab === 'settings'} tabKey="settings">
- *     <SettingsContent />
- *   </TabPanel>
+ * Uses CSS opacity transitions for smooth fade in/out effect
+ * when switching between tabs.
  */
 export function TabPanel({ children, isActive, tabKey }: TabPanelProps) {
   const [shouldRender, setShouldRender] = useState(isActive);
-  const [animationKey, setAnimationKey] = useState(0);
-  const prevActiveRef = useRef(isActive);
+  const [isVisible, setIsVisible] = useState(isActive);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (isActive && !prevActiveRef.current) {
-      // Tab becoming active - render and trigger animation
-      setShouldRender(true);
-      setAnimationKey(k => k + 1);
-    } else if (!isActive && prevActiveRef.current) {
-      // Tab becoming inactive - unmount after brief delay
-      const timer = setTimeout(() => setShouldRender(false), 50);
-      return () => clearTimeout(timer);
+    // Clear any existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
     }
-    prevActiveRef.current = isActive;
+
+    if (isActive) {
+      // Tab becoming active - render immediately, then fade in
+      setShouldRender(true);
+      // Small delay to ensure DOM is ready before triggering transition
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setIsVisible(true);
+        });
+      });
+    } else {
+      // Tab becoming inactive - fade out, then unmount
+      setIsVisible(false);
+      timeoutRef.current = setTimeout(() => {
+        setShouldRender(false);
+      }, 200); // Match the CSS transition duration
+    }
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
   }, [isActive]);
 
-  // Don't render if not active and shouldn't render
-  if (!shouldRender && !isActive) return null;
+  if (!shouldRender) return null;
+
+  const style: CSSProperties = {
+    opacity: isVisible ? 1 : 0,
+    transition: 'opacity 200ms ease-out',
+    // Prevent layout shift during transition
+    ...(isActive ? {} : { position: 'absolute' as const, pointerEvents: 'none' as const }),
+  };
 
   return (
     <div
-      key={animationKey}
       className="tab-content"
-      style={{ display: isActive ? 'block' : 'none' }}
+      style={style}
       role="tabpanel"
       aria-hidden={!isActive}
       data-tab-key={tabKey}
