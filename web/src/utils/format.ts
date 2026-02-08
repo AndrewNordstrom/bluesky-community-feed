@@ -2,11 +2,13 @@
  * Format Utilities
  */
 
-export function formatNumber(num: number): string {
+export function formatNumber(num: number | null | undefined): string {
+  if (num == null) return '0';
   return num.toLocaleString();
 }
 
-export function formatDate(dateStr: string): string {
+export function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return 'N/A';
   const date = new Date(dateStr);
   return date.toLocaleDateString('en-US', {
     month: 'short',
@@ -17,7 +19,8 @@ export function formatDate(dateStr: string): string {
   });
 }
 
-export function formatRelative(dateStr: string): string {
+export function formatRelative(dateStr: string | null | undefined): string {
+  if (!dateStr) return 'N/A';
   const date = new Date(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -46,13 +49,15 @@ export function formatRelative(dateStr: string): string {
   return formatDate(dateStr);
 }
 
-export function truncateDid(did: string): string {
+export function truncateDid(did: string | null | undefined): string {
+  if (!did) return 'Unknown';
   if (did === 'system') return 'System';
   if (did.length <= 20) return did;
   return `${did.slice(0, 12)}...${did.slice(-6)}`;
 }
 
-export function formatActionName(action: string): string {
+export function formatActionName(action: string | null | undefined): string {
+  if (!action) return 'Unknown';
   return action
     .split('_')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))

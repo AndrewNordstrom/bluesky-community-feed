@@ -13,7 +13,7 @@ export function EpochManager() {
   async function fetchEpochs() {
     try {
       const data = await adminApi.getEpochs();
-      setEpochs(data.epochs);
+      setEpochs(data.epochs || []);
     } catch (err) {
       setMessage({ type: 'error', text: 'Failed to load epochs' });
     } finally {
