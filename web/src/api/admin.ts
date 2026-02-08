@@ -173,6 +173,36 @@ export interface SchedulerStatus {
   }>;
 }
 
+export interface WeightImpactPost {
+  uri: string;
+  textPreview: string | null;
+  rank: number;
+  totalScore: number;
+  components: {
+    recency: { raw: number; weighted: number };
+    engagement: { raw: number; weighted: number };
+    bridging: { raw: number; weighted: number };
+    sourceDiversity: { raw: number; weighted: number };
+    relevance: { raw: number; weighted: number };
+  };
+  dominantFactor: keyof GovernanceWeights;
+  wouldRankWithEqualWeights: number;
+}
+
+export interface WeightSensitivityMetric {
+  postsAffected: number;
+  avgRankChange: number;
+}
+
+export interface WeightImpactResponse {
+  currentEpochId: number;
+  currentWeights: GovernanceWeights;
+  topPosts: WeightImpactPost[];
+  weightSensitivity: Record<keyof GovernanceWeights, WeightSensitivityMetric>;
+  analyzedPosts: number;
+  generatedAt: string;
+}
+
 // API Functions
 export const adminApi = {
   async getStatus(): Promise<AdminStatus> {
@@ -242,6 +272,13 @@ export const adminApi = {
     total: number;
   }> {
     const response = await api.get('/api/admin/audit-log', { params });
+    return response.data;
+  },
+
+  async getWeightImpact(limit = 20): Promise<WeightImpactResponse> {
+    const response = await api.get('/api/admin/audit/weight-impact', {
+      params: { limit },
+    });
     return response.data;
   },
 

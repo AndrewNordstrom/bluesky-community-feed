@@ -12,6 +12,7 @@ import { registerEpochRoutes } from './epochs.js';
 import { registerAnnouncementRoutes } from './announcements.js';
 import { registerFeedHealthRoutes } from './feed-health.js';
 import { registerAuditLogRoutes } from './audit-log.js';
+import { registerAuditAnalysisRoutes } from './audit-analysis.js';
 import { registerSchedulerRoutes } from './scheduler.js';
 import { registerGovernanceRoutes } from './governance.js';
 import { logger } from '../../lib/logger.js';
@@ -28,6 +29,7 @@ export function registerAdminRoutes(app: FastifyInstance): void {
       registerAnnouncementRoutes(adminApp);
       registerFeedHealthRoutes(adminApp);
       registerAuditLogRoutes(adminApp);
+      registerAuditAnalysisRoutes(adminApp);
       registerSchedulerRoutes(adminApp);
       registerGovernanceRoutes(adminApp);
 
