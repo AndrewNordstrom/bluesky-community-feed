@@ -37,16 +37,46 @@ type WeightComponent = (typeof WEIGHT_COMPONENTS)[number];
  * @returns Aggregated weights, or null if no votes
  */
 export async function aggregateVotes(epochId: number): Promise<GovernanceWeights | null> {
+  const keywordOnlyVotesResult = await db.query(
+    `SELECT COUNT(*)::int AS count
+     FROM governance_votes
+     WHERE epoch_id = $1
+       AND recency_weight IS NULL
+       AND engagement_weight IS NULL
+       AND bridging_weight IS NULL
+       AND source_diversity_weight IS NULL
+       AND relevance_weight IS NULL
+       AND (
+         (include_keywords IS NOT NULL AND array_length(include_keywords, 1) > 0)
+         OR
+         (exclude_keywords IS NOT NULL AND array_length(exclude_keywords, 1) > 0)
+       )`,
+    [epochId]
+  );
+
   const votes = await db.query(
     `SELECT recency_weight, engagement_weight, bridging_weight,
             source_diversity_weight, relevance_weight
      FROM governance_votes
      WHERE epoch_id = $1
+       AND recency_weight IS NOT NULL
+       AND engagement_weight IS NOT NULL
+       AND bridging_weight IS NOT NULL
+       AND source_diversity_weight IS NOT NULL
+       AND relevance_weight IS NOT NULL
      ORDER BY voted_at`,
     [epochId]
   );
 
   const n = votes.rows.length;
+  const keywordOnlyVoteCount = keywordOnlyVotesResult.rows[0]?.count ?? 0;
+
+  if (keywordOnlyVoteCount > 0) {
+    logger.warn(
+      { epochId, keywordOnlyVoteCount, weightVoteCount: n },
+      'Keyword-only votes excluded from weight aggregation'
+    );
+  }
 
   if (n === 0) {
     logger.warn({ epochId }, 'No votes to aggregate');

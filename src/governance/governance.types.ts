@@ -20,6 +20,16 @@ export interface GovernanceWeights {
   relevance: number;
 }
 
+const WEIGHT_KEYS = [
+  'recency',
+  'engagement',
+  'bridging',
+  'sourceDiversity',
+  'relevance',
+] as const satisfies ReadonlyArray<keyof GovernanceWeights>;
+const WEIGHT_SCALE = 1000;
+const SUM_TOLERANCE = 0.000001;
+
 /**
  * Vote payload as submitted by the API (snake_case to match DB schema).
  */
@@ -132,12 +142,12 @@ export function weightsToVotePayload(weights: GovernanceWeights): VotePayload {
  * Handles floating point precision issues.
  */
 export function normalizeWeights(weights: GovernanceWeights): GovernanceWeights {
-  const total =
-    weights.recency +
-    weights.engagement +
-    weights.bridging +
-    weights.sourceDiversity +
-    weights.relevance;
+  const values = WEIGHT_KEYS.map((key) => weights[key]);
+  if (values.some((value) => !Number.isFinite(value))) {
+    throw new Error('Weights must be finite numbers');
+  }
+
+  const total = values.reduce((sum, value) => sum + value, 0);
 
   if (total === 0) {
     // Default to equal weights if all zero
@@ -150,41 +160,130 @@ export function normalizeWeights(weights: GovernanceWeights): GovernanceWeights 
     };
   }
 
-  const normalized: GovernanceWeights = {
-    recency: Math.round((weights.recency / total) * 1000) / 1000,
-    engagement: Math.round((weights.engagement / total) * 1000) / 1000,
-    bridging: Math.round((weights.bridging / total) * 1000) / 1000,
-    sourceDiversity: Math.round((weights.sourceDiversity / total) * 1000) / 1000,
-    relevance: Math.round((weights.relevance / total) * 1000) / 1000,
-  };
+  const normalized = fromEntries(
+    WEIGHT_KEYS.map((key) => [key, weights[key] / total] as const)
+  );
+  const redistributed = redistributeNegativeDeficit(normalized);
+  const clamped = clampWeights(redistributed);
+  const clampedTotal = sumWeights(clamped);
 
-  // Fix rounding to ensure exact sum of 1.0
-  const currentSum =
-    normalized.recency +
-    normalized.engagement +
-    normalized.bridging +
-    normalized.sourceDiversity +
-    normalized.relevance;
+  if (clampedTotal <= 0) {
+    throw new Error('Weights cannot be normalized: no positive weight remains after clamping');
+  }
 
-  // Adjust the largest component to fix rounding errors
-  normalized.recency += 1.0 - currentSum;
-  normalized.recency = Math.round(normalized.recency * 1000) / 1000;
+  const renormalized = fromEntries(
+    WEIGHT_KEYS.map((key) => [key, clamped[key] / clampedTotal] as const)
+  );
+  const rounded = roundToExactUnitSum(renormalized);
+  assertNormalizedWeights(rounded);
 
-  return normalized;
+  return rounded;
 }
 
 /**
  * Validate that weights sum to approximately 1.0.
  */
 export function validateWeightsSum(weights: GovernanceWeights): boolean {
-  const sum =
-    weights.recency +
-    weights.engagement +
-    weights.bridging +
-    weights.sourceDiversity +
-    weights.relevance;
+  const sum = sumWeights(weights);
 
   return Math.abs(sum - 1.0) < 0.01;
+}
+
+function fromEntries(
+  entries: ReadonlyArray<readonly [keyof GovernanceWeights, number]>
+): GovernanceWeights {
+  return Object.fromEntries(entries) as unknown as GovernanceWeights;
+}
+
+function sumWeights(weights: GovernanceWeights): number {
+  return WEIGHT_KEYS.reduce((sum, key) => sum + weights[key], 0);
+}
+
+function clampWeights(weights: GovernanceWeights): GovernanceWeights {
+  return fromEntries(
+    WEIGHT_KEYS.map((key) => [key, Math.min(1, Math.max(0, weights[key]))] as const)
+  );
+}
+
+function redistributeNegativeDeficit(weights: GovernanceWeights): GovernanceWeights {
+  const redistributed = { ...weights };
+  let deficit = 0;
+
+  for (const key of WEIGHT_KEYS) {
+    if (redistributed[key] < 0) {
+      deficit += Math.abs(redistributed[key]);
+      redistributed[key] = 0;
+    }
+  }
+
+  if (deficit === 0) {
+    return redistributed;
+  }
+
+  const positiveTotal = WEIGHT_KEYS.reduce((sum, key) => {
+    const value = redistributed[key];
+    return value > 0 ? sum + value : sum;
+  }, 0);
+
+  if (positiveTotal <= 0) {
+    throw new Error('Weights cannot be normalized: unable to redistribute negative deficit');
+  }
+
+  for (const key of WEIGHT_KEYS) {
+    const value = redistributed[key];
+    if (value > 0) {
+      redistributed[key] = Math.max(0, value - (deficit * value) / positiveTotal);
+    }
+  }
+
+  return redistributed;
+}
+
+function roundToExactUnitSum(weights: GovernanceWeights): GovernanceWeights {
+  const scaled = WEIGHT_KEYS.map((key) => ({
+    key,
+    base: Math.floor(weights[key] * WEIGHT_SCALE),
+    remainder: weights[key] * WEIGHT_SCALE - Math.floor(weights[key] * WEIGHT_SCALE),
+  }));
+
+  let remaining = WEIGHT_SCALE - scaled.reduce((sum, part) => sum + part.base, 0);
+
+  if (remaining > 0) {
+    scaled
+      .slice()
+      .sort((a, b) => b.remainder - a.remainder)
+      .slice(0, remaining)
+      .forEach((part) => {
+        part.base += 1;
+      });
+  } else if (remaining < 0) {
+    remaining = Math.abs(remaining);
+    scaled
+      .slice()
+      .sort((a, b) => a.remainder - b.remainder)
+      .forEach((part) => {
+        if (remaining > 0 && part.base > 0) {
+          part.base -= 1;
+          remaining -= 1;
+        }
+      });
+  }
+
+  return fromEntries(scaled.map((part) => [part.key, part.base / WEIGHT_SCALE] as const));
+}
+
+function assertNormalizedWeights(weights: GovernanceWeights): void {
+  for (const key of WEIGHT_KEYS) {
+    const value = weights[key];
+    if (!Number.isFinite(value) || value < 0 || value > 1) {
+      throw new Error(`Weights cannot be normalized: ${key} is outside [0, 1]`);
+    }
+  }
+
+  const sum = sumWeights(weights);
+  if (Math.abs(sum - 1) > SUM_TOLERANCE) {
+    throw new Error('Weights cannot be normalized: sum is not exactly 1.0');
+  }
 }
 
 // ============================================================================
