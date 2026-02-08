@@ -10,7 +10,7 @@ import { db } from '../../db/client.js';
 import { redis } from '../../db/redis.js';
 import { getScoringStatus } from '../status-tracker.js';
 import { getAdminDid } from '../../auth/admin.js';
-import { runScoringPipeline } from '../../scoring/pipeline.js';
+import { tryTriggerManualScoringRun } from '../../scoring/scheduler.js';
 import { logger } from '../../lib/logger.js';
 
 export function registerFeedHealthRoutes(app: FastifyInstance): void {
@@ -124,6 +124,14 @@ export function registerFeedHealthRoutes(app: FastifyInstance): void {
   app.post('/feed/rescore', async (request: FastifyRequest, reply: FastifyReply) => {
     const adminDid = getAdminDid(request);
 
+    if (!tryTriggerManualScoringRun()) {
+      logger.warn({ adminDid }, 'Manual rescore rejected because scoring is already in progress');
+      return reply.code(409).send({
+        error: 'Conflict',
+        message: 'Scoring pipeline is already running. Try again after it completes.',
+      });
+    }
+
     // Log to audit
     await db.query(
       `INSERT INTO governance_audit_log (action, actor_did, details)
@@ -132,11 +140,6 @@ export function registerFeedHealthRoutes(app: FastifyInstance): void {
     );
 
     logger.info({ adminDid }, 'Manual rescore triggered by admin');
-
-    // Run scoring asynchronously (don't wait)
-    runScoringPipeline().catch((err) => {
-      logger.error({ err }, 'Manual rescore failed');
-    });
 
     return reply.send({
       success: true,

@@ -24,29 +24,53 @@ const CACHE_KEY = 'content_rules:current';
  * Get current epoch's content rules with Redis caching.
  */
 export async function getCurrentContentRules(): Promise<ContentRules> {
+  // Stage 1: cache read (best-effort)
   try {
-    // Check cache first
     const cached = await redis.get(CACHE_KEY);
     if (cached) {
-      return JSON.parse(cached);
+      try {
+        const parsed = JSON.parse(cached) as Partial<ContentRules>;
+        if (Array.isArray(parsed.includeKeywords) && Array.isArray(parsed.excludeKeywords)) {
+          return {
+            includeKeywords: parsed.includeKeywords,
+            excludeKeywords: parsed.excludeKeywords,
+          };
+        }
+        logger.warn(
+          { reason: 'cache_parse_failed' },
+          'Cached content rules had unexpected shape, falling back to database'
+        );
+      } catch (error) {
+        logger.warn(
+          { error, reason: 'cache_parse_failed' },
+          'Failed to parse cached content rules, falling back to database'
+        );
+      }
     }
-
-    // Fetch from database
-    const result = await db.query<{ content_rules: ContentRulesRow | null }>(
-      `SELECT content_rules FROM governance_epochs
-       WHERE status IN ('active', 'voting')
-       ORDER BY id DESC LIMIT 1`
+  } catch (error) {
+    logger.warn(
+      { error, reason: 'redis_read_failed' },
+      'Failed to read content rules from Redis, falling back to database'
     );
+  }
 
-    if (result.rows.length === 0) {
+  // Stage 2: database load (source of truth on cache miss/failure)
+  try {
+    const contentRules = await loadCurrentContentRulesFromDb();
+    if (!contentRules) {
       logger.warn('No active epoch found for content rules');
       return emptyContentRules();
     }
 
-    const contentRules = toContentRules(result.rows[0].content_rules);
-
-    // Cache for subsequent queries
-    await redis.set(CACHE_KEY, JSON.stringify(contentRules), 'EX', CACHE_TTL_SECONDS);
+    // Cache for subsequent queries (best-effort)
+    try {
+      await redis.set(CACHE_KEY, JSON.stringify(contentRules), 'EX', CACHE_TTL_SECONDS);
+    } catch (error) {
+      logger.warn(
+        { error, reason: 'redis_write_failed' },
+        'Failed to cache content rules in Redis'
+      );
+    }
 
     logger.debug(
       {
@@ -58,9 +82,23 @@ export async function getCurrentContentRules(): Promise<ContentRules> {
 
     return contentRules;
   } catch (error) {
-    logger.error({ error }, 'Failed to get content rules, returning empty rules');
+    logger.error({ error }, 'Failed to load content rules from database, returning empty rules');
     return emptyContentRules();
   }
+}
+
+async function loadCurrentContentRulesFromDb(): Promise<ContentRules | null> {
+  const result = await db.query<{ content_rules: ContentRulesRow | null }>(
+    `SELECT content_rules FROM governance_epochs
+     WHERE status IN ('active', 'voting')
+     ORDER BY id DESC LIMIT 1`
+  );
+
+  if (result.rows.length === 0) {
+    return null;
+  }
+
+  return toContentRules(result.rows[0].content_rules);
 }
 
 /**

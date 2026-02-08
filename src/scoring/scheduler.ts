@@ -92,12 +92,10 @@ async function runWithGuard(): Promise<void> {
   }
 
   // Don't start if previous run is still going
-  if (isScoring) {
+  if (!acquireScoringLock()) {
     logger.warn('Skipping scoring run - previous run still in progress');
     return;
   }
-
-  isScoring = true;
 
   try {
     await runScoringPipeline();
@@ -105,12 +103,40 @@ async function runWithGuard(): Promise<void> {
     // Log error but don't crash - next run will try again
     logger.error({ err }, 'Scoring pipeline failed');
   } finally {
-    isScoring = false;
+    releaseScoringLock();
   }
 }
 
 /**
- * Manually trigger a scoring run (for testing/debugging).
+ * Try to trigger a manual scoring run without waiting for completion.
+ * Returns false when a run is already in progress or scheduler is shutting down.
+ */
+export function tryTriggerManualScoringRun(): boolean {
+  if (isShuttingDown) {
+    logger.warn('Manual scoring run rejected - scheduler is shutting down');
+    return false;
+  }
+
+  if (!acquireScoringLock()) {
+    logger.warn('Manual scoring run rejected - scoring already in progress');
+    return false;
+  }
+
+  logger.info('Manual scoring run triggered');
+
+  void runScoringPipeline()
+    .catch((err) => {
+      logger.error({ err }, 'Manual scoring pipeline failed');
+    })
+    .finally(() => {
+      releaseScoringLock();
+    });
+
+  return true;
+}
+
+/**
+ * Manually trigger a scoring run and wait for completion.
  * Respects the same guards as scheduled runs.
  */
 export async function triggerManualRun(): Promise<void> {
@@ -137,4 +163,17 @@ export function isScoringInProgress(): boolean {
  */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function acquireScoringLock(): boolean {
+  if (isScoring) {
+    return false;
+  }
+
+  isScoring = true;
+  return true;
+}
+
+function releaseScoringLock(): void {
+  isScoring = false;
 }

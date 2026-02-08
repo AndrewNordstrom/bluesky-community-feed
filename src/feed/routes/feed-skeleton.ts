@@ -11,6 +11,7 @@
 
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { randomUUID } from 'crypto';
+import { z } from 'zod';
 import { config } from '../../config.js';
 import { logger } from '../../lib/logger.js';
 import { redis } from '../../db/redis.js';
@@ -30,6 +31,22 @@ interface FeedSkeletonQuery {
   limit?: string;
 }
 
+const FeedSkeletonQuerySchema = z
+  .object({
+    feed: z.string(),
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+  })
+  .superRefine((query, ctx) => {
+    if (query.cursor && decodeCursor(query.cursor) === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['cursor'],
+        message: 'Cursor must be a valid feed pagination cursor',
+      });
+    }
+  });
+
 /**
  * Register the getFeedSkeleton endpoint.
  *
@@ -39,8 +56,16 @@ export function registerFeedSkeleton(app: FastifyInstance): void {
   app.get(
     '/xrpc/app.bsky.feed.getFeedSkeleton',
     async (request: FastifyRequest<{ Querystring: FeedSkeletonQuery }>, reply) => {
-      const { feed, cursor, limit: limitStr } = request.query;
-      const limit = Math.min(parseInt(limitStr ?? '50', 10) || 50, 100);
+      const parseResult = FeedSkeletonQuerySchema.safeParse(request.query);
+      if (!parseResult.success) {
+        return reply.code(400).send({
+          error: 'ValidationError',
+          message: 'Invalid query parameters',
+          details: parseResult.error.issues,
+        });
+      }
+
+      const { feed, cursor, limit } = parseResult.data;
 
       // Validate this is a request for OUR feed
       if (feed !== FEED_URI) {
@@ -69,7 +94,16 @@ export function registerFeedSkeleton(app: FastifyInstance): void {
         const parsed = decodeCursor(cursor);
         if (!parsed) {
           logger.warn({ cursor }, 'Invalid cursor');
-          return reply.code(400).send({ error: 'InvalidCursor' });
+          return reply.code(400).send({
+            error: 'ValidationError',
+            message: 'Invalid query parameters',
+            details: [
+              {
+                path: ['cursor'],
+                message: 'Cursor must be a valid feed pagination cursor',
+              },
+            ],
+          });
         }
 
         snapshotId = parsed.snapshotId;

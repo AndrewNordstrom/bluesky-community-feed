@@ -87,8 +87,7 @@ async function runScoringPipelineInternal(): Promise<void> {
     logger.info({ postCount: allPosts.length, epochId: epoch.id }, 'Posts fetched for scoring');
 
     if (allPosts.length === 0) {
-      logger.warn('No posts to score in the window');
-      return;
+      logger.warn({ epochId: epoch.id }, 'No posts to score in the window, clearing feed');
     }
 
     // 2b. Apply content filtering based on governance rules
@@ -112,8 +111,7 @@ async function runScoringPipelineInternal(): Promise<void> {
       );
 
       if (posts.length === 0) {
-        logger.warn('All posts filtered out by content rules');
-        return;
+        logger.warn({ epochId: epoch.id }, 'All posts filtered out by content rules, clearing feed');
       }
     }
 
@@ -326,11 +324,6 @@ async function writeToRedis(scored: ScoredPost[], epochId: number): Promise<void
   // Take top N posts for the feed
   const topPosts = scored.slice(0, config.FEED_MAX_POSTS);
 
-  if (topPosts.length === 0) {
-    logger.warn('No posts to write to Redis');
-    return;
-  }
-
   // Use Redis pipeline for atomic batch write
   const pipeline = redis.pipeline();
 
@@ -348,6 +341,11 @@ async function writeToRedis(scored: ScoredPost[], epochId: number): Promise<void
   pipeline.set('feed:count', topPosts.length.toString());
 
   await pipeline.exec();
+
+  if (topPosts.length === 0) {
+    logger.info({ epochId }, 'Feed cleared in Redis due to empty scoring result');
+    return;
+  }
 
   logger.info({ postCount: topPosts.length, epochId }, 'Feed written to Redis');
 }
