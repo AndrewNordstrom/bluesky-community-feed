@@ -52,22 +52,9 @@ export async function createServer() {
   });
 
   if (config.RATE_LIMIT_ENABLED) {
-    await app.register(fastifyRateLimit, {
-      global: true,
-      redis,
-      max: config.RATE_LIMIT_GLOBAL_MAX,
-      timeWindow: config.RATE_LIMIT_GLOBAL_WINDOW_MS,
-      keyGenerator: (request) => request.ip,
-      errorResponseBuilder: (_request, context) => ({
-        error: 'TooManyRequests',
-        message: 'Rate limit exceeded. Please retry later.',
-        retryAfterSeconds: Math.max(1, Math.ceil(context.ttl / 1000)),
-      }),
-    });
-
     app.addHook('onRoute', (routeOptions) => {
       const url = routeOptions.url;
-      if (url === '/api/governance/auth/login') {
+      if (url.startsWith('/api/governance/auth/login')) {
         routeOptions.config = {
           ...routeOptions.config,
           rateLimit: {
@@ -78,7 +65,7 @@ export async function createServer() {
         return;
       }
 
-      if (url === '/api/governance/vote') {
+      if (url.startsWith('/api/governance/vote')) {
         routeOptions.config = {
           ...routeOptions.config,
           rateLimit: {
@@ -129,6 +116,20 @@ export async function createServer() {
           },
         };
       }
+    });
+
+    await app.register(fastifyRateLimit, {
+      global: true,
+      redis,
+      max: config.RATE_LIMIT_GLOBAL_MAX,
+      timeWindow: config.RATE_LIMIT_GLOBAL_WINDOW_MS,
+      keyGenerator: (request) => request.ip,
+      errorResponseBuilder: (_request, context) => ({
+        statusCode: 429,
+        error: 'TooManyRequests',
+        message: 'Rate limit exceeded. Please retry later.',
+        retryAfterSeconds: Math.max(1, Math.ceil(context.ttl / 1000)),
+      }),
     });
   }
 
@@ -195,6 +196,35 @@ export async function createServer() {
   // Standardized error handler with correlation ID
   app.setErrorHandler((error: Error, request: FastifyRequest, reply: FastifyReply) => {
     const correlationId = request.correlationId || 'unknown';
+    const rateLimitError = error as Partial<{
+      statusCode: number;
+      code: number | string;
+      error: string;
+      message: string;
+      retryAfterSeconds: number;
+    }>;
+
+    if (
+      rateLimitError.statusCode === 429 ||
+      rateLimitError.code === 429 ||
+      rateLimitError.error === 'TooManyRequests'
+    ) {
+      const response: Record<string, unknown> = {
+        error: 'TooManyRequests',
+        message: rateLimitError.message ?? 'Rate limit exceeded. Please retry later.',
+        correlationId,
+      };
+      if (typeof rateLimitError.retryAfterSeconds === 'number') {
+        response.retryAfterSeconds = rateLimitError.retryAfterSeconds;
+      }
+
+      logger.warn({
+        correlationId,
+        retryAfterSeconds: rateLimitError.retryAfterSeconds,
+      }, 'Rate limit exceeded');
+
+      return reply.status(429).send(response);
+    }
 
     // Handle AppError (our custom error type)
     if (isAppError(error)) {
