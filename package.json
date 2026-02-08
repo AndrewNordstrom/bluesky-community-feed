@@ -8,7 +8,7 @@
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
-    "migrate": "psql $DATABASE_URL -f src/db/migrations/001_initial_schema.sql",
+    "migrate": "tsx scripts/migrate.ts",
     "test": "vitest"
   },
   "dependencies": {

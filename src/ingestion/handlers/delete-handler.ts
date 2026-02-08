@@ -16,44 +16,92 @@ export async function handleDelete(uri: string, collection: string): Promise<voi
   try {
     switch (collection) {
       case COLLECTIONS.POST:
-        await db.query(`UPDATE posts SET deleted = TRUE WHERE uri = $1`, [uri]);
+        {
+          const postResult = await db.query(
+            `UPDATE posts
+             SET deleted = TRUE
+             WHERE uri = $1 AND deleted = FALSE
+             RETURNING uri`,
+            [uri]
+          );
+
+          if (postResult.rowCount === 0) {
+            logger.debug({ uri }, 'Duplicate post delete received; no state change');
+            break;
+          }
+        }
         logger.debug({ uri }, 'Post marked as deleted');
         break;
 
       case COLLECTIONS.LIKE:
-        // First get the subject URI so we can decrement the counter
-        const likeResult = await db.query(`SELECT subject_uri FROM likes WHERE uri = $1`, [uri]);
-        await db.query(`UPDATE likes SET deleted = TRUE WHERE uri = $1`, [uri]);
-
-        if (likeResult.rows[0]?.subject_uri) {
-          await db.query(
-            `UPDATE post_engagement
-             SET like_count = GREATEST(like_count - 1, 0), updated_at = NOW()
-             WHERE post_uri = $1`,
-            [likeResult.rows[0].subject_uri]
+        {
+          const likeResult = await db.query(
+            `UPDATE likes
+             SET deleted = TRUE
+             WHERE uri = $1 AND deleted = FALSE
+             RETURNING subject_uri`,
+            [uri]
           );
+
+          if (likeResult.rowCount === 0) {
+            logger.debug({ uri }, 'Duplicate like delete received; no state change');
+            break;
+          }
+
+          if (likeResult.rows[0]?.subject_uri) {
+            await db.query(
+              `UPDATE post_engagement
+               SET like_count = GREATEST(like_count - 1, 0), updated_at = NOW()
+               WHERE post_uri = $1`,
+              [likeResult.rows[0].subject_uri]
+            );
+          }
         }
         logger.debug({ uri }, 'Like marked as deleted');
         break;
 
       case COLLECTIONS.REPOST:
-        // First get the subject URI so we can decrement the counter
-        const repostResult = await db.query(`SELECT subject_uri FROM reposts WHERE uri = $1`, [uri]);
-        await db.query(`UPDATE reposts SET deleted = TRUE WHERE uri = $1`, [uri]);
-
-        if (repostResult.rows[0]?.subject_uri) {
-          await db.query(
-            `UPDATE post_engagement
-             SET repost_count = GREATEST(repost_count - 1, 0), updated_at = NOW()
-             WHERE post_uri = $1`,
-            [repostResult.rows[0].subject_uri]
+        {
+          const repostResult = await db.query(
+            `UPDATE reposts
+             SET deleted = TRUE
+             WHERE uri = $1 AND deleted = FALSE
+             RETURNING subject_uri`,
+            [uri]
           );
+
+          if (repostResult.rowCount === 0) {
+            logger.debug({ uri }, 'Duplicate repost delete received; no state change');
+            break;
+          }
+
+          if (repostResult.rows[0]?.subject_uri) {
+            await db.query(
+              `UPDATE post_engagement
+               SET repost_count = GREATEST(repost_count - 1, 0), updated_at = NOW()
+               WHERE post_uri = $1`,
+              [repostResult.rows[0].subject_uri]
+            );
+          }
         }
         logger.debug({ uri }, 'Repost marked as deleted');
         break;
 
       case COLLECTIONS.FOLLOW:
-        await db.query(`UPDATE follows SET deleted = TRUE WHERE uri = $1`, [uri]);
+        {
+          const followResult = await db.query(
+            `UPDATE follows
+             SET deleted = TRUE
+             WHERE uri = $1 AND deleted = FALSE
+             RETURNING uri`,
+            [uri]
+          );
+
+          if (followResult.rowCount === 0) {
+            logger.debug({ uri }, 'Duplicate follow delete received; no state change');
+            break;
+          }
+        }
         logger.debug({ uri }, 'Follow marked as deleted');
         break;
 
