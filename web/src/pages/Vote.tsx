@@ -4,6 +4,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAdminStatus } from '../hooks/useAdminStatus';
 import { WeightSliders } from '../components/WeightSliders';
 import { KeywordInput } from '../components/KeywordInput';
+import { TabPanel } from '../components/TabPanel';
+import { VoteSkeleton } from '../components/Skeleton';
 import type { GovernanceWeights } from '../components/WeightSliders';
 import { voteApi, weightsApi } from '../api/client';
 import type { EpochResponse, ContentVote, ContentRulesResponse } from '../api/client';
@@ -160,10 +162,21 @@ export function Vote() {
   if (authLoading || isLoadingData) {
     return (
       <div className="vote-page">
-        <div className="loading">
-          <div className="loading-spinner" />
-          <span>Loading...</span>
-        </div>
+        <header className="vote-header">
+          <div className="header-content">
+            <div className="header-left">
+              <h1>Community feed</h1>
+              <nav className="header-nav">
+                <Link to="/vote" className="nav-link active">Vote</Link>
+                <Link to="/dashboard" className="nav-link">Dashboard</Link>
+                <Link to="/history" className="nav-link">History</Link>
+              </nav>
+            </div>
+          </div>
+        </header>
+        <main className="vote-main">
+          <VoteSkeleton />
+        </main>
         <style>{styles}</style>
       </div>
     );
@@ -191,7 +204,7 @@ export function Vote() {
         </div>
       </header>
 
-      <main className="vote-main">
+      <main className="vote-main page-content">
         {currentEpoch && (
           <div className="epoch-info">
             <div className="epoch-status">
@@ -231,7 +244,7 @@ export function Vote() {
         {successMessage && <div className="success-message">{successMessage}</div>}
 
         {/* Weights tab */}
-        {activeTab === 'weights' && (
+        <TabPanel isActive={activeTab === 'weights'} tabKey="weights">
           <section className="voting-section">
             <h2>Your vote</h2>
             <p className="vote-description">
@@ -274,10 +287,10 @@ export function Vote() {
               )}
             </div>
           </section>
-        )}
+        </TabPanel>
 
         {/* Content rules tab */}
-        {activeTab === 'content' && (
+        <TabPanel isActive={activeTab === 'content'} tabKey="content">
           <section className="voting-section">
             <h2>Content rules vote</h2>
             <p className="vote-description">
@@ -382,7 +395,7 @@ export function Vote() {
               </div>
             )}
           </section>
-        )}
+        </TabPanel>
 
         <section className="current-weights-section">
           <h2>Current algorithm weights</h2>

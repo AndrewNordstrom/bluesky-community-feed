@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { adminApi } from '../../api/admin';
 import type { AuditEntry } from '../../api/admin';
 import { formatRelative, truncateDid, formatActionName } from '../../utils/format';
+import { TableSkeleton } from '../Skeleton';
 
 const ACTION_TYPES = [
   { value: '', label: 'All Actions' },
@@ -68,7 +69,7 @@ export function AuditLog() {
       </div>
 
       {isLoading ? (
-        <div className="admin-loading"><div className="loading-spinner" /></div>
+        <TableSkeleton rows={8} />
       ) : entries.length === 0 ? (
         <p className="empty-state">No audit entries found</p>
       ) : (

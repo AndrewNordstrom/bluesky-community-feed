@@ -1,0 +1,165 @@
+/* ========================================
+   Page & Tab Transition Utilities
+   Uses existing design tokens from tokens.css
+   ======================================== */
+
+/* Page enter animation - subtle fade up */
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Tab content fade */
+@keyframes tabFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Content loaded fade (for data arriving) */
+@keyframes contentLoaded {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Skeleton shimmer effect */
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ========================================
+   Utility Classes
+   ======================================== */
+
+/* Apply to main page content areas */
+.page-content {
+  animation: pageEnter var(--transition-base) ease-out;
+}
+
+/* Apply to tab panel content */
+.tab-content {
+  animation: tabFadeIn var(--transition-fast) ease-out;
+}
+
+/* Apply when data finishes loading */
+.content-loaded {
+  animation: contentLoaded var(--transition-base) ease-out;
+}
+
+/* ========================================
+   Skeleton Loading Styles
+   ======================================== */
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-elevated) 25%,
+    var(--bg-hover) 50%,
+    var(--bg-elevated) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-md);
+}
+
+/* Skeleton variants */
+.skeleton-text {
+  height: 16px;
+  margin-bottom: 8px;
+}
+
+.skeleton-text.short {
+  width: 40%;
+}
+
+.skeleton-text.medium {
+  width: 70%;
+}
+
+.skeleton-title {
+  height: 24px;
+  width: 50%;
+  margin-bottom: 16px;
+}
+
+.skeleton-card {
+  height: 120px;
+  margin-bottom: 16px;
+}
+
+.skeleton-stat {
+  height: 80px;
+}
+
+.skeleton-slider {
+  height: 32px;
+  margin-bottom: 16px;
+}
+
+.skeleton-button {
+  height: 40px;
+  width: 120px;
+}
+
+/* ========================================
+   Skeleton Layout Helpers
+   ======================================== */
+
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.skeleton-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.skeleton-grid.cols-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.skeleton-grid.cols-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.skeleton-grid.cols-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* ========================================
+   Accessibility: Reduced Motion
+   ======================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .page-content,
+  .tab-content,
+  .content-loaded {
+    animation: none;
+  }
+
+  .skeleton {
+    animation: none;
+    background: var(--bg-elevated);
+  }
+}

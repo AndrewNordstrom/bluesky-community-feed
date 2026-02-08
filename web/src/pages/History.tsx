@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { EpochTimeline } from '../components/EpochTimeline';
 import { ScoreRadar } from '../components/ScoreRadar';
+import { HistorySkeleton } from '../components/Skeleton';
 import { useAuth } from '../contexts/AuthContext';
 import { useAdminStatus } from '../hooks/useAdminStatus';
 import { transparencyApi } from '../api/client';
@@ -85,10 +86,21 @@ export function History() {
   if (isLoading) {
     return (
       <div className="history-page">
-        <div className="loading">
-          <div className="loading-spinner" />
-          <span>Loading history...</span>
-        </div>
+        <header className="history-header">
+          <div className="header-content">
+            <div className="header-left">
+              <h1>Community feed</h1>
+              <nav className="header-nav">
+                <Link to="/vote" className="nav-link">Vote</Link>
+                <Link to="/dashboard" className="nav-link">Dashboard</Link>
+                <Link to="/history" className="nav-link active">History</Link>
+              </nav>
+            </div>
+          </div>
+        </header>
+        <main className="history-main">
+          <HistorySkeleton />
+        </main>
         <style>{styles}</style>
       </div>
     );
@@ -129,7 +141,7 @@ export function History() {
         </div>
       </header>
 
-      <main className="history-main">
+      <main className="history-main page-content">
         <div className="history-layout">
           <aside className="timeline-sidebar">
             <h2>Epochs</h2>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { adminApi } from '../../api/admin';
 import type { FeedHealth as FeedHealthType } from '../../api/admin';
 import { formatNumber, formatRelative, formatDate } from '../../utils/format';
+import { AdminPanelSkeleton } from '../Skeleton';
 
 export function FeedHealth() {
   const [health, setHealth] = useState<FeedHealthType | null>(null);
@@ -49,11 +50,11 @@ export function FeedHealth() {
   }
 
   if (isLoading || !health) {
-    return <div className="admin-loading"><div className="loading-spinner" /></div>;
+    return <AdminPanelSkeleton />;
   }
 
   return (
-    <div>
+    <div className="content-loaded">
       {message && (
         <div className={`alert alert-${message.type}`}>
           {message.text}

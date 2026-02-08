@@ -17,6 +17,7 @@ import { EpochManager } from '../components/admin/EpochManager';
 import { AnnouncementPanel } from '../components/admin/AnnouncementPanel';
 import { FeedHealth } from '../components/admin/FeedHealth';
 import { AuditLog } from '../components/admin/AuditLog';
+import { TabPanel } from '../components/TabPanel';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/admin.css';
 
@@ -78,12 +79,22 @@ export function AdminPage() {
             ))}
           </nav>
 
-          <main className="admin-content">
-            {activeTab === 'overview' && <OverviewPanel onNavigate={(tab) => setActiveTab(tab as AdminTab)} />}
-            {activeTab === 'epochs' && <EpochManager />}
-            {activeTab === 'announcements' && <AnnouncementPanel />}
-            {activeTab === 'health' && <FeedHealth />}
-            {activeTab === 'audit' && <AuditLog />}
+          <main className="admin-content page-content">
+            <TabPanel isActive={activeTab === 'overview'} tabKey="overview">
+              <OverviewPanel onNavigate={(tab) => setActiveTab(tab as AdminTab)} />
+            </TabPanel>
+            <TabPanel isActive={activeTab === 'epochs'} tabKey="epochs">
+              <EpochManager />
+            </TabPanel>
+            <TabPanel isActive={activeTab === 'announcements'} tabKey="announcements">
+              <AnnouncementPanel />
+            </TabPanel>
+            <TabPanel isActive={activeTab === 'health'} tabKey="health">
+              <FeedHealth />
+            </TabPanel>
+            <TabPanel isActive={activeTab === 'audit'} tabKey="audit">
+              <AuditLog />
+            </TabPanel>
           </main>
         </div>
       </div>
