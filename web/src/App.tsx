@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './contexts/AuthContext';
 import { Login } from './pages/Login';
@@ -18,48 +17,20 @@ const queryClient = new QueryClient({
   },
 });
 
-function AnimatedRoutes() {
-  const location = useLocation();
-  const [displayLocation, setDisplayLocation] = useState(location);
-  const [transitionStage, setTransitionStage] = useState<'enter' | 'exit'>('enter');
-
-  useEffect(() => {
-    if (location.key !== displayLocation.key) {
-      setTransitionStage('exit');
-    }
-  }, [location, displayLocation]);
-
-  const handleAnimationEnd = () => {
-    if (transitionStage === 'exit') {
-      setDisplayLocation(location);
-      setTransitionStage('enter');
-    }
-  };
-
-  return (
-    <div
-      className={`route-transition route-transition--${transitionStage}`}
-      onAnimationEnd={handleAnimationEnd}
-    >
-      <Routes location={displayLocation}>
-        <Route path="/login" element={<Login />} />
-        <Route path="/vote" element={<Vote />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/post/:uri" element={<PostExplain />} />
-        <Route path="/history" element={<History />} />
-        <Route path="/admin" element={<AdminPage />} />
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
-    </div>
-  );
-}
-
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <BrowserRouter>
-          <AnimatedRoutes />
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/vote" element={<Vote />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/post/:uri" element={<PostExplain />} />
+            <Route path="/history" element={<History />} />
+            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
         </BrowserRouter>
       </AuthProvider>
     </QueryClientProvider>
