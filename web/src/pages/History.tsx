@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { EpochTimeline } from '../components/EpochTimeline';
 import { ScoreRadar } from '../components/ScoreRadar';
+import { useAuth } from '../contexts/AuthContext';
 import { useAdminStatus } from '../hooks/useAdminStatus';
 import { transparencyApi } from '../api/client';
 import type { EpochResponse, AuditLogEntry } from '../api/client';
 
 export function History() {
+  const { userHandle, logout } = useAuth();
   const { isAdmin } = useAdminStatus();
+  const navigate = useNavigate();
   const [epochs, setEpochs] = useState<EpochResponse[]>([]);
   const [selectedEpoch, setSelectedEpoch] = useState<EpochResponse | null>(null);
   const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
@@ -69,6 +72,11 @@ export function History() {
       .join(' ');
   };
 
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
+
   // Get audit entries for selected epoch
   const epochAuditEntries = selectedEpoch
     ? auditLog.filter((entry) => entry.epoch_id === selectedEpoch.id)
@@ -111,6 +119,12 @@ export function History() {
               <Link to="/history" className="nav-link">History</Link>
               {isAdmin && <Link to="/admin" className="nav-link">Admin</Link>}
             </nav>
+          </div>
+          <div className="user-info">
+            <span className="user-handle">@{userHandle}</span>
+            <button onClick={handleLogout} className="logout-button">
+              Log out
+            </button>
           </div>
         </div>
       </header>
@@ -300,7 +314,7 @@ const styles = `
   }
 
   .header-content {
-    max-width: 1200px;
+    max-width: 900px;
     margin: 0 auto;
     display: flex;
     justify-content: space-between;
@@ -342,6 +356,35 @@ const styles = `
   .nav-link.active {
     color: var(--accent-blue);
     background: var(--accent-blue-subtle);
+  }
+
+  .user-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  .user-handle {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  .logout-button {
+    background: transparent;
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .logout-button:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-subtle);
+    color: var(--text-primary);
   }
 
   .history-main {
@@ -557,7 +600,7 @@ const styles = `
     background: rgba(16, 131, 254, 0.25);
   }
 
-  @media (max-width: 900px) {
+  @media (max-width: 768px) {
     .header-content {
       flex-direction: column;
       gap: var(--space-4);
