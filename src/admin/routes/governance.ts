@@ -21,6 +21,12 @@ import { invalidateContentRulesCache } from '../../governance/content-filter.js'
 import { aggregateContentVotes, aggregateVotes } from '../../governance/aggregation.js';
 import { tryTriggerManualScoringRun } from '../../scoring/scheduler.js';
 import { forceEpochTransition, triggerEpochTransition } from '../../governance/epoch-manager.js';
+import {
+  announceResultsApproved,
+  announceVoteScheduled,
+  announceVotingClosed,
+  announceVotingOpen,
+} from '../../bot/governance-announcements.js';
 
 const KEYWORD_PATTERN = /^[a-z0-9][a-z0-9\s-]{0,49}$/i;
 
@@ -65,10 +71,35 @@ const RoundIdParamsSchema = z.object({
   id: z.coerce.number().int().positive(),
 });
 
+const StartVotingSchema = z.object({
+  durationHours: z.coerce.number().int().min(1).max(168).default(72),
+  announce: z.boolean().optional().default(true),
+});
+
+const EndVotingSchema = z.object({
+  announce: z.boolean().optional().default(true),
+});
+
+const ApproveResultsSchema = z.object({
+  announce: z.boolean().optional().default(true),
+});
+
+const ScheduleVoteSchema = z.object({
+  startsAt: z.string().datetime(),
+  durationHours: z.coerce.number().int().min(1).max(168).default(72),
+});
+
 interface GovernanceEpochRow {
   id: number;
   status: string;
+  phase: string | null;
   voting_ends_at: string | null;
+  voting_started_at: string | null;
+  voting_closed_at: string | null;
+  results_approved_at: string | null;
+  results_approved_by: string | null;
+  proposed_weights: unknown;
+  proposed_content_rules: unknown;
   auto_transition: boolean;
   recency_weight: number | string;
   engagement_weight: number | string;
@@ -78,6 +109,15 @@ interface GovernanceEpochRow {
   content_rules: unknown;
   created_at: string;
   closed_at: string | null;
+}
+
+interface ScheduledVoteRow {
+  id: number;
+  starts_at: string;
+  duration_hours: number;
+  announced: boolean;
+  created_by: string;
+  created_at: string;
 }
 
 function toNumber(value: number | string): number {
@@ -92,6 +132,65 @@ function toWeights(row: GovernanceEpochRow): GovernanceWeights {
     sourceDiversity: toNumber(row.source_diversity_weight),
     relevance: toNumber(row.relevance_weight),
   };
+}
+
+function toDbContentRules(rules: ContentRules): { include_keywords: string[]; exclude_keywords: string[] } {
+  return {
+    include_keywords: rules.includeKeywords,
+    exclude_keywords: rules.excludeKeywords,
+  };
+}
+
+function toPhase(row: GovernanceEpochRow): 'running' | 'voting' | 'results' {
+  if (row.phase === 'voting' || row.phase === 'results' || row.phase === 'running') {
+    return row.phase;
+  }
+
+  if (row.status === 'voting') {
+    return 'voting';
+  }
+
+  return 'running';
+}
+
+function toProposedWeights(raw: unknown): GovernanceWeights | null {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+
+  const value = raw as Record<string, unknown>;
+  const recency = typeof value.recency === 'number' ? value.recency : null;
+  const engagement = typeof value.engagement === 'number' ? value.engagement : null;
+  const bridging = typeof value.bridging === 'number' ? value.bridging : null;
+  const sourceDiversity =
+    typeof value.sourceDiversity === 'number' ? value.sourceDiversity : null;
+  const relevance = typeof value.relevance === 'number' ? value.relevance : null;
+
+  if (
+    recency === null ||
+    engagement === null ||
+    bridging === null ||
+    sourceDiversity === null ||
+    relevance === null
+  ) {
+    return null;
+  }
+
+  return {
+    recency,
+    engagement,
+    bridging,
+    sourceDiversity,
+    relevance,
+  };
+}
+
+function toProposedContentRules(raw: unknown): ContentRules | null {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+
+  return toContentRules(raw as any);
 }
 
 function toContentRulesPayload(rules: ContentRules): { include_keywords: string[]; exclude_keywords: string[] } {
@@ -131,10 +230,17 @@ function mapRound(row: GovernanceEpochRow, voteCount: number) {
   return {
     id: row.id,
     status: row.status,
+    phase: toPhase(row),
     voteCount,
     createdAt: row.created_at,
     closedAt: row.closed_at,
     votingEndsAt: row.voting_ends_at,
+    votingStartedAt: row.voting_started_at,
+    votingClosedAt: row.voting_closed_at,
+    resultsApprovedAt: row.results_approved_at,
+    resultsApprovedBy: row.results_approved_by,
+    proposedWeights: toProposedWeights(row.proposed_weights),
+    proposedContentRules: toProposedContentRules(row.proposed_content_rules),
     autoTransition: row.auto_transition,
     weights: toWeights(row),
     contentRules: {
@@ -167,13 +273,52 @@ async function triggerManualRescore(reason: string): Promise<boolean> {
   return triggered;
 }
 
+async function getVoteCounts(client: PoolClient, epochId: number): Promise<{ total: number; content: number }> {
+  const result = await client.query<{ total: string; content: string }>(
+    `SELECT
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (
+        WHERE
+          (include_keywords IS NOT NULL AND array_length(include_keywords, 1) > 0)
+          OR
+          (exclude_keywords IS NOT NULL AND array_length(exclude_keywords, 1) > 0)
+      )::int AS content
+     FROM governance_votes
+     WHERE epoch_id = $1`,
+    [epochId]
+  );
+
+  return {
+    total: parseInt(result.rows[0]?.total ?? '0', 10),
+    content: parseInt(result.rows[0]?.content ?? '0', 10),
+  };
+}
+
+function mapScheduledVote(row: ScheduledVoteRow) {
+  return {
+    id: row.id,
+    startsAt: row.starts_at,
+    durationHours: row.duration_hours,
+    announced: row.announced,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+  };
+}
+
 export function registerGovernanceRoutes(app: FastifyInstance): void {
   app.get('/governance', async (_request: FastifyRequest, reply: FastifyReply) => {
     const roundsResult = await db.query<GovernanceEpochRow & { vote_count: string }>(
       `SELECT
         e.id,
         e.status,
+        e.phase,
         e.voting_ends_at,
+        e.voting_started_at,
+        e.voting_closed_at,
+        e.results_approved_at,
+        e.results_approved_by,
+        e.proposed_weights,
+        e.proposed_content_rules,
         e.auto_transition,
         e.recency_weight,
         e.engagement_weight,
@@ -202,6 +347,464 @@ export function registerGovernanceRoutes(app: FastifyInstance): void {
       excludeKeywords: currentRound?.contentRules.excludeKeywords ?? [],
       votingEndsAt: currentRound?.votingEndsAt ?? null,
       autoTransition: currentRound?.autoTransition ?? false,
+    });
+  });
+
+  app.post('/governance/start-voting', async (request: FastifyRequest, reply: FastifyReply) => {
+    const adminDid = getAdminDid(request);
+    const parseResult = StartVotingSchema.safeParse(request.body ?? {});
+
+    if (!parseResult.success) {
+      return reply.code(400).send({
+        error: 'ValidationError',
+        message: 'Invalid start-voting request',
+        details: parseResult.error.issues,
+      });
+    }
+
+    const { durationHours, announce } = parseResult.data;
+    const client = await db.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      const epoch = await getCurrentEpochForUpdate(client);
+      if (!epoch) {
+        await client.query('ROLLBACK');
+        return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
+      }
+
+      const phase = toPhase(epoch);
+      if (phase === 'voting') {
+        await client.query('ROLLBACK');
+        return reply.code(409).send({
+          error: 'AlreadyVoting',
+          message: 'A voting period is already open for the current round',
+        });
+      }
+
+      if (phase === 'results') {
+        await client.query('ROLLBACK');
+        return reply.code(409).send({
+          error: 'ResultsPending',
+          message: 'Current round is awaiting results approval/rejection',
+        });
+      }
+
+      const updatedResult = await client.query<GovernanceEpochRow>(
+        `UPDATE governance_epochs
+         SET phase = 'voting',
+             status = 'active',
+             voting_started_at = NOW(),
+             voting_closed_at = NULL,
+             voting_ends_at = NOW() + make_interval(hours => $1),
+             auto_transition = TRUE,
+             results_approved_at = NULL,
+             results_approved_by = NULL,
+             proposed_weights = NULL,
+             proposed_content_rules = NULL
+         WHERE id = $2
+         RETURNING *`,
+        [durationHours, epoch.id]
+      );
+
+      const voteCounts = await getVoteCounts(client, epoch.id);
+
+      await client.query(
+        `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
+         VALUES ('admin_start_voting', $1, $2, $3)`,
+        [
+          adminDid,
+          epoch.id,
+          JSON.stringify({
+            duration_hours: durationHours,
+            announce,
+          }),
+        ]
+      );
+
+      await client.query('COMMIT');
+
+      if (announce) {
+        await announceVotingOpen({ id: epoch.id }, `${durationHours} hour(s)`);
+      }
+
+      return reply.send({
+        success: true,
+        round: mapRound(updatedResult.rows[0], voteCounts.total),
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      logger.error({ error, adminDid }, 'Failed to start voting period');
+      return reply.code(500).send({
+        error: 'StartVotingFailed',
+        message: 'Failed to start voting period',
+      });
+    } finally {
+      client.release();
+    }
+  });
+
+  app.post('/governance/end-voting', async (request: FastifyRequest, reply: FastifyReply) => {
+    const adminDid = getAdminDid(request);
+    const parseResult = EndVotingSchema.safeParse(request.body ?? {});
+
+    if (!parseResult.success) {
+      return reply.code(400).send({
+        error: 'ValidationError',
+        message: 'Invalid end-voting request',
+        details: parseResult.error.issues,
+      });
+    }
+
+    const { announce } = parseResult.data;
+    const client = await db.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      const epoch = await getCurrentEpochForUpdate(client);
+      if (!epoch) {
+        await client.query('ROLLBACK');
+        return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
+      }
+
+      const phase = toPhase(epoch);
+      if (phase !== 'voting') {
+        await client.query('ROLLBACK');
+        return reply.code(409).send({
+          error: 'VotingNotOpen',
+          message: 'Voting is not currently open for this round',
+        });
+      }
+
+      const voteCounts = await getVoteCounts(client, epoch.id);
+      const previousWeights = toWeights(epoch);
+      const previousRules = toContentRules((epoch.content_rules ?? null) as any);
+
+      let proposedWeights = previousWeights;
+      let proposedRules = previousRules;
+
+      if (voteCounts.total > 0) {
+        const aggregatedWeights = await aggregateVotes(epoch.id);
+        if (aggregatedWeights) {
+          proposedWeights = aggregatedWeights;
+        }
+      }
+
+      if (voteCounts.content > 0) {
+        proposedRules = await aggregateContentVotes(epoch.id);
+      }
+
+      const updatedResult = await client.query<GovernanceEpochRow>(
+        `UPDATE governance_epochs
+         SET phase = 'results',
+             voting_closed_at = NOW(),
+             auto_transition = FALSE,
+             proposed_weights = $1,
+             proposed_content_rules = $2
+         WHERE id = $3
+         RETURNING *`,
+        [JSON.stringify(proposedWeights), JSON.stringify(toDbContentRules(proposedRules)), epoch.id]
+      );
+
+      await client.query(
+        `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
+         VALUES ('admin_end_voting', $1, $2, $3)`,
+        [
+          adminDid,
+          epoch.id,
+          JSON.stringify({
+            vote_count: voteCounts.total,
+            content_vote_count: voteCounts.content,
+            proposed_weights: proposedWeights,
+            proposed_content_rules: toDbContentRules(proposedRules),
+            announce,
+          }),
+        ]
+      );
+
+      await client.query('COMMIT');
+
+      if (announce) {
+        await announceVotingClosed({ id: epoch.id }, voteCounts.total);
+      }
+
+      return reply.send({
+        success: true,
+        voteCount: voteCounts.total,
+        proposedWeights,
+        proposedContentRules: proposedRules,
+        round: mapRound(updatedResult.rows[0], voteCounts.total),
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      logger.error({ error, adminDid }, 'Failed to end voting period');
+      return reply.code(500).send({
+        error: 'EndVotingFailed',
+        message: 'Failed to end voting period',
+      });
+    } finally {
+      client.release();
+    }
+  });
+
+  app.post('/governance/approve-results', async (request: FastifyRequest, reply: FastifyReply) => {
+    const adminDid = getAdminDid(request);
+    const parseResult = ApproveResultsSchema.safeParse(request.body ?? {});
+
+    if (!parseResult.success) {
+      return reply.code(400).send({
+        error: 'ValidationError',
+        message: 'Invalid approve-results request',
+        details: parseResult.error.issues,
+      });
+    }
+
+    const { announce } = parseResult.data;
+    const client = await db.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      const epoch = await getCurrentEpochForUpdate(client);
+      if (!epoch) {
+        await client.query('ROLLBACK');
+        return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
+      }
+
+      if (toPhase(epoch) !== 'results') {
+        await client.query('ROLLBACK');
+        return reply.code(409).send({
+          error: 'ResultsNotPending',
+          message: 'No pending results to approve',
+        });
+      }
+
+      const oldWeights = toWeights(epoch);
+      const oldContentRules = toContentRules((epoch.content_rules ?? null) as any);
+      const newWeights = toProposedWeights(epoch.proposed_weights) ?? oldWeights;
+      const newContentRules = toProposedContentRules(epoch.proposed_content_rules) ?? oldContentRules;
+
+      const updatedResult = await client.query<GovernanceEpochRow>(
+        `UPDATE governance_epochs
+         SET recency_weight = $1,
+             engagement_weight = $2,
+             bridging_weight = $3,
+             source_diversity_weight = $4,
+             relevance_weight = $5,
+             content_rules = $6,
+             phase = 'running',
+             voting_ends_at = NULL,
+             auto_transition = FALSE,
+             proposed_weights = NULL,
+             proposed_content_rules = NULL,
+             results_approved_at = NOW(),
+             results_approved_by = $7
+         WHERE id = $8
+         RETURNING *`,
+        [
+          newWeights.recency,
+          newWeights.engagement,
+          newWeights.bridging,
+          newWeights.sourceDiversity,
+          newWeights.relevance,
+          JSON.stringify(toDbContentRules(newContentRules)),
+          adminDid,
+          epoch.id,
+        ]
+      );
+
+      const voteCounts = await getVoteCounts(client, epoch.id);
+
+      await client.query(
+        `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
+         VALUES ('admin_approve_results', $1, $2, $3)`,
+        [
+          adminDid,
+          epoch.id,
+          JSON.stringify({
+            old_weights: oldWeights,
+            new_weights: newWeights,
+            old_content_rules: toDbContentRules(oldContentRules),
+            new_content_rules: toDbContentRules(newContentRules),
+            announce,
+          }),
+        ]
+      );
+
+      await client.query('COMMIT');
+
+      await invalidateContentRulesCache();
+      const rescoreTriggered = await triggerManualRescore('admin_approve_results');
+
+      if (announce) {
+        await announceResultsApproved(
+          { id: epoch.id },
+          {
+            oldWeights,
+            newWeights,
+            oldContentRules,
+            newContentRules,
+          }
+        );
+      }
+
+      return reply.send({
+        success: true,
+        weights: newWeights,
+        contentRules: newContentRules,
+        rescoreTriggered,
+        round: mapRound(updatedResult.rows[0], voteCounts.total),
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      logger.error({ error, adminDid }, 'Failed to approve voting results');
+      return reply.code(500).send({
+        error: 'ApproveResultsFailed',
+        message: 'Failed to approve voting results',
+      });
+    } finally {
+      client.release();
+    }
+  });
+
+  app.post('/governance/reject-results', async (request: FastifyRequest, reply: FastifyReply) => {
+    const adminDid = getAdminDid(request);
+    const client = await db.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      const epoch = await getCurrentEpochForUpdate(client);
+      if (!epoch) {
+        await client.query('ROLLBACK');
+        return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
+      }
+
+      if (toPhase(epoch) !== 'results') {
+        await client.query('ROLLBACK');
+        return reply.code(409).send({
+          error: 'ResultsNotPending',
+          message: 'No pending results to reject',
+        });
+      }
+
+      const updatedResult = await client.query<GovernanceEpochRow>(
+        `UPDATE governance_epochs
+         SET phase = 'running',
+             voting_ends_at = NULL,
+             auto_transition = FALSE,
+             proposed_weights = NULL,
+             proposed_content_rules = NULL
+         WHERE id = $1
+         RETURNING *`,
+        [epoch.id]
+      );
+
+      const voteCounts = await getVoteCounts(client, epoch.id);
+
+      await client.query(
+        `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
+         VALUES ('admin_reject_results', $1, $2, $3)`,
+        [
+          adminDid,
+          epoch.id,
+          JSON.stringify({
+            rejected_at: new Date().toISOString(),
+          }),
+        ]
+      );
+
+      await client.query('COMMIT');
+
+      return reply.send({
+        success: true,
+        round: mapRound(updatedResult.rows[0], voteCounts.total),
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      logger.error({ error, adminDid }, 'Failed to reject voting results');
+      return reply.code(500).send({
+        error: 'RejectResultsFailed',
+        message: 'Failed to reject voting results',
+      });
+    } finally {
+      client.release();
+    }
+  });
+
+  app.post('/governance/schedule-vote', async (request: FastifyRequest, reply: FastifyReply) => {
+    const adminDid = getAdminDid(request);
+    const parseResult = ScheduleVoteSchema.safeParse(request.body ?? {});
+
+    if (!parseResult.success) {
+      return reply.code(400).send({
+        error: 'ValidationError',
+        message: 'Invalid schedule-vote request',
+        details: parseResult.error.issues,
+      });
+    }
+
+    const startsAt = new Date(parseResult.data.startsAt);
+    if (Number.isNaN(startsAt.getTime())) {
+      return reply.code(400).send({
+        error: 'ValidationError',
+        message: 'startsAt must be a valid ISO datetime string',
+      });
+    }
+
+    if (startsAt.getTime() <= Date.now()) {
+      return reply.code(400).send({
+        error: 'ValidationError',
+        message: 'startsAt must be in the future',
+      });
+    }
+
+    const result = await db.query<ScheduledVoteRow>(
+      `INSERT INTO scheduled_votes (starts_at, duration_hours, created_by)
+       VALUES ($1, $2, $3)
+       RETURNING id, starts_at, duration_hours, announced, created_by, created_at`,
+      [startsAt.toISOString(), parseResult.data.durationHours, adminDid]
+    );
+
+    const scheduledVote = mapScheduledVote(result.rows[0]);
+
+    await db.query(
+      `INSERT INTO governance_audit_log (action, actor_did, details)
+       VALUES ('admin_schedule_vote', $1, $2)`,
+      [
+        adminDid,
+        JSON.stringify({
+          scheduled_vote_id: scheduledVote.id,
+          starts_at: scheduledVote.startsAt,
+          duration_hours: scheduledVote.durationHours,
+        }),
+      ]
+    );
+
+    await announceVoteScheduled({
+      id: scheduledVote.id,
+      startsAt: scheduledVote.startsAt,
+      durationHours: scheduledVote.durationHours,
+    });
+
+    return reply.send({
+      success: true,
+      scheduledVote,
+    });
+  });
+
+  app.get('/governance/schedule', async (_request: FastifyRequest, reply: FastifyReply) => {
+    const result = await db.query<ScheduledVoteRow>(
+      `SELECT id, starts_at, duration_hours, announced, created_by, created_at
+       FROM scheduled_votes
+       WHERE starts_at >= NOW() - INTERVAL '1 hour'
+       ORDER BY starts_at ASC`
+    );
+
+    return reply.send({
+      scheduledVotes: result.rows.map(mapScheduledVote),
     });
   });
 
@@ -697,9 +1300,15 @@ export function registerGovernanceRoutes(app: FastifyInstance): void {
              relevance_weight = $5,
              content_rules = $6,
              vote_count = $7,
-             voting_ends_at = COALESCE(voting_ends_at, NOW()),
-             auto_transition = FALSE
-         WHERE id = $8
+             phase = 'running',
+             voting_closed_at = NOW(),
+             voting_ends_at = NULL,
+             auto_transition = FALSE,
+             proposed_weights = NULL,
+             proposed_content_rules = NULL,
+             results_approved_at = NOW(),
+             results_approved_by = $8
+         WHERE id = $9
          RETURNING *`,
         [
           nextWeights.recency,
@@ -709,6 +1318,7 @@ export function registerGovernanceRoutes(app: FastifyInstance): void {
           nextWeights.relevance,
           JSON.stringify(toContentRulesPayload(nextRules)),
           voteCount,
+          adminDid,
           epoch.id,
         ]
       );

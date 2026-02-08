@@ -51,7 +51,7 @@ export function OverviewPanel({ onNavigate }: OverviewPanelProps) {
             </div>
           </>
         ) : (
-          <p className="empty-state">No active epoch</p>
+          <p className="empty-state">No active round</p>
         )}
       </div>
 

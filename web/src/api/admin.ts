@@ -24,10 +24,17 @@ export interface ContentRules {
 export interface RoundSummary {
   id: number;
   status: string;
+  phase?: 'running' | 'voting' | 'results';
   voteCount: number;
   createdAt: string;
   closedAt: string | null;
   votingEndsAt: string | null;
+  votingStartedAt?: string | null;
+  votingClosedAt?: string | null;
+  resultsApprovedAt?: string | null;
+  resultsApprovedBy?: string | null;
+  proposedWeights?: GovernanceWeights | null;
+  proposedContentRules?: ContentRules | null;
   autoTransition: boolean;
   weights: GovernanceWeights;
   contentRules: ContentRules;
@@ -41,6 +48,15 @@ export interface GovernanceStatus {
   excludeKeywords: string[];
   votingEndsAt: string | null;
   autoTransition: boolean;
+}
+
+export interface ScheduledVote {
+  id: number;
+  startsAt: string;
+  durationHours: number;
+  announced: boolean;
+  createdBy: string;
+  createdAt: string;
 }
 
 export interface RoundDetails {
@@ -369,6 +385,61 @@ export const adminApi = {
 
   async endRound(force = false): Promise<{ success: boolean; newRoundId: number }> {
     const response = await api.post('/api/admin/governance/end-round', { force });
+    return response.data;
+  },
+
+  async startVoting(durationHours: number, announce = true): Promise<{ success: boolean; round: RoundSummary }> {
+    const response = await api.post('/api/admin/governance/start-voting', {
+      durationHours,
+      announce,
+    });
+    return response.data;
+  },
+
+  async endVoting(announce = true): Promise<{
+    success: boolean;
+    voteCount: number;
+    proposedWeights: GovernanceWeights;
+    proposedContentRules: ContentRules;
+    round: RoundSummary;
+  }> {
+    const response = await api.post('/api/admin/governance/end-voting', {
+      announce,
+    });
+    return response.data;
+  },
+
+  async approveResults(announce = true): Promise<{
+    success: boolean;
+    weights: GovernanceWeights;
+    contentRules: ContentRules;
+    rescoreTriggered: boolean;
+    round: RoundSummary;
+  }> {
+    const response = await api.post('/api/admin/governance/approve-results', {
+      announce,
+    });
+    return response.data;
+  },
+
+  async rejectResults(): Promise<{ success: boolean; round: RoundSummary }> {
+    const response = await api.post('/api/admin/governance/reject-results');
+    return response.data;
+  },
+
+  async scheduleVote(startsAt: string, durationHours: number): Promise<{
+    success: boolean;
+    scheduledVote: ScheduledVote;
+  }> {
+    const response = await api.post('/api/admin/governance/schedule-vote', {
+      startsAt,
+      durationHours,
+    });
+    return response.data;
+  },
+
+  async getVoteSchedule(): Promise<{ scheduledVotes: ScheduledVote[] }> {
+    const response = await api.get('/api/admin/governance/schedule');
     return response.data;
   },
 };

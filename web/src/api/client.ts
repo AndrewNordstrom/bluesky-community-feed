@@ -172,6 +172,7 @@ export interface WeightsResponse {
 export interface EpochResponse {
   id: number;
   status: string;
+  phase?: 'running' | 'voting' | 'results';
   weights: {
     recency: number;
     engagement: number;
@@ -184,6 +185,9 @@ export interface EpochResponse {
   created_at: string;
   closed_at?: string;
   description?: string;
+  voting_started_at?: string | null;
+  voting_ends_at?: string | null;
+  voting_closed_at?: string | null;
 }
 
 // Weights API
@@ -207,6 +211,7 @@ export const weightsApi = {
     return {
       id: e.epoch_id ?? e.id,
       status: e.status,
+      phase: e.phase,
       weights: {
         recency: e.weights.recency,
         engagement: e.weights.engagement,
@@ -219,6 +224,9 @@ export const weightsApi = {
       created_at: e.created_at,
       closed_at: e.closed_at,
       description: e.description,
+      voting_started_at: e.voting_started_at,
+      voting_ends_at: e.voting_ends_at,
+      voting_closed_at: e.voting_closed_at,
     };
   },
 };

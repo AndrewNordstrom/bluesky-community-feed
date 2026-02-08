@@ -57,6 +57,7 @@ export function registerEpochsRoute(app: FastifyInstance): void {
         return {
           id: epoch.id,
           status: epoch.status,
+          phase: (row.phase as string | null) ?? (epoch.status === 'voting' ? 'voting' : 'running'),
           weights: epoch.weights,
           vote_count: parseInt(voteCount.rows[0].count),
           created_at: epoch.createdAt,
@@ -106,10 +107,14 @@ export function registerEpochsRoute(app: FastifyInstance): void {
     return reply.send({
       id: epoch.id,
       status: epoch.status,
+      phase: (result.rows[0].phase as string | null) ?? (epoch.status === 'voting' ? 'voting' : 'running'),
       weights: epoch.weights,
       vote_count: parseInt(voteCount.rows[0].count),
       subscriber_count: parseInt(subscriberCount.rows[0].count),
       created_at: epoch.createdAt,
+      voting_started_at: result.rows[0].voting_started_at ?? null,
+      voting_ends_at: result.rows[0].voting_ends_at ?? null,
+      voting_closed_at: result.rows[0].voting_closed_at ?? null,
       description: epoch.description,
     });
   });

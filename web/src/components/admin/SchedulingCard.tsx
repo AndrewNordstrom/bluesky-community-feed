@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { adminApi, type RoundSummary } from '../../api/admin';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { adminApi, type RoundSummary, type ScheduledVote } from '../../api/admin';
 
 interface SchedulingCardProps {
   round: RoundSummary | null;
@@ -7,17 +7,10 @@ interface SchedulingCardProps {
   onNotify: (type: 'success' | 'error', message: string) => void;
 }
 
-type ScheduleMode = 'manual' | 'scheduled';
-
-function toInputDateTime(value: string | null): string {
-  if (!value) {
-    return '';
-  }
-
-  const date = new Date(value);
+function toInputDateTime(value: Date): string {
   const pad = (input: number) => String(input).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(
-    date.getMinutes()
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(
+    value.getMinutes()
   )}`;
 }
 
@@ -43,70 +36,50 @@ function formatCountdown(votingEndsAt: string): string {
   return `Voting ends in ${minutes}m`;
 }
 
+function toPhase(round: RoundSummary | null): 'running' | 'voting' | 'results' {
+  if (!round) {
+    return 'running';
+  }
+  if (round.phase === 'voting' || round.phase === 'results' || round.phase === 'running') {
+    return round.phase;
+  }
+  if (round.status === 'voting') {
+    return 'voting';
+  }
+  return 'running';
+}
+
 export function SchedulingCard({ round, onUpdate, onNotify }: SchedulingCardProps) {
-  const [mode, setMode] = useState<ScheduleMode>('manual');
-  const [votingEndsAtInput, setVotingEndsAtInput] = useState('');
-  const [autoTransition, setAutoTransition] = useState(false);
+  const [scheduledVotes, setScheduledVotes] = useState<ScheduledVote[]>([]);
+  const [startsAtInput, setStartsAtInput] = useState(toInputDateTime(new Date(Date.now() + 24 * 60 * 60 * 1000)));
+  const [durationHours, setDurationHours] = useState(72);
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    if (!round) {
-      setMode('manual');
-      setVotingEndsAtInput('');
-      setAutoTransition(false);
-      return;
-    }
+  const phase = useMemo(() => toPhase(round), [round]);
 
-    const scheduled = Boolean(round.votingEndsAt || round.autoTransition);
-    setMode(scheduled ? 'scheduled' : 'manual');
-    setVotingEndsAtInput(toInputDateTime(round.votingEndsAt));
-    setAutoTransition(round.autoTransition);
-  }, [round]);
-
-  const hasChanges = useMemo(() => {
-    if (!round) {
-      return false;
-    }
-
-    const initialMode: ScheduleMode = round.votingEndsAt || round.autoTransition ? 'scheduled' : 'manual';
-    const initialEndsAt = toInputDateTime(round.votingEndsAt);
-
-    return (
-      initialMode !== mode ||
-      initialEndsAt !== votingEndsAtInput ||
-      round.autoTransition !== autoTransition
-    );
-  }, [round, mode, votingEndsAtInput, autoTransition]);
-
-  async function handleSave() {
-    if (!round) {
-      return;
-    }
-
-    if (mode === 'scheduled' && !votingEndsAtInput) {
-      onNotify('error', 'Please select a voting end time for scheduled mode');
-      return;
-    }
-
-    setIsSaving(true);
-
+  const loadSchedule = useCallback(async () => {
     try {
-      if (mode === 'manual') {
-        await adminApi.updateEpoch({
-          votingEndsAt: null,
-          autoTransition: false,
-        });
-      } else {
-        await adminApi.updateEpoch({
-          votingEndsAt: new Date(votingEndsAtInput).toISOString(),
-          autoTransition,
-        });
-      }
+      const response = await adminApi.getVoteSchedule();
+      setScheduledVotes(response.scheduledVotes);
+    } catch (error) {
+      onNotify('error', error instanceof Error ? error.message : 'Failed to load vote schedule');
+    }
+  }, [onNotify]);
 
-      onNotify('success', 'Scheduling updated');
+  useEffect(() => {
+    void loadSchedule();
+  }, [loadSchedule]);
+
+  async function handleScheduleVote() {
+    setIsSaving(true);
+    try {
+      const startsAtIso = new Date(startsAtInput).toISOString();
+      await adminApi.scheduleVote(startsAtIso, durationHours);
+      onNotify('success', 'Vote schedule saved');
+      await loadSchedule();
       await onUpdate();
     } catch (error) {
-      onNotify('error', error instanceof Error ? error.message : 'Failed to update schedule');
+      onNotify('error', error instanceof Error ? error.message : 'Failed to schedule vote');
     } finally {
       setIsSaving(false);
     }
@@ -114,7 +87,6 @@ export function SchedulingCard({ round, onUpdate, onNotify }: SchedulingCardProp
 
   async function handleExtend24h() {
     setIsSaving(true);
-
     try {
       await adminApi.extendVoting(24);
       onNotify('success', 'Voting window extended by 24 hours');
@@ -126,82 +98,65 @@ export function SchedulingCard({ round, onUpdate, onNotify }: SchedulingCardProp
     }
   }
 
-  if (!round) {
-    return (
-      <div className="admin-card">
-        <h2>Scheduling</h2>
-        <p className="empty-state">No active round found.</p>
-      </div>
-    );
-  }
-
   return (
     <div className="admin-card">
-      <h2>Scheduling</h2>
+      <h2>Schedule</h2>
 
-      <div className="radio-group">
-        <label className="radio-option">
-          <input
-            type="radio"
-            name="schedule-mode"
-            checked={mode === 'manual'}
-            onChange={() => setMode('manual')}
-          />
-          <span>Manual (I&apos;ll manage rounds myself)</span>
-        </label>
-
-        <label className="radio-option">
-          <input
-            type="radio"
-            name="schedule-mode"
-            checked={mode === 'scheduled'}
-            onChange={() => setMode('scheduled')}
-          />
-          <span>Scheduled</span>
-        </label>
-      </div>
-
-      {mode === 'scheduled' ? (
+      {phase === 'voting' && round?.votingEndsAt ? (
         <>
-          <div className="form-group">
-            <label htmlFor="voting-end">Voting end time</label>
-            <input
-              id="voting-end"
-              type="datetime-local"
-              value={votingEndsAtInput}
-              onChange={(event) => setVotingEndsAtInput(event.target.value)}
-            />
-          </div>
-
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={autoTransition}
-              onChange={(event) => setAutoTransition(event.target.checked)}
-            />
-            Automatically start a new round when voting ends
-          </label>
-
-          {round.votingEndsAt ? <p className="countdown">{formatCountdown(round.votingEndsAt)}</p> : null}
-
+          <p className="countdown">{formatCountdown(round.votingEndsAt)}</p>
           <div className="action-buttons">
             <button type="button" className="btn-secondary" onClick={handleExtend24h} disabled={isSaving}>
               Extend 24h
             </button>
           </div>
+          <div className="section-divider" />
         </>
       ) : null}
 
+      <div className="form-group">
+        <label htmlFor="schedule-start">Next vote starts at</label>
+        <input
+          id="schedule-start"
+          type="datetime-local"
+          value={startsAtInput}
+          onChange={(event) => setStartsAtInput(event.target.value)}
+        />
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="schedule-duration">Duration (hours)</label>
+        <input
+          id="schedule-duration"
+          type="number"
+          min={1}
+          max={168}
+          value={durationHours}
+          onChange={(event) => setDurationHours(Number(event.target.value))}
+        />
+      </div>
+
       <div className="action-buttons">
-        <button
-          type="button"
-          className="btn-primary"
-          onClick={handleSave}
-          disabled={isSaving || !hasChanges}
-        >
-          {isSaving ? 'Saving...' : 'Save Schedule'}
+        <button type="button" className="btn-primary" onClick={handleScheduleVote} disabled={isSaving}>
+          {isSaving ? 'Saving...' : 'Schedule Next Vote'}
         </button>
       </div>
+
+      <div className="section-divider" />
+
+      <h3>Upcoming Scheduled Votes</h3>
+      {scheduledVotes.length === 0 ? (
+        <p className="empty-state">No upcoming scheduled votes.</p>
+      ) : (
+        <div className="stats-list">
+          {scheduledVotes.map((scheduledVote) => (
+            <div key={scheduledVote.id} className="stat-row">
+              <span>{new Date(scheduledVote.startsAt).toLocaleString()}</span>
+              <strong>{scheduledVote.durationHours}h</strong>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,21 +1,342 @@
 /**
  * Epoch Scheduler
  *
- * Runs periodically to check for epochs that need auto-transition.
- * When an epoch has voting_ends_at in the past and auto_transition enabled,
- * it will automatically close the epoch and create a new one.
+ * Handles phase-cycle automation:
+ * - Start scheduled votes (running -> voting)
+ * - Close expired voting windows (voting -> results)
+ * - Send 24h voting reminders
  */
 
 import cron from 'node-cron';
+import type { PoolClient } from 'pg';
 import { db } from '../db/client.js';
-import { forceEpochTransition } from '../governance/epoch-manager.js';
+import { aggregateContentVotes, aggregateVotes } from '../governance/aggregation.js';
+import { toContentRules, type ContentRules, type GovernanceWeights } from '../governance/governance.types.js';
+import {
+  announceVotingClosed,
+  announceVotingOpen,
+  announceVotingReminder,
+} from '../bot/governance-announcements.js';
 import { logger } from '../lib/logger.js';
 
+interface ActiveEpochRow {
+  id: number;
+  phase: string | null;
+  voting_ends_at: string | null;
+  content_rules: unknown;
+  recency_weight: number | string;
+  engagement_weight: number | string;
+  bridging_weight: number | string;
+  source_diversity_weight: number | string;
+  relevance_weight: number | string;
+}
+
+interface ScheduledVoteRow {
+  id: number;
+  starts_at: string;
+  duration_hours: number;
+}
+
 let schedulerTask: cron.ScheduledTask | null = null;
+let isSchedulerTickRunning = false;
+
+function toNumber(value: number | string): number {
+  return typeof value === 'number' ? value : parseFloat(value);
+}
+
+function toWeights(epoch: ActiveEpochRow): GovernanceWeights {
+  return {
+    recency: toNumber(epoch.recency_weight),
+    engagement: toNumber(epoch.engagement_weight),
+    bridging: toNumber(epoch.bridging_weight),
+    sourceDiversity: toNumber(epoch.source_diversity_weight),
+    relevance: toNumber(epoch.relevance_weight),
+  };
+}
+
+function toPhase(phase: string | null): 'running' | 'voting' | 'results' {
+  if (phase === 'voting' || phase === 'results') {
+    return phase;
+  }
+  return 'running';
+}
+
+function toDbContentRules(rules: ContentRules): { include_keywords: string[]; exclude_keywords: string[] } {
+  return {
+    include_keywords: rules.includeKeywords,
+    exclude_keywords: rules.excludeKeywords,
+  };
+}
+
+async function getVoteCounts(client: PoolClient, epochId: number): Promise<{ total: number; content: number }> {
+  const result = await client.query<{ total: string; content: string }>(
+    `SELECT
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (
+        WHERE
+          (include_keywords IS NOT NULL AND array_length(include_keywords, 1) > 0)
+          OR
+          (exclude_keywords IS NOT NULL AND array_length(exclude_keywords, 1) > 0)
+      )::int AS content
+     FROM governance_votes
+     WHERE epoch_id = $1`,
+    [epochId]
+  );
+
+  return {
+    total: parseInt(result.rows[0]?.total ?? '0', 10),
+    content: parseInt(result.rows[0]?.content ?? '0', 10),
+  };
+}
+
+async function startDueScheduledVotes(): Promise<{ started: number; errors: number }> {
+  const dueVotes = await db.query<ScheduledVoteRow>(
+    `SELECT id, starts_at, duration_hours
+     FROM scheduled_votes
+     WHERE starts_at <= NOW()
+     ORDER BY starts_at ASC
+     LIMIT 20`
+  );
+
+  let started = 0;
+  let errors = 0;
+
+  for (const scheduled of dueVotes.rows) {
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
+
+      const epochResult = await client.query<ActiveEpochRow>(
+        `SELECT *
+         FROM governance_epochs
+         WHERE status = 'active'
+         ORDER BY id DESC
+         LIMIT 1
+         FOR UPDATE`
+      );
+
+      const epoch = epochResult.rows[0];
+      if (!epoch) {
+        await client.query('ROLLBACK');
+        errors++;
+        continue;
+      }
+
+      if (toPhase(epoch.phase) !== 'running') {
+        await client.query('ROLLBACK');
+        continue;
+      }
+
+      await client.query(
+        `UPDATE governance_epochs
+         SET phase = 'voting',
+             voting_started_at = NOW(),
+             voting_closed_at = NULL,
+             voting_ends_at = NOW() + make_interval(hours => $1),
+             auto_transition = TRUE,
+             proposed_weights = NULL,
+             proposed_content_rules = NULL
+         WHERE id = $2`,
+        [scheduled.duration_hours, epoch.id]
+      );
+
+      await client.query(`DELETE FROM scheduled_votes WHERE id = $1`, [scheduled.id]);
+
+      await client.query(
+        `INSERT INTO governance_audit_log (action, epoch_id, details)
+         VALUES ('scheduled_vote_started', $1, $2)`,
+        [
+          epoch.id,
+          JSON.stringify({
+            scheduled_vote_id: scheduled.id,
+            starts_at: scheduled.starts_at,
+            duration_hours: scheduled.duration_hours,
+          }),
+        ]
+      );
+
+      await client.query('COMMIT');
+      started++;
+
+      await announceVotingOpen({ id: epoch.id }, `${scheduled.duration_hours} hour(s)`);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      errors++;
+      logger.error({ error, scheduledVoteId: scheduled.id }, 'Failed to start scheduled vote');
+    } finally {
+      client.release();
+    }
+  }
+
+  return { started, errors };
+}
+
+async function closeExpiredVotingWindows(): Promise<{ transitioned: number; errors: number }> {
+  const dueEpochs = await db.query<{ id: number }>(
+    `SELECT id
+     FROM governance_epochs
+     WHERE status = 'active'
+       AND phase = 'voting'
+       AND auto_transition = TRUE
+       AND voting_ends_at IS NOT NULL
+       AND voting_ends_at <= NOW()
+     ORDER BY voting_ends_at ASC
+     LIMIT 20`
+  );
+
+  let transitioned = 0;
+  let errors = 0;
+
+  for (const row of dueEpochs.rows) {
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
+
+      const epochResult = await client.query<ActiveEpochRow>(
+        `SELECT *
+         FROM governance_epochs
+         WHERE id = $1
+         FOR UPDATE`,
+        [row.id]
+      );
+
+      const epoch = epochResult.rows[0];
+      if (!epoch || toPhase(epoch.phase) !== 'voting') {
+        await client.query('ROLLBACK');
+        continue;
+      }
+
+      const voteCounts = await getVoteCounts(client, epoch.id);
+      const currentWeights = toWeights(epoch);
+      const currentRules = toContentRules((epoch.content_rules ?? null) as any);
+
+      let proposedWeights = currentWeights;
+      let proposedRules = currentRules;
+
+      if (voteCounts.total > 0) {
+        const aggregatedWeights = await aggregateVotes(epoch.id);
+        if (aggregatedWeights) {
+          proposedWeights = aggregatedWeights;
+        }
+      }
+
+      if (voteCounts.content > 0) {
+        proposedRules = await aggregateContentVotes(epoch.id);
+      }
+
+      await client.query(
+        `UPDATE governance_epochs
+         SET phase = 'results',
+             voting_closed_at = NOW(),
+             auto_transition = FALSE,
+             proposed_weights = $1,
+             proposed_content_rules = $2
+         WHERE id = $3`,
+        [JSON.stringify(proposedWeights), JSON.stringify(toDbContentRules(proposedRules)), epoch.id]
+      );
+
+      await client.query(
+        `INSERT INTO governance_audit_log (action, epoch_id, details)
+         VALUES ('auto_end_voting', $1, $2)`,
+        [
+          epoch.id,
+          JSON.stringify({
+            vote_count: voteCounts.total,
+            content_vote_count: voteCounts.content,
+            proposed_weights: proposedWeights,
+            proposed_content_rules: toDbContentRules(proposedRules),
+          }),
+        ]
+      );
+
+      await client.query('COMMIT');
+      transitioned++;
+
+      await announceVotingClosed({ id: epoch.id }, voteCounts.total);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      errors++;
+      logger.error({ error, epochId: row.id }, 'Failed to auto-close voting window');
+    } finally {
+      client.release();
+    }
+  }
+
+  return { transitioned, errors };
+}
+
+async function sendVotingReminders(): Promise<{ reminders: number; errors: number }> {
+  const candidates = await db.query<{ id: number; voting_ends_at: string }>(
+    `SELECT id, voting_ends_at
+     FROM governance_epochs
+     WHERE status = 'active'
+       AND phase = 'voting'
+       AND voting_ends_at > NOW() + INTERVAL '23 hours'
+       AND voting_ends_at <= NOW() + INTERVAL '25 hours'`
+  );
+
+  let reminders = 0;
+  let errors = 0;
+
+  for (const epoch of candidates.rows) {
+    try {
+      const alreadySent = await db.query(
+        `SELECT 1
+         FROM governance_audit_log
+         WHERE epoch_id = $1
+           AND action = 'voting_reminder_24h'
+         LIMIT 1`,
+        [epoch.id]
+      );
+
+      if (alreadySent.rows.length > 0) {
+        continue;
+      }
+
+      await announceVotingReminder({ id: epoch.id, votingEndsAt: epoch.voting_ends_at }, 24);
+
+      await db.query(
+        `INSERT INTO governance_audit_log (action, epoch_id, details)
+         VALUES ('voting_reminder_24h', $1, $2)`,
+        [
+          epoch.id,
+          JSON.stringify({
+            voting_ends_at: epoch.voting_ends_at,
+          }),
+        ]
+      );
+
+      reminders++;
+    } catch (error) {
+      errors++;
+      logger.error({ error, epochId: epoch.id }, 'Failed to send voting reminder');
+    }
+  }
+
+  return { reminders, errors };
+}
+
+async function checkScheduledTransitions(): Promise<{
+  startedVotes: number;
+  transitionedToResults: number;
+  remindersSent: number;
+  errors: number;
+}> {
+  const started = await startDueScheduledVotes();
+  const transitioned = await closeExpiredVotingWindows();
+  const reminders = await sendVotingReminders();
+
+  return {
+    startedVotes: started.started,
+    transitionedToResults: transitioned.transitioned,
+    remindersSent: reminders.reminders,
+    errors: started.errors + transitioned.errors + reminders.errors,
+  };
+}
 
 /**
  * Start the epoch scheduler.
- * Runs every 5 minutes to check for epochs that need auto-transition.
+ * Runs every 5 minutes to check for scheduled vote and phase transitions.
  */
 export function startEpochScheduler(): void {
   if (schedulerTask) {
@@ -23,18 +344,33 @@ export function startEpochScheduler(): void {
     return;
   }
 
-  // Run at minute 0, 5, 10, 15... of every hour (every 5 minutes)
   schedulerTask = cron.schedule('*/5 * * * *', async () => {
-    logger.debug('Epoch scheduler running');
-    await checkScheduledTransitions();
+    if (isSchedulerTickRunning) {
+      logger.warn('Skipping scheduler tick because previous tick is still running');
+      return;
+    }
+
+    isSchedulerTickRunning = true;
+    try {
+      const result = await checkScheduledTransitions();
+      logger.debug(result, 'Epoch scheduler tick complete');
+    } catch (error) {
+      logger.error({ error }, 'Epoch scheduler tick failed');
+    } finally {
+      isSchedulerTickRunning = false;
+    }
   });
 
   logger.info('Epoch scheduler started (runs every 5 minutes)');
 
-  // Also run immediately on startup to catch any missed transitions
-  checkScheduledTransitions().catch((err) => {
-    logger.error({ err }, 'Initial scheduler check failed');
-  });
+  void (async () => {
+    try {
+      const result = await checkScheduledTransitions();
+      logger.info(result, 'Initial epoch scheduler check complete');
+    } catch (error) {
+      logger.error({ error }, 'Initial scheduler check failed');
+    }
+  })();
 }
 
 /**
@@ -49,82 +385,6 @@ export function stopEpochScheduler(): void {
 }
 
 /**
- * Check for epochs that need auto-transition.
- */
-async function checkScheduledTransitions(): Promise<void> {
-  try {
-    // Find epochs where:
-    // - status is 'active'
-    // - voting_ends_at has passed
-    // - auto_transition is enabled
-    const result = await db.query(`
-      SELECT id, voting_ends_at
-      FROM governance_epochs
-      WHERE status = 'active'
-        AND voting_ends_at IS NOT NULL
-        AND voting_ends_at <= NOW()
-        AND auto_transition = true
-    `);
-
-    if (result.rows.length === 0) {
-      logger.debug('No epochs ready for auto-transition');
-      return;
-    }
-
-    for (const epoch of result.rows) {
-      logger.info(
-        { epochId: epoch.id, votingEndsAt: epoch.voting_ends_at },
-        'Auto-transitioning epoch'
-      );
-
-      try {
-        // Get vote count for logging
-        const voteResult = await db.query(
-          `SELECT COUNT(*) as count FROM governance_votes WHERE epoch_id = $1`,
-          [epoch.id]
-        );
-        const voteCount = parseInt(voteResult.rows[0].count, 10);
-
-        // Force transition (skips vote count check for scheduled transitions)
-        const newEpochId = await forceEpochTransition();
-
-        // Log to audit
-        await db.query(
-          `INSERT INTO governance_audit_log (action, epoch_id, details)
-           VALUES ('auto_epoch_transition', $1, $2)`,
-          [
-            epoch.id,
-            JSON.stringify({
-              fromEpoch: epoch.id,
-              toEpoch: newEpochId,
-              trigger: 'scheduled',
-              votingEndsAt: epoch.voting_ends_at,
-              voteCount,
-            }),
-          ]
-        );
-
-        logger.info(
-          { fromEpoch: epoch.id, toEpoch: newEpochId, voteCount },
-          'Auto-transition completed'
-        );
-      } catch (err) {
-        logger.error({ epochId: epoch.id, err }, 'Auto-transition failed for epoch');
-
-        // Log failure to audit
-        await db.query(
-          `INSERT INTO governance_audit_log (action, epoch_id, details)
-           VALUES ('auto_epoch_transition_failed', $1, $2)`,
-          [epoch.id, JSON.stringify({ error: String(err) })]
-        );
-      }
-    }
-  } catch (err) {
-    logger.error({ err }, 'Scheduler check failed');
-  }
-}
-
-/**
  * Manually trigger a scheduler check (for testing/admin use).
  */
 export async function runSchedulerCheck(): Promise<{
@@ -132,44 +392,20 @@ export async function runSchedulerCheck(): Promise<{
   transitioned: number;
   errors: number;
 }> {
-  let transitioned = 0;
-  let errors = 0;
-
   try {
-    const result = await db.query(`
-      SELECT id, voting_ends_at
-      FROM governance_epochs
-      WHERE status = 'active'
-        AND voting_ends_at IS NOT NULL
-        AND voting_ends_at <= NOW()
-        AND auto_transition = true
-    `);
-
-    for (const epoch of result.rows) {
-      try {
-        await forceEpochTransition();
-        transitioned++;
-
-        await db.query(
-          `INSERT INTO governance_audit_log (action, epoch_id, details)
-           VALUES ('auto_epoch_transition', $1, $2)`,
-          [
-            epoch.id,
-            JSON.stringify({
-              fromEpoch: epoch.id,
-              trigger: 'manual_scheduler_check',
-              votingEndsAt: epoch.voting_ends_at,
-            }),
-          ]
-        );
-      } catch {
-        errors++;
-      }
-    }
-
-    return { checked: true, transitioned, errors };
-  } catch {
-    return { checked: false, transitioned: 0, errors: 1 };
+    const result = await checkScheduledTransitions();
+    return {
+      checked: true,
+      transitioned: result.startedVotes + result.transitionedToResults,
+      errors: result.errors,
+    };
+  } catch (error) {
+    logger.error({ error }, 'Manual scheduler check failed');
+    return {
+      checked: false,
+      transitioned: 0,
+      errors: 1,
+    };
   }
 }
 

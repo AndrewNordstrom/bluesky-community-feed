@@ -806,6 +806,32 @@
   margin-top: 12px;
 }
 
+.results-preview {
+  background: #161718;
+  border: 1px solid #2a2b2d;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 12px;
+}
+
+.results-preview ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.results-preview li,
+.results-preview p {
+  color: #c7cbcd;
+  font-size: 13px;
+  margin: 4px 0;
+}
+
+.stats-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .radio-group {
   display: flex;
   flex-direction: column;

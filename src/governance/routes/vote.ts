@@ -164,7 +164,7 @@ export function registerVoteRoute(app: FastifyInstance): void {
 
     // 5. Get current epoch (must be active or voting)
     const epoch = await db.query(
-      `SELECT id, status FROM governance_epochs
+      `SELECT id, status, phase FROM governance_epochs
        WHERE status IN ('active', 'voting')
        ORDER BY id DESC LIMIT 1`
     );
@@ -177,6 +177,14 @@ export function registerVoteRoute(app: FastifyInstance): void {
     }
 
     const epochId = epoch.rows[0].id;
+    const epochPhase = epoch.rows[0].phase as string | null;
+
+    if (epochPhase !== 'voting') {
+      return reply.code(409).send({
+        error: 'VotingClosed',
+        message: 'Voting is currently closed for this round.',
+      });
+    }
 
     try {
       // 6. UPSERT vote with weights and/or keywords

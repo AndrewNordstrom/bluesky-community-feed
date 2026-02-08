@@ -24,6 +24,7 @@ export function registerSchedulerRoutes(app: FastifyInstance): void {
       SELECT id, voting_ends_at, auto_transition
       FROM governance_epochs
       WHERE status = 'active'
+        AND phase = 'voting'
         AND voting_ends_at IS NOT NULL
         AND auto_transition = true
     `);

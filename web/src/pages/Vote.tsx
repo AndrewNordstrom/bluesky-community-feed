@@ -32,6 +32,10 @@ export function Vote() {
   });
   const [currentContentRules, setCurrentContentRules] = useState<ContentRulesResponse | null>(null);
 
+  const currentPhase =
+    currentEpoch?.phase ?? (currentEpoch?.status === 'voting' ? 'voting' : 'running');
+  const isVotingOpen = currentPhase === 'voting';
+
   // Load current epoch and user's vote
   const loadData = useCallback(async () => {
     try {
@@ -108,6 +112,11 @@ export function Vote() {
   }, []);
 
   const handleSubmit = async () => {
+    if (!isVotingOpen) {
+      setError('Voting is currently closed. Please wait for the next voting period.');
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
     setSuccessMessage(null);
@@ -208,10 +217,14 @@ export function Vote() {
         {currentEpoch && (
           <div className="epoch-info">
             <div className="epoch-status">
-              <span className={`status-badge ${currentEpoch.status}`}>
-                {currentEpoch.status === 'voting' ? 'Voting open' : 'Active'}
+              <span className={`status-badge ${currentPhase}`}>
+                {currentPhase === 'voting'
+                  ? 'Voting open'
+                  : currentPhase === 'results'
+                    ? 'Results pending'
+                    : 'Running'}
               </span>
-              <span className="epoch-id">Epoch {currentEpoch.id}</span>
+              <span className="epoch-id">Round {currentEpoch.id}</span>
             </div>
             <div className="vote-count">
               <strong>{currentEpoch.vote_count}</strong> votes
@@ -242,6 +255,11 @@ export function Vote() {
 
         {error && <div className="error-message">{error}</div>}
         {successMessage && <div className="success-message">{successMessage}</div>}
+        {!isVotingOpen ? (
+          <div className="error-message">
+            Voting is currently closed. The algorithm is in {currentPhase} phase.
+          </div>
+        ) : null}
 
         <div className="tab-panel-wrapper">
           {/* Weights tab */}
@@ -251,7 +269,7 @@ export function Vote() {
               <p className="vote-description">
                 Adjust the sliders to set your preferred algorithm weights. The sliders
                 are linked and will always sum to 100%. Your vote will influence how
-                the feed ranks posts in future epochs.
+                the feed ranks posts in future rounds.
               </p>
 
               {weights && (
@@ -265,7 +283,7 @@ export function Vote() {
               <div className="vote-actions">
                 <button
                   onClick={handleSubmit}
-                  disabled={isSubmitting || !weights}
+                  disabled={isSubmitting || !weights || !isVotingOpen}
                   className="submit-button"
                 >
                   {isSubmitting
@@ -573,9 +591,19 @@ const styles = `
     color: var(--accent-blue);
   }
 
+  .status-badge.running {
+    background: var(--accent-blue-subtle);
+    color: var(--accent-blue);
+  }
+
   .status-badge.voting {
     background: rgba(52, 199, 89, 0.15);
     color: var(--status-success);
+  }
+
+  .status-badge.results {
+    background: rgba(255, 159, 10, 0.16);
+    color: #ff9f0a;
   }
 
   .epoch-id {
