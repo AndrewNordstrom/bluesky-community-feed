@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { adminApi } from '../../api/admin';
 import type { Announcement } from '../../api/admin';
 import { formatRelative } from '../../utils/format';
+import { Skeleton } from '../Skeleton';
 
 export function AnnouncementPanel() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -105,7 +106,11 @@ export function AnnouncementPanel() {
         <h2>Recent Announcements</h2>
 
         {isLoading ? (
-          <div className="admin-loading"><div className="loading-spinner" /></div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} variant="card" height="100px" />
+            ))}
+          </div>
         ) : announcements.length === 0 ? (
           <p className="empty-state">No announcements yet</p>
         ) : (

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ScoreRadar } from '../components/ScoreRadar';
+import { DashboardSkeleton } from '../components/Skeleton';
 import { useAuth } from '../contexts/AuthContext';
 import { useAdminStatus } from '../hooks/useAdminStatus';
 import { transparencyApi } from '../api/client';
@@ -62,10 +63,21 @@ export function Dashboard() {
   if (isLoading) {
     return (
       <div className="dashboard-page">
-        <div className="loading">
-          <div className="loading-spinner" />
-          <span>Loading dashboard...</span>
-        </div>
+        <header className="dashboard-header">
+          <div className="header-content">
+            <div className="header-left">
+              <h1>Community feed</h1>
+              <nav className="header-nav">
+                <Link to="/vote" className="nav-link">Vote</Link>
+                <Link to="/dashboard" className="nav-link active">Dashboard</Link>
+                <Link to="/history" className="nav-link">History</Link>
+              </nav>
+            </div>
+          </div>
+        </header>
+        <main className="dashboard-main">
+          <DashboardSkeleton />
+        </main>
         <style>{styles}</style>
       </div>
     );
@@ -108,7 +120,7 @@ export function Dashboard() {
         </div>
       </header>
 
-      <main className="dashboard-main">
+      <main className="dashboard-main page-content">
         {stats && (
           <>
             <section className="weights-section">

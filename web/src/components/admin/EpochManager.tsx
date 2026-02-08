@@ -3,6 +3,7 @@ import { adminApi } from '../../api/admin';
 import type { Epoch } from '../../api/admin';
 import { SchedulingPanel } from './SchedulingPanel';
 import { formatDate, formatRelative } from '../../utils/format';
+import { AdminPanelSkeleton } from '../Skeleton';
 
 export function EpochManager() {
   const [epochs, setEpochs] = useState<Epoch[]>([]);
@@ -63,11 +64,11 @@ export function EpochManager() {
   }
 
   if (isLoading) {
-    return <div className="admin-loading"><div className="loading-spinner" /></div>;
+    return <AdminPanelSkeleton />;
   }
 
   return (
-    <div className="epoch-manager">
+    <div className="epoch-manager content-loaded">
       {message && (
         <div className={`alert alert-${message.type}`}>
           {message.text}

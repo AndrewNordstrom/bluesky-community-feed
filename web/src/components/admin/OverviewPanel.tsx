@@ -1,5 +1,6 @@
 import { useAdminStatus } from '../../hooks/useAdminStatus';
 import { formatNumber, formatRelative } from '../../utils/format';
+import { AdminPanelSkeleton } from '../Skeleton';
 
 interface OverviewPanelProps {
   onNavigate: (tab: string) => void;
@@ -9,14 +10,14 @@ export function OverviewPanel({ onNavigate }: OverviewPanelProps) {
   const { status, isLoading, refetch } = useAdminStatus();
 
   if (isLoading || !status) {
-    return <div className="admin-loading"><div className="loading-spinner" /></div>;
+    return <AdminPanelSkeleton />;
   }
 
   const { system } = status;
   const epoch = system.currentEpoch;
 
   return (
-    <div className="overview-grid">
+    <div className="overview-grid content-loaded">
       <div className="stat-card">
         <div className="stat-card-header">
           <h3>Current Epoch</h3>
