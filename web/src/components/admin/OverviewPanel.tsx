@@ -84,7 +84,7 @@ export function OverviewPanel({ onNavigate }: OverviewPanelProps) {
         <div className="keyword-section">
           <label>Include keywords:</label>
           <div className="keyword-pills">
-            {system.contentRules.includeKeywords.length > 0 ? (
+            {system.contentRules?.includeKeywords?.length > 0 ? (
               system.contentRules.includeKeywords.map(k => (
                 <span key={k} className="pill pill-include">{k}</span>
               ))
@@ -96,7 +96,7 @@ export function OverviewPanel({ onNavigate }: OverviewPanelProps) {
         <div className="keyword-section">
           <label>Exclude keywords:</label>
           <div className="keyword-pills">
-            {system.contentRules.excludeKeywords.length > 0 ? (
+            {system.contentRules?.excludeKeywords?.length > 0 ? (
               system.contentRules.excludeKeywords.map(k => (
                 <span key={k} className="pill pill-exclude">{k}</span>
               ))
