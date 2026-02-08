@@ -67,6 +67,26 @@ let consecutiveFailures = 0;
 let useFallback = false;
 let isShuttingDown = false;
 let lastEventReceivedAt: Date | null = null;
+let lastDisconnectedAt: Date | null = null;
+const eventCountByMinute = new Map<number, number>();
+
+function currentMinuteBucket(nowMs: number): number {
+  return Math.floor(nowMs / 60_000);
+}
+
+function pruneOldEventBuckets(latestBucket: number): void {
+  for (const bucket of eventCountByMinute.keys()) {
+    if (bucket < latestBucket - 10) {
+      eventCountByMinute.delete(bucket);
+    }
+  }
+}
+
+function recordEventAt(nowMs: number): void {
+  const bucket = currentMinuteBucket(nowMs);
+  eventCountByMinute.set(bucket, (eventCountByMinute.get(bucket) || 0) + 1);
+  pruneOldEventBuckets(bucket);
+}
 
 /**
  * Start the Jetstream connection.
@@ -137,6 +157,7 @@ function connect(cursor?: bigint): void {
     logger.info({ instanceType }, 'Jetstream connection established');
     reconnectAttempts = 0;
     consecutiveFailures = 0;
+    lastDisconnectedAt = null;
   });
 
   ws.on('message', async (data: Buffer) => {
@@ -147,7 +168,9 @@ function connect(cursor?: bigint): void {
       await processEvent(event);
 
       // Track last event time for health checks
-      lastEventReceivedAt = new Date();
+      const nowMs = Date.now();
+      lastEventReceivedAt = new Date(nowMs);
+      recordEventAt(nowMs);
 
       // Track cursor for persistence
       if (event.time_us) {
@@ -173,6 +196,8 @@ function connect(cursor?: bigint): void {
   });
 
   ws.on('close', (code, reason) => {
+    ws = null;
+    lastDisconnectedAt = new Date();
     logger.warn({ code, reason: reason.toString() }, 'Jetstream connection closed');
     if (!isShuttingDown) {
       consecutiveFailures++;
@@ -259,4 +284,44 @@ export function isJetstreamConnected(): boolean {
  */
 export function getLastEventReceivedAt(): Date | null {
   return lastEventReceivedAt;
+}
+
+/**
+ * Get number of events processed in the last 5 minutes.
+ */
+export function getJetstreamEventsLast5Min(): number {
+  const nowBucket = currentMinuteBucket(Date.now());
+  pruneOldEventBuckets(nowBucket);
+
+  let total = 0;
+  for (let i = 0; i < 5; i++) {
+    total += eventCountByMinute.get(nowBucket - i) || 0;
+  }
+  return total;
+}
+
+/**
+ * Get timestamp of the most recent disconnect event.
+ */
+export function getJetstreamDisconnectedAt(): Date | null {
+  return lastDisconnectedAt;
+}
+
+/**
+ * Trigger a reconnect cycle for the Jetstream websocket.
+ * Reuses existing reconnect flow so cursor resume and backoff behavior stay consistent.
+ */
+export function triggerJetstreamReconnect(): void {
+  reconnectAttempts = 0;
+  consecutiveFailures = 0;
+
+  if (ws) {
+    ws.close(1012, 'admin reconnect');
+    return;
+  }
+
+  void (async () => {
+    const cursor = await getLastCursor();
+    connect(cursor);
+  })();
 }

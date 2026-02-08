@@ -137,6 +137,7 @@ export interface FeedHealth {
     connected: boolean;
     lastEvent: string | null;
     eventsLast5min: number;
+    disconnectedForSeconds?: number | null;
   };
   subscribers: {
     total: number;
@@ -264,6 +265,11 @@ export const adminApi = {
 
   async triggerRescore(): Promise<{ success: boolean; message: string }> {
     const response = await api.post('/api/admin/feed/rescore');
+    return response.data;
+  },
+
+  async triggerJetstreamReconnect(): Promise<{ success: boolean; message: string }> {
+    const response = await api.post('/api/admin/jetstream/reconnect');
     return response.data;
   },
 

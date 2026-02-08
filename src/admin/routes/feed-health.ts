@@ -12,6 +12,13 @@ import { getScoringStatus } from '../status-tracker.js';
 import { getAdminDid } from '../../auth/admin.js';
 import { tryTriggerManualScoringRun } from '../../scoring/scheduler.js';
 import { logger } from '../../lib/logger.js';
+import {
+  getJetstreamDisconnectedAt,
+  getJetstreamEventsLast5Min,
+  getLastEventReceivedAt,
+  isJetstreamConnected,
+  triggerJetstreamReconnect,
+} from '../../ingestion/jetstream.js';
 
 export function registerFeedHealthRoutes(app: FastifyInstance): void {
   /**
@@ -23,10 +30,10 @@ export function registerFeedHealthRoutes(app: FastifyInstance): void {
     const dbStats = await db.query(`
       SELECT
         COUNT(*) as total_posts,
-        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') as posts_24h,
-        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') as posts_7d,
-        MIN(created_at) as oldest_post,
-        MAX(created_at) as newest_post
+        COUNT(*) FILTER (WHERE indexed_at > NOW() - INTERVAL '24 hours') as posts_24h,
+        COUNT(*) FILTER (WHERE indexed_at > NOW() - INTERVAL '7 days') as posts_7d,
+        MIN(indexed_at) as oldest_post,
+        MAX(indexed_at) as newest_post
       FROM posts
       WHERE deleted = FALSE
     `);
@@ -34,28 +41,14 @@ export function registerFeedHealthRoutes(app: FastifyInstance): void {
     // Scoring status
     const scoringStatus = await getScoringStatus();
 
-    // Jetstream status (check Redis for last event)
-    let jetstreamStatus: { connected: boolean; lastEvent: string | null; eventsLast5min: number } = {
-      connected: false,
-      lastEvent: null,
-      eventsLast5min: 0,
-    };
-    try {
-      const lastEvent = await redis.get('jetstream:last_event');
-      const eventCount = await redis.get('jetstream:event_count_5min');
-
-      if (lastEvent) {
-        const lastEventTime = new Date(lastEvent);
-        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-        jetstreamStatus = {
-          connected: lastEventTime > fiveMinutesAgo,
-          lastEvent,
-          eventsLast5min: parseInt(eventCount || '0', 10),
-        };
-      }
-    } catch (err) {
-      logger.warn({ err }, 'Failed to get Jetstream status from Redis');
-    }
+    // Jetstream status from ingestion runtime state
+    const connected = isJetstreamConnected();
+    const lastEventAt = getLastEventReceivedAt();
+    const disconnectedAt = getJetstreamDisconnectedAt();
+    const disconnectedForSeconds =
+      !connected && disconnectedAt
+        ? Math.max(0, Math.floor((Date.now() - disconnectedAt.getTime()) / 1000))
+        : null;
 
     // Subscriber stats
     const subStats = await db.query(`
@@ -63,7 +56,10 @@ export function registerFeedHealthRoutes(app: FastifyInstance): void {
         COUNT(*) as total,
         COUNT(*) FILTER (
           WHERE did IN (SELECT DISTINCT voter_did FROM governance_votes)
-        ) as with_votes
+        ) as with_votes,
+        COUNT(*) FILTER (
+          WHERE last_seen > NOW() - INTERVAL '7 days'
+        ) as active_last_week
       FROM subscribers
       WHERE is_active = TRUE
     `);
@@ -103,10 +99,16 @@ export function registerFeedHealthRoutes(app: FastifyInstance): void {
         postsScored: scoringStatus.posts_scored,
         postsFiltered: scoringStatus.posts_filtered,
       },
-      jetstream: jetstreamStatus,
+      jetstream: {
+        connected,
+        lastEvent: lastEventAt ? lastEventAt.toISOString() : null,
+        eventsLast5min: getJetstreamEventsLast5Min(),
+        disconnectedForSeconds,
+      },
       subscribers: {
         total: parseInt(subStats.rows[0].total, 10),
         withVotes: parseInt(subStats.rows[0].with_votes, 10),
+        activeLastWeek: parseInt(subStats.rows[0].active_last_week, 10),
       },
       contentRules: {
         includeKeywords: contentRules.include_keywords || [],
@@ -114,6 +116,29 @@ export function registerFeedHealthRoutes(app: FastifyInstance): void {
         lastUpdated: epochResult.rows[0]?.rules_updated,
       },
       feedSize,
+    });
+  });
+
+  /**
+   * POST /api/admin/jetstream/reconnect
+   * Trigger a manual reconnect cycle for Jetstream ingestion.
+   */
+  app.post('/jetstream/reconnect', async (request: FastifyRequest, reply: FastifyReply) => {
+    const adminDid = getAdminDid(request);
+
+    triggerJetstreamReconnect();
+
+    await db.query(
+      `INSERT INTO governance_audit_log (action, actor_did, details)
+       VALUES ('admin_jetstream_reconnect', $1, $2)`,
+      [adminDid, JSON.stringify({ triggeredAt: new Date().toISOString() })]
+    );
+
+    logger.info({ adminDid }, 'Manual Jetstream reconnect triggered by admin');
+
+    return reply.send({
+      success: true,
+      message: 'Jetstream reconnect triggered.',
     });
   });
 
