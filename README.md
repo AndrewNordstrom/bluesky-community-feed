@@ -8,6 +8,52 @@ A production Bluesky custom feed where subscribers democratically vote on rankin
 
 This project supports an NSF research question: can communities meaningfully govern their own algorithms?
 
+---
+
+## Try It Now
+
+**No coding required** — just a Bluesky account.
+
+1. **Add the feed** — Open Bluesky and search "Community Governed" in Feeds, or click:
+   [View feed on Bluesky](https://bsky.app/profile/corgi-network.bsky.social/feed/community-gov)
+
+2. **Vote on the algorithm** — Sign in with your Bluesky handle + [app password](https://bsky.app/settings/app-passwords):
+   [feed.corgi.network/vote](https://feed.corgi.network/vote)
+
+3. **See the transparency dashboard** — View current weights, vote history, and score breakdowns:
+   [feed.corgi.network/dashboard](https://feed.corgi.network/dashboard)
+
+Your vote affects how posts are ranked in future governance rounds.
+
+---
+
+## Screenshots
+
+<details>
+<summary>Click to expand</summary>
+
+### Feed in Bluesky
+![Feed in Bluesky app](docs/screenshots/feed-in-app.png)
+
+### Governance Voting
+![Voting interface](docs/screenshots/voting-ui.png)
+
+### Transparency Dashboard
+![Dashboard](docs/screenshots/dashboard.png)
+
+### Admin Audit View ("Why #1?")
+![Admin audit view](docs/screenshots/audit-view.png)
+
+### Round History
+![History](docs/screenshots/history.png)
+
+### Bot Announcement Post
+![Bot announcement post](docs/screenshots/bot-announcement-post.png)
+
+</details>
+
+---
+
 ## Live Deployment
 
 - Feed: [feed.corgi.network](https://feed.corgi.network)
