@@ -16,6 +16,12 @@ dist/
 *.swo
 .claude/
 .cursor/
+AGENTS.md
+CLAUDE.md
+TASKING.md
+docs/AI_CODING_GUIDE.md
+docs/IMPLEMENTATION_SPEC.md
+docs/ADMIN_DASHBOARD_SPEC.md
 
 # OS files
 .DS_Store
