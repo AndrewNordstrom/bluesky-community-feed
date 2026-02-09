@@ -6,19 +6,14 @@
  */
 
 import { db } from '../db/client.js';
+import { GOVERNANCE_WEIGHT_VOTE_FIELDS, VOTABLE_WEIGHT_PARAMS } from '../config/votable-params.js';
 import { logger } from '../lib/logger.js';
 import { GovernanceWeights, normalizeWeights, ContentRules, emptyContentRules } from './governance.types.js';
 
 /**
  * Weight component names for iteration.
  */
-const WEIGHT_COMPONENTS = [
-  'recency_weight',
-  'engagement_weight',
-  'bridging_weight',
-  'source_diversity_weight',
-  'relevance_weight',
-] as const;
+const WEIGHT_COMPONENTS = GOVERNANCE_WEIGHT_VOTE_FIELDS;
 
 type WeightComponent = (typeof WEIGHT_COMPONENTS)[number];
 
@@ -92,13 +87,9 @@ export async function aggregateVotes(epochId: number): Promise<GovernanceWeights
   // For small vote counts, don't trim (need at least 10 votes to trim 1 from each end)
   const effectiveTrimCount = n >= 10 ? trimCount : 0;
 
-  const aggregated: Record<WeightComponent, number> = {
-    recency_weight: 0,
-    engagement_weight: 0,
-    bridging_weight: 0,
-    source_diversity_weight: 0,
-    relevance_weight: 0,
-  };
+  const aggregated = Object.fromEntries(
+    WEIGHT_COMPONENTS.map((component) => [component, 0] as const)
+  ) as Record<WeightComponent, number>;
 
   for (const component of WEIGHT_COMPONENTS) {
     const values = votes.rows
@@ -122,13 +113,9 @@ export async function aggregateVotes(epochId: number): Promise<GovernanceWeights
   }
 
   // Convert to GovernanceWeights
-  const weights: GovernanceWeights = {
-    recency: aggregated.recency_weight,
-    engagement: aggregated.engagement_weight,
-    bridging: aggregated.bridging_weight,
-    sourceDiversity: aggregated.source_diversity_weight,
-    relevance: aggregated.relevance_weight,
-  };
+  const weights = Object.fromEntries(
+    VOTABLE_WEIGHT_PARAMS.map((param) => [param.key, aggregated[param.voteField]] as const)
+  ) as unknown as GovernanceWeights;
 
   // Normalize to ensure exact sum of 1.0
   const normalized = normalizeWeights(weights);
@@ -262,15 +249,12 @@ export async function getVoteStatistics(epochId: number): Promise<{
     [epochId]
   );
 
-  const median: GovernanceWeights = {
-    recency: calculateMedian(votes.rows.map((v: Record<string, number>) => v.recency_weight)),
-    engagement: calculateMedian(votes.rows.map((v: Record<string, number>) => v.engagement_weight)),
-    bridging: calculateMedian(votes.rows.map((v: Record<string, number>) => v.bridging_weight)),
-    sourceDiversity: calculateMedian(
-      votes.rows.map((v: Record<string, number>) => v.source_diversity_weight)
-    ),
-    relevance: calculateMedian(votes.rows.map((v: Record<string, number>) => v.relevance_weight)),
-  };
+  const median = Object.fromEntries(
+    VOTABLE_WEIGHT_PARAMS.map((param) => [
+      param.key,
+      calculateMedian(votes.rows.map((v: Record<string, number>) => v[param.voteField])),
+    ])
+  ) as unknown as GovernanceWeights;
 
   return {
     count: weightVoteCount,

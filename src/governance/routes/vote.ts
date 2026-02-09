@@ -13,6 +13,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../db/client.js';
+import { GOVERNANCE_WEIGHT_VOTE_FIELDS, VOTABLE_WEIGHT_PARAMS } from '../../config/votable-params.js';
 import { logger } from '../../lib/logger.js';
 import { getAuthenticatedDid, SessionStoreUnavailableError } from '../auth.js';
 import {
@@ -21,6 +22,14 @@ import {
   weightsToVotePayload,
   normalizeKeywords,
 } from '../governance.types.js';
+import type { VotePayload } from '../governance.types.js';
+
+const weightFieldSchemas = Object.fromEntries(
+  VOTABLE_WEIGHT_PARAMS.map((param) => [
+    param.voteField,
+    z.number().min(param.min).max(param.max).optional(),
+  ])
+) as Record<(typeof GOVERNANCE_WEIGHT_VOTE_FIELDS)[number], z.ZodOptional<z.ZodNumber>>;
 
 /**
  * Zod schema for vote validation.
@@ -30,11 +39,7 @@ import {
 const VoteSchema = z
   .object({
     // Weight fields (optional for keyword-only votes)
-    recency_weight: z.number().min(0).max(1).optional(),
-    engagement_weight: z.number().min(0).max(1).optional(),
-    bridging_weight: z.number().min(0).max(1).optional(),
-    source_diversity_weight: z.number().min(0).max(1).optional(),
-    relevance_weight: z.number().min(0).max(1).optional(),
+    ...weightFieldSchemas,
     // Keyword fields (optional for weight-only votes)
     include_keywords: z
       .array(z.string().max(50, 'Keywords must be 50 characters or less'))
@@ -48,31 +53,16 @@ const VoteSchema = z
   .refine(
     (data) => {
       // If any weight is provided, all must be provided and sum to 1.0
-      const hasAnyWeight =
-        data.recency_weight !== undefined ||
-        data.engagement_weight !== undefined ||
-        data.bridging_weight !== undefined ||
-        data.source_diversity_weight !== undefined ||
-        data.relevance_weight !== undefined;
+      const hasAnyWeight = GOVERNANCE_WEIGHT_VOTE_FIELDS.some((field) => data[field] !== undefined);
 
       if (!hasAnyWeight) return true; // Keywords-only vote is valid
 
       // If any weight provided, all must be provided
-      const hasAllWeights =
-        data.recency_weight !== undefined &&
-        data.engagement_weight !== undefined &&
-        data.bridging_weight !== undefined &&
-        data.source_diversity_weight !== undefined &&
-        data.relevance_weight !== undefined;
+      const hasAllWeights = GOVERNANCE_WEIGHT_VOTE_FIELDS.every((field) => data[field] !== undefined);
 
       if (!hasAllWeights) return false;
 
-      const sum =
-        data.recency_weight! +
-        data.engagement_weight! +
-        data.bridging_weight! +
-        data.source_diversity_weight! +
-        data.relevance_weight!;
+      const sum = GOVERNANCE_WEIGHT_VOTE_FIELDS.reduce((acc, field) => acc + (data[field] as number), 0);
       return Math.abs(sum - 1.0) < 0.01;
     },
     { message: 'If weights are provided, all must be present and sum to 1.0' }
@@ -80,7 +70,7 @@ const VoteSchema = z
   .refine(
     (data) => {
       // At least one of weights or keywords must be provided
-      const hasWeights = data.recency_weight !== undefined;
+      const hasWeights = GOVERNANCE_WEIGHT_VOTE_FIELDS.some((field) => data[field] !== undefined);
       const hasKeywords =
         (data.include_keywords?.length ?? 0) > 0 ||
         (data.exclude_keywords?.length ?? 0) > 0;
@@ -141,19 +131,17 @@ export function registerVoteRoute(app: FastifyInstance): void {
     const vote = parseResult.data;
 
     // 4. Normalize weights (if provided) and keywords
-    const hasWeights = vote.recency_weight !== undefined;
+    const hasWeights = GOVERNANCE_WEIGHT_VOTE_FIELDS.some((field) => vote[field] !== undefined);
     let normalized = null;
-    let normalizedPayload = null;
+    let normalizedPayload: VotePayload | null = null;
 
     if (hasWeights) {
+      const weightPayload = Object.fromEntries(
+        GOVERNANCE_WEIGHT_VOTE_FIELDS.map((field) => [field, vote[field]!])
+      ) as unknown as VotePayload;
+
       normalized = normalizeWeights(
-        votePayloadToWeights({
-          recency_weight: vote.recency_weight!,
-          engagement_weight: vote.engagement_weight!,
-          bridging_weight: vote.bridging_weight!,
-          source_diversity_weight: vote.source_diversity_weight!,
-          relevance_weight: vote.relevance_weight!,
-        })
+        votePayloadToWeights(weightPayload)
       );
       normalizedPayload = weightsToVotePayload(normalized);
     }
@@ -210,11 +198,7 @@ export function registerVoteRoute(app: FastifyInstance): void {
         [
           voterDid,
           epochId,
-          normalizedPayload?.recency_weight ?? null,
-          normalizedPayload?.engagement_weight ?? null,
-          normalizedPayload?.bridging_weight ?? null,
-          normalizedPayload?.source_diversity_weight ?? null,
-          normalizedPayload?.relevance_weight ?? null,
+          ...GOVERNANCE_WEIGHT_VOTE_FIELDS.map((field) => normalizedPayload?.[field] ?? null),
           includeKeywords.length > 0 ? includeKeywords : null,
           excludeKeywords.length > 0 ? excludeKeywords : null,
         ]
@@ -238,13 +222,9 @@ export function registerVoteRoute(app: FastifyInstance): void {
               exclude_keywords: excludeKeywords,
             },
             original_weights: hasWeights
-              ? {
-                  recency_weight: vote.recency_weight,
-                  engagement_weight: vote.engagement_weight,
-                  bridging_weight: vote.bridging_weight,
-                  source_diversity_weight: vote.source_diversity_weight,
-                  relevance_weight: vote.relevance_weight,
-                }
+              ? Object.fromEntries(
+                  GOVERNANCE_WEIGHT_VOTE_FIELDS.map((field) => [field, vote[field]])
+                )
               : null,
           }),
         ]

@@ -1,16 +1,17 @@
 import { useState, useCallback, useEffect } from 'react';
+import {
+  DEFAULT_GOVERNANCE_WEIGHTS,
+  GOVERNANCE_WEIGHT_KEYS,
+  VOTABLE_WEIGHT_PARAMS,
+  type GovernanceWeightKey,
+  type GovernanceWeights,
+} from '../config/votable-params';
 
 /**
  * Weight configuration for the governance system.
  * All values must be 0.0-1.0 and sum to 1.0.
  */
-export interface GovernanceWeights {
-  recency: number;
-  engagement: number;
-  bridging: number;
-  sourceDiversity: number;
-  relevance: number;
-}
+export type { GovernanceWeights } from '../config/votable-params';
 
 interface WeightSlidersProps {
   initialWeights?: GovernanceWeights;
@@ -18,44 +19,19 @@ interface WeightSlidersProps {
   disabled?: boolean;
 }
 
-const DEFAULT_WEIGHTS: GovernanceWeights = {
-  recency: 0.2,
-  engagement: 0.2,
-  bridging: 0.2,
-  sourceDiversity: 0.2,
-  relevance: 0.2,
-};
+const DEFAULT_WEIGHTS: GovernanceWeights = DEFAULT_GOVERNANCE_WEIGHTS;
 
-const WEIGHT_LABELS: Record<keyof GovernanceWeights, { name: string; description: string }> = {
-  recency: {
-    name: 'Recency',
-    description: 'How much to favor newer posts over older ones',
-  },
-  engagement: {
-    name: 'Engagement',
-    description: 'How much to favor posts with more likes, reposts, and replies',
-  },
-  bridging: {
-    name: 'Bridging',
-    description: 'How much to favor posts that appeal across different communities',
-  },
-  sourceDiversity: {
-    name: 'Source diversity',
-    description: 'How much to penalize seeing too many posts from the same author',
-  },
-  relevance: {
-    name: 'Relevance',
-    description: 'How much to favor posts matching your interests (future feature)',
-  },
-};
+const WEIGHT_LABELS = Object.fromEntries(
+  VOTABLE_WEIGHT_PARAMS.map((param) => [
+    param.key,
+    {
+      name: param.label,
+      description: param.description,
+    },
+  ])
+) as Record<GovernanceWeightKey, { name: string; description: string }>;
 
-const WEIGHT_KEYS: (keyof GovernanceWeights)[] = [
-  'recency',
-  'engagement',
-  'bridging',
-  'sourceDiversity',
-  'relevance',
-];
+const WEIGHT_KEYS = [...GOVERNANCE_WEIGHT_KEYS];
 
 /**
  * WeightSliders Component
@@ -64,7 +40,9 @@ const WEIGHT_KEYS: (keyof GovernanceWeights)[] = [
  * When user drags one slider, others adjust proportionally.
  */
 export function WeightSliders({ initialWeights, onChange, disabled = false }: WeightSlidersProps) {
-  const [weights, setWeights] = useState<GovernanceWeights>(initialWeights ?? DEFAULT_WEIGHTS);
+  const [weights, setWeights] = useState<GovernanceWeights>(
+    initialWeights ?? { ...DEFAULT_WEIGHTS }
+  );
 
   // Update weights when initialWeights changes
   useEffect(() => {
@@ -84,7 +62,7 @@ export function WeightSliders({ initialWeights, onChange, disabled = false }: We
    * 5. After all adjustments, normalize to ensure exact sum of 1.0
    */
   const handleSliderChange = useCallback(
-    (key: keyof GovernanceWeights, newValue: number) => {
+    (key: GovernanceWeightKey, newValue: number) => {
       setWeights((prevWeights) => {
         const oldValue = prevWeights[key];
         const delta = newValue - oldValue;

@@ -7,6 +7,7 @@
  * - Epoch information
  * - Audit log entries
  */
+import { createDefaultGovernanceWeightRecord, GOVERNANCE_WEIGHT_KEYS } from '../config/votable-params.js';
 
 /**
  * Governance weights for the scoring algorithm.
@@ -20,13 +21,7 @@ export interface GovernanceWeights {
   relevance: number;
 }
 
-const WEIGHT_KEYS = [
-  'recency',
-  'engagement',
-  'bridging',
-  'sourceDiversity',
-  'relevance',
-] as const satisfies ReadonlyArray<keyof GovernanceWeights>;
+const WEIGHT_KEYS = GOVERNANCE_WEIGHT_KEYS as ReadonlyArray<keyof GovernanceWeights>;
 const WEIGHT_SCALE = 1000;
 const SUM_TOLERANCE = 0.000001;
 
@@ -151,13 +146,7 @@ export function normalizeWeights(weights: GovernanceWeights): GovernanceWeights 
 
   if (total === 0) {
     // Default to equal weights if all zero
-    return {
-      recency: 0.2,
-      engagement: 0.2,
-      bridging: 0.2,
-      sourceDiversity: 0.2,
-      relevance: 0.2,
-    };
+    return createDefaultGovernanceWeightRecord();
   }
 
   const normalized = fromEntries(
