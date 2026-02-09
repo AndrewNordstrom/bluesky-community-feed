@@ -6,7 +6,7 @@
 
 A production Bluesky custom feed where subscribers democratically vote on ranking behavior (weights + content rules), and the backend applies those decisions in a transparent scoring pipeline.
 
-This project supports an NSF research question: can communities meaningfully govern their own algorithms?
+This project supports a research question: can communities meaningfully govern their own algorithms?
 
 ---
 
