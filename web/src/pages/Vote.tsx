@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useAdminStatus } from '../hooks/useAdminStatus';
@@ -35,6 +35,29 @@ export function Vote() {
   const currentPhase =
     currentEpoch?.phase ?? (currentEpoch?.status === 'voting' ? 'voting' : 'running');
   const isVotingOpen = currentPhase === 'voting';
+  const phaseNotice = useMemo(() => {
+    if (!currentEpoch) {
+      return null;
+    }
+
+    if (currentPhase === 'voting') {
+      if (currentEpoch.voting_ends_at) {
+        return `Voting is open now and closes ${new Date(currentEpoch.voting_ends_at).toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })}.`;
+      }
+      return 'Voting is open now.';
+    }
+
+    if (currentPhase === 'results') {
+      return 'Voting has closed. Results are being reviewed before they are applied.';
+    }
+
+    return 'Voting is currently closed while the current algorithm settings run.';
+  }, [currentEpoch, currentPhase]);
 
   // Load current epoch and user's vote
   const loadData = useCallback(async () => {
@@ -98,6 +121,24 @@ export function Vote() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Keep voting phase status fresh without resetting in-progress form edits.
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void (async () => {
+        try {
+          const epoch = await weightsApi.getCurrentEpoch();
+          setCurrentEpoch(epoch);
+          const contentRules = await voteApi.getContentRules();
+          setCurrentContentRules(contentRules);
+        } catch {
+          // Silent refresh: keep current UI state if refresh fails.
+        }
+      })();
+    }, 45_000);
+
+    return () => window.clearInterval(interval);
+  }, []);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -255,9 +296,9 @@ export function Vote() {
 
         {error && <div className="error-message">{error}</div>}
         {successMessage && <div className="success-message">{successMessage}</div>}
-        {!isVotingOpen ? (
-          <div className="error-message">
-            Voting is currently closed. The algorithm is in {currentPhase} phase.
+        {phaseNotice ? (
+          <div className={`phase-notice ${isVotingOpen ? 'open' : 'closed'}`}>
+            {phaseNotice}
           </div>
         ) : null}
 
@@ -693,6 +734,25 @@ const styles = `
     border-radius: var(--radius-md);
     margin-bottom: var(--space-4);
     font-size: var(--text-sm);
+  }
+
+  .phase-notice {
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    margin-bottom: var(--space-4);
+    font-size: var(--text-sm);
+  }
+
+  .phase-notice.open {
+    background: rgba(52, 199, 89, 0.1);
+    border: 1px solid rgba(52, 199, 89, 0.2);
+    color: var(--status-success);
+  }
+
+  .phase-notice.closed {
+    background: rgba(255, 159, 10, 0.12);
+    border: 1px solid rgba(255, 159, 10, 0.2);
+    color: #ff9f0a;
   }
 
   .vote-actions {

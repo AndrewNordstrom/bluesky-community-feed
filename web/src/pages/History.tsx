@@ -8,6 +8,83 @@ import { useAdminStatus } from '../hooks/useAdminStatus';
 import { transparencyApi } from '../api/client';
 import type { EpochResponse, AuditLogEntry } from '../api/client';
 
+interface RoundWeightChange {
+  key: keyof EpochResponse['weights'];
+  previous: number;
+  current: number;
+  delta: number;
+}
+
+interface RoundKeywordDiff {
+  includeAdded: string[];
+  includeRemoved: string[];
+  excludeAdded: string[];
+  excludeRemoved: string[];
+}
+
+interface RoundDiff {
+  weightChanges: RoundWeightChange[];
+  keywordDiff: RoundKeywordDiff;
+}
+
+const WEIGHT_LABELS: Record<keyof EpochResponse['weights'], string> = {
+  recency: 'Recency',
+  engagement: 'Engagement',
+  bridging: 'Bridging',
+  source_diversity: 'Source diversity',
+  relevance: 'Relevance',
+};
+
+const ROUND_DIFF_EPSILON = 0.0005;
+
+function normalizeKeywords(values: string[] | undefined): string[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  return Array.from(
+    new Set(values.map((value) => value.trim().toLowerCase()).filter((value) => value.length > 0))
+  );
+}
+
+function computeRoundDiff(current: EpochResponse, previous: EpochResponse): RoundDiff {
+  const weightChanges = (Object.keys(current.weights) as Array<keyof EpochResponse['weights']>)
+    .map((key) => {
+      const currentValue = current.weights[key];
+      const previousValue = previous.weights[key];
+      const delta = currentValue - previousValue;
+      return {
+        key,
+        previous: previousValue,
+        current: currentValue,
+        delta,
+      };
+    })
+    .filter((change) => Math.abs(change.delta) >= ROUND_DIFF_EPSILON);
+
+  const currentRules = current.content_rules ?? { include_keywords: [], exclude_keywords: [] };
+  const previousRules = previous.content_rules ?? { include_keywords: [], exclude_keywords: [] };
+
+  const includeCurrent = normalizeKeywords(currentRules.include_keywords);
+  const includePrevious = normalizeKeywords(previousRules.include_keywords);
+  const includeCurrentSet = new Set(includeCurrent);
+  const includePreviousSet = new Set(includePrevious);
+
+  const excludeCurrent = normalizeKeywords(currentRules.exclude_keywords);
+  const excludePrevious = normalizeKeywords(previousRules.exclude_keywords);
+  const excludeCurrentSet = new Set(excludeCurrent);
+  const excludePreviousSet = new Set(excludePrevious);
+
+  return {
+    weightChanges,
+    keywordDiff: {
+      includeAdded: includeCurrent.filter((keyword) => !includePreviousSet.has(keyword)),
+      includeRemoved: includePrevious.filter((keyword) => !includeCurrentSet.has(keyword)),
+      excludeAdded: excludeCurrent.filter((keyword) => !excludePreviousSet.has(keyword)),
+      excludeRemoved: excludePrevious.filter((keyword) => !excludeCurrentSet.has(keyword)),
+    },
+  };
+}
+
 export function History() {
   const { userHandle, logout } = useAuth();
   const { isAdmin } = useAdminStatus();
@@ -82,6 +159,14 @@ export function History() {
   const epochAuditEntries = selectedEpoch
     ? auditLog.filter((entry) => entry.epoch_id === selectedEpoch.id)
     : [];
+  const sortedEpochs = [...epochs].sort((a, b) => b.id - a.id);
+  const selectedIndex = selectedEpoch
+    ? sortedEpochs.findIndex((epoch) => epoch.id === selectedEpoch.id)
+    : -1;
+  const previousEpoch = selectedIndex >= 0 ? (sortedEpochs[selectedIndex + 1] ?? null) : null;
+  const roundDiff = selectedEpoch && previousEpoch
+    ? computeRoundDiff(selectedEpoch, previousEpoch)
+    : null;
 
   if (isLoading) {
     return (
@@ -144,7 +229,7 @@ export function History() {
       <main className="history-main page-content">
         <div className="history-layout">
           <aside className="timeline-sidebar">
-            <h2>Epochs</h2>
+            <h2>Rounds</h2>
             <EpochTimeline
               epochs={epochs.map((e) => ({
                 id: e.id,
@@ -170,7 +255,7 @@ export function History() {
               <>
                 <section className="epoch-overview">
                   <div className="epoch-header">
-                    <h2>Epoch {selectedEpoch.id}</h2>
+                    <h2>Round {selectedEpoch.id}</h2>
                     <span className={`status-badge ${selectedEpoch.status}`}>
                       {selectedEpoch.status}
                     </span>
@@ -217,6 +302,47 @@ export function History() {
                     </div>
                   </div>
                 </section>
+
+                {roundDiff && (
+                  <section className="changes-section">
+                    <h3>Changes from Round {previousEpoch?.id}</h3>
+                    {roundDiff.weightChanges.length > 0 ? (
+                      <div className="changes-list">
+                        {roundDiff.weightChanges.map((change) => (
+                          <div key={change.key} className="change-item">
+                            <span>{WEIGHT_LABELS[change.key]}</span>
+                            <strong>
+                              {(change.previous * 100).toFixed(1)}% → {(change.current * 100).toFixed(1)}%
+                              {' '}
+                              ({change.delta >= 0 ? '+' : ''}{(change.delta * 100).toFixed(1)}%)
+                            </strong>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="changes-empty">No weight changes from the prior round.</p>
+                    )}
+                    {(roundDiff.keywordDiff.includeAdded.length > 0 ||
+                      roundDiff.keywordDiff.includeRemoved.length > 0 ||
+                      roundDiff.keywordDiff.excludeAdded.length > 0 ||
+                      roundDiff.keywordDiff.excludeRemoved.length > 0) && (
+                      <div className="changes-keywords">
+                        {roundDiff.keywordDiff.includeAdded.length > 0 && (
+                          <p><strong>Include added:</strong> {roundDiff.keywordDiff.includeAdded.join(', ')}</p>
+                        )}
+                        {roundDiff.keywordDiff.includeRemoved.length > 0 && (
+                          <p><strong>Include removed:</strong> {roundDiff.keywordDiff.includeRemoved.join(', ')}</p>
+                        )}
+                        {roundDiff.keywordDiff.excludeAdded.length > 0 && (
+                          <p><strong>Exclude added:</strong> {roundDiff.keywordDiff.excludeAdded.join(', ')}</p>
+                        )}
+                        {roundDiff.keywordDiff.excludeRemoved.length > 0 && (
+                          <p><strong>Exclude removed:</strong> {roundDiff.keywordDiff.excludeRemoved.join(', ')}</p>
+                        )}
+                      </div>
+                    )}
+                  </section>
+                )}
 
                 {epochAuditEntries.length > 0 && (
                   <section className="audit-section">
@@ -498,6 +624,53 @@ const styles = `
     color: var(--text-primary);
   }
 
+  .changes-section h3 {
+    margin: 0 0 var(--space-4) 0;
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+  }
+
+  .changes-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+  }
+
+  .change-item {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    background: var(--bg-elevated);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+  }
+
+  .change-item strong {
+    color: var(--accent-blue);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .changes-keywords p {
+    margin: 0 0 var(--space-2) 0;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    line-height: var(--leading-relaxed);
+    word-break: break-word;
+  }
+
+  .changes-keywords p:last-child {
+    margin-bottom: 0;
+  }
+
+  .changes-empty {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
   .weights-content {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -637,6 +810,11 @@ const styles = `
 
     .weights-content {
       grid-template-columns: 1fr;
+    }
+
+    .change-item {
+      flex-direction: column;
+      gap: var(--space-1);
     }
   }
 `;

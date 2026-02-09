@@ -188,6 +188,10 @@ export interface EpochResponse {
   voting_started_at?: string | null;
   voting_ends_at?: string | null;
   voting_closed_at?: string | null;
+  content_rules?: {
+    include_keywords: string[];
+    exclude_keywords: string[];
+  };
 }
 
 // Weights API
@@ -395,13 +399,14 @@ export const transparencyApi = {
   },
 
   getEpochHistory: async (limit = 20): Promise<{ epochs: EpochResponse[] }> => {
-    const response = await api.get<{ epochs: any[] }>('/api/governance/weights/history', {
+    const response = await api.get<{ epochs: any[] }>('/api/governance/epochs', {
       params: { limit },
     });
     // Transform API response to match expected interface
     const epochs = response.data.epochs.map((e: any) => ({
       id: e.epoch_id ?? e.id,
       status: e.status,
+      phase: e.phase,
       weights: {
         recency: e.weights.recency,
         engagement: e.weights.engagement,
@@ -414,6 +419,14 @@ export const transparencyApi = {
       created_at: e.created_at,
       closed_at: e.closed_at,
       description: e.description,
+      content_rules: {
+        include_keywords: Array.isArray(e.content_rules?.include_keywords)
+          ? e.content_rules.include_keywords
+          : [],
+        exclude_keywords: Array.isArray(e.content_rules?.exclude_keywords)
+          ? e.content_rules.exclude_keywords
+          : [],
+      },
     }));
     return { epochs };
   },

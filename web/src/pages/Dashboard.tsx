@@ -1,43 +1,164 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ScoreRadar } from '../components/ScoreRadar';
 import { DashboardSkeleton } from '../components/Skeleton';
 import { useAuth } from '../contexts/AuthContext';
 import { useAdminStatus } from '../hooks/useAdminStatus';
 import { transparencyApi } from '../api/client';
-import type { FeedStatsResponse, AuditLogEntry } from '../api/client';
+import type { FeedStatsResponse, AuditLogEntry, EpochResponse } from '../api/client';
+
+interface WeightChange {
+  key: keyof EpochResponse['weights'];
+  previous: number;
+  current: number;
+  delta: number;
+}
+
+interface KeywordChanges {
+  includeAdded: string[];
+  includeRemoved: string[];
+  excludeAdded: string[];
+  excludeRemoved: string[];
+}
+
+interface LatestRoundUpdate {
+  currentRoundId: number;
+  previousRoundId: number;
+  participantCount: number;
+  appliedAt: string;
+  weightChanges: WeightChange[];
+  keywordChanges: KeywordChanges;
+}
+
+const WEIGHT_LABELS: Record<keyof EpochResponse['weights'], string> = {
+  recency: 'Recency',
+  engagement: 'Engagement',
+  bridging: 'Bridging',
+  source_diversity: 'Source diversity',
+  relevance: 'Relevance',
+};
+
+const ROUND_DIFF_EPSILON = 0.0005;
+
+function normalizeKeywords(values: string[] | undefined): string[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  return Array.from(
+    new Set(values.map((value) => value.trim().toLowerCase()).filter((value) => value.length > 0))
+  );
+}
+
+function deriveLatestRoundUpdate(epochs: EpochResponse[]): LatestRoundUpdate | null {
+  if (epochs.length < 2) {
+    return null;
+  }
+
+  const sorted = [...epochs].sort((a, b) => b.id - a.id);
+  const [current, previous] = sorted;
+  if (!current || !previous) {
+    return null;
+  }
+
+  const weightChanges = (Object.keys(current.weights) as Array<keyof EpochResponse['weights']>)
+    .map((key) => {
+      const currentValue = current.weights[key];
+      const previousValue = previous.weights[key];
+      const delta = currentValue - previousValue;
+      return {
+        key,
+        previous: previousValue,
+        current: currentValue,
+        delta,
+      };
+    })
+    .filter((change) => Math.abs(change.delta) >= ROUND_DIFF_EPSILON);
+
+  const currentRules = current.content_rules ?? { include_keywords: [], exclude_keywords: [] };
+  const previousRules = previous.content_rules ?? { include_keywords: [], exclude_keywords: [] };
+
+  const includeCurrent = normalizeKeywords(currentRules.include_keywords);
+  const includePreviousList = normalizeKeywords(previousRules.include_keywords);
+  const includeCurrentSet = new Set(includeCurrent);
+  const includePreviousSet = new Set(includePreviousList);
+  const includeAdded = includeCurrent.filter((keyword) => !includePreviousSet.has(keyword));
+  const includeRemoved = includePreviousList.filter((keyword) => !includeCurrentSet.has(keyword));
+
+  const excludeCurrent = normalizeKeywords(currentRules.exclude_keywords);
+  const excludePreviousList = normalizeKeywords(previousRules.exclude_keywords);
+  const excludeCurrentSet = new Set(excludeCurrent);
+  const excludePreviousSet = new Set(excludePreviousList);
+  const excludeAdded = excludeCurrent.filter((keyword) => !excludePreviousSet.has(keyword));
+  const excludeRemoved = excludePreviousList.filter((keyword) => !excludeCurrentSet.has(keyword));
+
+  return {
+    currentRoundId: current.id,
+    previousRoundId: previous.id,
+    participantCount: previous.vote_count,
+    appliedAt: current.created_at,
+    weightChanges,
+    keywordChanges: {
+      includeAdded,
+      includeRemoved,
+      excludeAdded,
+      excludeRemoved,
+    },
+  };
+}
 
 export function Dashboard() {
   const { userHandle, logout } = useAuth();
   const { isAdmin } = useAdminStatus();
   const navigate = useNavigate();
   const [stats, setStats] = useState<FeedStatsResponse | null>(null);
+  const [epochHistory, setEpochHistory] = useState<EpochResponse[]>([]);
   const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasInitialLoad, setHasInitialLoad] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadData() {
-      try {
+  const loadData = useCallback(async (silent = false) => {
+    try {
+      if (!silent) {
         setIsLoading(true);
-        setError(null);
+      }
 
-        const [statsData, auditData] = await Promise.all([
-          transparencyApi.getStats(),
-          transparencyApi.getAuditLog({ limit: 5 }),
-        ]);
+      const [statsData, auditData, historyData] = await Promise.all([
+        transparencyApi.getStats(),
+        transparencyApi.getAuditLog({ limit: 8 }),
+        transparencyApi.getEpochHistory(2),
+      ]);
 
-        setStats(statsData);
-        setAuditLog(auditData.entries);
-      } catch (err: any) {
+      setStats(statsData);
+      setAuditLog(auditData.entries);
+      setEpochHistory(historyData.epochs);
+      setError(null);
+    } catch (err: any) {
+      if (!silent || !hasInitialLoad) {
         setError(err.message || 'Failed to load dashboard data');
-      } finally {
+      }
+    } finally {
+      if (!silent) {
         setIsLoading(false);
       }
+      setHasInitialLoad(true);
     }
+  }, [hasInitialLoad]);
 
-    loadData();
-  }, []);
+  useEffect(() => {
+    void loadData(false);
+
+    const interval = window.setInterval(() => {
+      void loadData(true);
+    }, 60_000);
+
+    return () => window.clearInterval(interval);
+  }, [loadData]);
+
+  const latestRoundUpdate = useMemo(
+    () => deriveLatestRoundUpdate(epochHistory),
+    [epochHistory]
+  );
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -60,7 +181,7 @@ export function Dashboard() {
     navigate('/login');
   };
 
-  if (isLoading) {
+  if (isLoading && !hasInitialLoad) {
     return (
       <div className="dashboard-page">
         <header className="dashboard-header">
@@ -83,7 +204,7 @@ export function Dashboard() {
     );
   }
 
-  if (error) {
+  if (error && !stats) {
     return (
       <div className="dashboard-page">
         <div className="error-container">
@@ -123,6 +244,77 @@ export function Dashboard() {
       <main className="dashboard-main page-content">
         {stats && (
           <>
+            {latestRoundUpdate ? (
+              <section className="latest-update-section">
+                <div className="section-header">
+                  <h2>Latest governance update</h2>
+                  <span className="update-time">{formatDate(latestRoundUpdate.appliedAt)}</span>
+                </div>
+                <p className="latest-update-title">
+                  Round {latestRoundUpdate.currentRoundId} is now live.
+                </p>
+                <p className="latest-update-meta">
+                  Applied from Round {latestRoundUpdate.previousRoundId} with {latestRoundUpdate.participantCount} voter(s).
+                </p>
+                {latestRoundUpdate.weightChanges.length > 0 ? (
+                  <div className="latest-update-list">
+                    {latestRoundUpdate.weightChanges.map((change) => (
+                      <div key={change.key} className="latest-update-item">
+                        <span>{WEIGHT_LABELS[change.key]}</span>
+                        <strong>
+                          {(change.previous * 100).toFixed(1)}% → {(change.current * 100).toFixed(1)}%
+                          {' '}
+                          ({change.delta >= 0 ? '+' : ''}{(change.delta * 100).toFixed(1)}%)
+                        </strong>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="latest-update-empty">No weight changes from the prior round.</p>
+                )}
+                {(latestRoundUpdate.keywordChanges.includeAdded.length > 0 ||
+                  latestRoundUpdate.keywordChanges.excludeAdded.length > 0 ||
+                  latestRoundUpdate.keywordChanges.includeRemoved.length > 0 ||
+                  latestRoundUpdate.keywordChanges.excludeRemoved.length > 0) && (
+                  <div className="latest-keyword-grid">
+                    {latestRoundUpdate.keywordChanges.includeAdded.length > 0 && (
+                      <div>
+                        <span className="keyword-change-label">Include added</span>
+                        <p className="keyword-change-values">
+                          {latestRoundUpdate.keywordChanges.includeAdded.join(', ')}
+                        </p>
+                      </div>
+                    )}
+                    {latestRoundUpdate.keywordChanges.excludeAdded.length > 0 && (
+                      <div>
+                        <span className="keyword-change-label">Exclude added</span>
+                        <p className="keyword-change-values">
+                          {latestRoundUpdate.keywordChanges.excludeAdded.join(', ')}
+                        </p>
+                      </div>
+                    )}
+                    {latestRoundUpdate.keywordChanges.includeRemoved.length > 0 && (
+                      <div>
+                        <span className="keyword-change-label">Include removed</span>
+                        <p className="keyword-change-values">
+                          {latestRoundUpdate.keywordChanges.includeRemoved.join(', ')}
+                        </p>
+                      </div>
+                    )}
+                    {latestRoundUpdate.keywordChanges.excludeRemoved.length > 0 && (
+                      <div>
+                        <span className="keyword-change-label">Exclude removed</span>
+                        <p className="keyword-change-values">
+                          {latestRoundUpdate.keywordChanges.excludeRemoved.join(', ')}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <p className="refresh-hint">This page refreshes automatically every minute.</p>
+              </section>
+            ) : null}
+
             <section className="weights-section">
               <div className="section-header">
                 <h2>Current algorithm weights</h2>
@@ -386,6 +578,86 @@ const styles = `
     color: var(--text-primary);
   }
 
+  .latest-update-section {
+    background: linear-gradient(180deg, rgba(16, 131, 254, 0.1) 0%, rgba(30, 31, 33, 1) 100%);
+  }
+
+  .update-time {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+
+  .latest-update-title {
+    margin: 0 0 var(--space-2) 0;
+    color: var(--text-primary);
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .latest-update-meta {
+    margin: 0 0 var(--space-4) 0;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+  }
+
+  .latest-update-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+  }
+
+  .latest-update-item {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.03);
+    font-size: var(--text-sm);
+  }
+
+  .latest-update-item strong {
+    font-variant-numeric: tabular-nums;
+    color: var(--accent-blue);
+  }
+
+  .latest-update-empty {
+    margin: 0 0 var(--space-4) 0;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+  }
+
+  .latest-keyword-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+  }
+
+  .keyword-change-label {
+    display: block;
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-1);
+  }
+
+  .keyword-change-values {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+    word-break: break-word;
+  }
+
+  .refresh-hint {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+  }
+
   .epoch-badge {
     background: var(--accent-blue-subtle);
     color: var(--accent-blue);
@@ -554,6 +826,11 @@ const styles = `
       flex-direction: column;
       align-items: flex-start;
       gap: var(--space-2);
+    }
+
+    .latest-update-item {
+      flex-direction: column;
+      gap: var(--space-1);
     }
   }
 `;

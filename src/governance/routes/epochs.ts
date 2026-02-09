@@ -10,7 +10,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { db } from '../../db/client.js';
 import { config } from '../../config.js';
 import { logger } from '../../lib/logger.js';
-import { toEpochInfo } from '../governance.types.js';
+import { toEpochInfo, toContentRules, ContentRulesRow } from '../governance.types.js';
 import { getAuthenticatedDid, SessionStoreUnavailableError } from '../auth.js';
 import { triggerEpochTransition, forceEpochTransition, getCurrentEpochStatus } from '../epoch-manager.js';
 
@@ -47,6 +47,7 @@ export function registerEpochsRoute(app: FastifyInstance): void {
     const epochs = await Promise.all(
       result.rows.map(async (row) => {
         const epoch = toEpochInfo(row);
+        const contentRules = toContentRules((row.content_rules as ContentRulesRow | null) ?? null);
 
         // Get actual vote count
         const voteCount = await db.query(
@@ -63,6 +64,10 @@ export function registerEpochsRoute(app: FastifyInstance): void {
           created_at: epoch.createdAt,
           closed_at: epoch.closedAt,
           description: epoch.description,
+          content_rules: {
+            include_keywords: contentRules.includeKeywords,
+            exclude_keywords: contentRules.excludeKeywords,
+          },
         };
       })
     );
@@ -92,6 +97,7 @@ export function registerEpochsRoute(app: FastifyInstance): void {
     }
 
     const epoch = toEpochInfo(result.rows[0]);
+    const contentRules = toContentRules((result.rows[0].content_rules as ContentRulesRow | null) ?? null);
 
     // Get vote count
     const voteCount = await db.query(
@@ -116,6 +122,10 @@ export function registerEpochsRoute(app: FastifyInstance): void {
       voting_ends_at: result.rows[0].voting_ends_at ?? null,
       voting_closed_at: result.rows[0].voting_closed_at ?? null,
       description: epoch.description,
+      content_rules: {
+        include_keywords: contentRules.includeKeywords,
+        exclude_keywords: contentRules.excludeKeywords,
+      },
     });
   });
 
@@ -144,6 +154,7 @@ export function registerEpochsRoute(app: FastifyInstance): void {
     }
 
     const epoch = toEpochInfo(result.rows[0]);
+    const contentRules = toContentRules((result.rows[0].content_rules as ContentRulesRow | null) ?? null);
 
     // Get vote count
     const voteCount = await db.query(
@@ -184,6 +195,11 @@ export function registerEpochsRoute(app: FastifyInstance): void {
       created_at: epoch.createdAt,
       closed_at: epoch.closedAt,
       description: epoch.description,
+      phase: (result.rows[0].phase as string | null) ?? (epoch.status === 'voting' ? 'voting' : 'running'),
+      content_rules: {
+        include_keywords: contentRules.includeKeywords,
+        exclude_keywords: contentRules.excludeKeywords,
+      },
       vote_statistics:
         parseInt(voteCount.rows[0].count) > 0
           ? {
