@@ -185,6 +185,10 @@ function escapeSqlRegex(value: string): string {
   return value.replace(/[\\.^$|()?*+\[\]{}]/g, '\\$&');
 }
 
+function escapeSqlLike(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
+
 function toSqlKeywordRegex(keyword: string): string {
   const normalized = keyword.trim().toLowerCase();
   if (!normalized) {
@@ -204,6 +208,25 @@ function toSqlKeywordRegex(keyword: string): string {
   return `(^|[^[:alnum:]])${phrasePattern}($|[^[:alnum:]])`;
 }
 
+function toSqlLikePattern(keyword: string): string {
+  const normalized = keyword.trim().toLowerCase();
+  if (!normalized) {
+    return '';
+  }
+
+  const phrasePattern = normalized
+    .split(/\s+/)
+    .filter((part) => part.length > 0)
+    .map(escapeSqlLike)
+    .join('%');
+
+  if (!phrasePattern) {
+    return '';
+  }
+
+  return `%${phrasePattern}%`;
+}
+
 /**
  * Get posts within the scoring window.
  * Applies SQL keyword prefiltering so LIMIT is taken from matching posts.
@@ -218,12 +241,18 @@ async function getPostsForScoring(contentRules: ContentRules): Promise<PostForSc
   if (contentRules.includeKeywords.length > 0) {
     const includePredicates: string[] = [];
     for (const keyword of contentRules.includeKeywords) {
+      const likePattern = toSqlLikePattern(keyword);
       const regex = toSqlKeywordRegex(keyword);
-      if (!regex) {
+      if (!likePattern || !regex) {
         continue;
       }
+      params.push(likePattern);
+      const likeParamPosition = params.length;
       params.push(regex);
-      includePredicates.push(`COALESCE(p.text, '') ~* $${params.length}`);
+      const regexParamPosition = params.length;
+      includePredicates.push(
+        `(p.text IS NOT NULL AND p.text ILIKE $${likeParamPosition} ESCAPE '\\' AND p.text ~* $${regexParamPosition})`
+      );
     }
     if (includePredicates.length > 0) {
       clauses.push(`(${includePredicates.join(' OR ')})`);
@@ -233,12 +262,18 @@ async function getPostsForScoring(contentRules: ContentRules): Promise<PostForSc
   if (contentRules.excludeKeywords.length > 0) {
     const excludePredicates: string[] = [];
     for (const keyword of contentRules.excludeKeywords) {
+      const likePattern = toSqlLikePattern(keyword);
       const regex = toSqlKeywordRegex(keyword);
-      if (!regex) {
+      if (!likePattern || !regex) {
         continue;
       }
+      params.push(likePattern);
+      const likeParamPosition = params.length;
       params.push(regex);
-      excludePredicates.push(`COALESCE(p.text, '') ~* $${params.length}`);
+      const regexParamPosition = params.length;
+      excludePredicates.push(
+        `(p.text IS NOT NULL AND p.text ILIKE $${likeParamPosition} ESCAPE '\\' AND p.text ~* $${regexParamPosition})`
+      );
     }
     if (excludePredicates.length > 0) {
       clauses.push(`NOT (${excludePredicates.join(' OR ')})`);

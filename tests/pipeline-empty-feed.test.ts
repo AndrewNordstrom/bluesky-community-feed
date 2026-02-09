@@ -176,7 +176,8 @@ describe('scoring pipeline empty-feed Redis updates', () => {
     const queryText = String(postsQueryCall[0]);
     const queryParams = postsQueryCall[1] as unknown[];
 
-    expect(queryText).toContain("COALESCE(p.text, '') ~*");
+    expect(queryText).toContain("p.text ILIKE $");
+    expect(queryText).toContain('p.text ~* $');
     expect(queryText).toContain('NOT (');
     expect(queryText).toContain('LIMIT $');
     expect(queryParams.at(-1)).toBe(10000);
