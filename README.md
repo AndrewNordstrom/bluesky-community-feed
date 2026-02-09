@@ -1,101 +1,166 @@
 # Community-Governed Bluesky Feed
 
-A Bluesky custom feed where the community votes on ranking behavior.
+[![Deploy](https://github.com/AndrewNordstrom/bluesky-community-feed/actions/workflows/deploy.yml/badge.svg)](https://github.com/AndrewNordstrom/bluesky-community-feed/actions/workflows/deploy.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node >= 20](https://img.shields.io/badge/Node-%3E%3D20-339933)](https://nodejs.org/)
 
-This project combines:
-- Governance voting for algorithm weights and content rules
-- A scoring pipeline that stores decomposed component scores
-- A feed generator endpoint that serves ranked post URIs
+A production Bluesky custom feed where subscribers democratically vote on ranking behavior (weights + content rules), and the backend applies those decisions in a transparent scoring pipeline.
 
-## Quick Start
+This project supports an NSF research question: can communities meaningfully govern their own algorithms?
 
-1. Install dependencies:
+## Live Deployment
+
+- Feed: [feed.corgi.network](https://feed.corgi.network)
+- Bot account: [@corgi-network.bsky.social](https://bsky.app/profile/corgi-network.bsky.social)
+
+## Core Features
+
+- Community governance on 5 ranking components: `recency`, `engagement`, `bridging`, `source_diversity`, `relevance`
+- Content-rule voting (`include` / `exclude` keywords)
+- Score decomposition persisted per post per epoch (raw + weighted + total)
+- Fast feed serving via Redis snapshots and stable cursors
+- Admin controls, audit log, health dashboard, and transparency endpoints
+- Jetstream ingestion with cursor persistence and reconnect resilience
+
+## Architecture
+
+```text
+GOVERNANCE (Vote UI + APIs) -> epoch weights/content rules
+         |
+         v
+SCORING PIPELINE (scheduled batch) -> post_scores + feed snapshot in Redis
+         |
+         v
+INGESTION (Jetstream -> PostgreSQL) + FEED SERVING (XRPC getFeedSkeleton)
+```
+
+## Tech Stack
+
+- Backend: Node.js 20, TypeScript 5, Fastify 5
+- Data: PostgreSQL 16, Redis 7
+- Frontend: React 19, Vite 7
+- Protocol libs: `@atproto/api`, `@atproto/xrpc-server`
+
+## Quickstart (Local)
+
+### 1. Install dependencies
+
 ```bash
 npm install
 cd web && npm install && cd ..
 ```
-2. Copy environment config:
+
+### 2. Configure environment
+
 ```bash
 cp .env.example .env
 ```
-3. Start local services:
+
+Minimum required variables:
+- `FEEDGEN_SERVICE_DID`
+- `FEEDGEN_PUBLISHER_DID`
+- `FEEDGEN_HOSTNAME`
+- `JETSTREAM_URL`
+- `DATABASE_URL`
+- `REDIS_URL`
+- `BSKY_IDENTIFIER`
+- `BSKY_APP_PASSWORD`
+- `BOT_ADMIN_DIDS`
+
+Use `.env.example` for the full set, defaults, and comments.
+
+### 3. Start local dependencies
+
 ```bash
 docker compose up -d
 ```
-4. Run database migrations:
+
+### 4. Run migrations
+
 ```bash
 npm run migrate
 ```
-5. Build and run:
+
+### 5. Build and run backend
+
 ```bash
 npm run build
 npm run dev
 ```
 
-For the web app:
+### 6. Run frontend (separate terminal)
+
 ```bash
 cd web
 npm run dev
 ```
 
-## Architecture
+## Quality Gates
 
-```text
-GOVERNANCE (voting UI) -> epoch weights/content rules
-    |
-    v
-SCORING PIPELINE (batch) -> post_scores + ranked Redis feed
-    |
-    v
-FEED SERVING (getFeedSkeleton) -> Bluesky clients
+Run before pushing:
+
+```bash
+# backend
+npm run build
+CI=1 npm test -- --run
+
+# frontend
+cd web
+npm run lint
+npm run build
 ```
 
-## Key Paths
+## API Surface (High-Level)
 
-- Backend app: `src/`
-- Governance logic: `src/governance/`
-- Scoring pipeline: `src/scoring/`
-- Feed serving: `src/feed/`
-- Admin routes: `src/admin/routes/`
-- Frontend app: `web/`
+Public:
+- `GET /xrpc/app.bsky.feed.getFeedSkeleton`
+- `GET /xrpc/app.bsky.feed.describeFeedGenerator`
+- `GET /.well-known/did.json`
+- `GET /health`, `GET /health/ready`, `GET /health/live`
 
-## Safety Invariants
+Governance:
+- `/api/governance/auth/*`
+- `/api/governance/vote`
+- `/api/governance/weights/*`
+- `/api/governance/content-rules/*`
+- `/api/governance/epochs/*`
 
-- Every score is decomposed per component (not only `total_score`)
-- Every score row is tagged with `epoch_id`
-- Soft-delete behavior is used for ingestion entities
-- `getFeedSkeleton` does not call external APIs
-- Governance audit log is append-only
+Admin:
+- `/api/admin/*` (governance controls, feed health, scheduler, announcements, audit)
 
-## Documentation
+See source route registration in `src/feed/server.ts`.
 
-- Technical spec: `docs/IMPLEMENTATION_SPEC.md`
-- Admin UX spec: `docs/ADMIN_DASHBOARD_SPEC.md`
-- System overview: `docs/SYSTEM_OVERVIEW.md`
+## Security and Integrity Invariants
+
+- Score decomposition is always persisted; never store only `total_score`
+- Scores are always tagged with `epoch_id`
+- Governance audit log is append-only (DB-enforced)
+- Weight sums are validated (DB/API/UI)
+- `getFeedSkeleton` avoids external API calls and serves from local data
+- Feed JWT handling is verification-based and availability-safe
+
+## Deployment and Operations
+
 - Deployment guide: `docs/DEPLOYMENT.md`
+- Operations runbook: `docs/OPS_RUNBOOK.md`
 - Security guide: `docs/SECURITY.md`
 
-## Plan V1 Hardening Tracker
+## Documentation Index
 
-Execution branch: `codex/no-drift-hardening-v1`
-
-- [x] Phase 0 baseline captured
-- [ ] Phase 1 critical integrity fixes
-- [ ] Phase 2 perimeter and validation hardening
-- [ ] Phase 3 runtime resilience
-- [ ] Phase 4 ops correctness fixes
-- [ ] Phase 5 frontend quality/security cleanup
-
-Baseline gate snapshot (Phase 0):
-- Backend build: pass (`npm run build`)
-- Backend tests: pass (`CI=1 npm test -- --run`)
-- Web build: pass (`cd web && npm run build`)
-- Web lint: fail with pre-existing issues (`cd web && npm run lint`)
+- System overview: `docs/SYSTEM_OVERVIEW.md`
+- Full implementation spec: `docs/IMPLEMENTATION_SPEC.md`
+- Admin dashboard spec: `docs/ADMIN_DASHBOARD_SPEC.md`
+- Stability and test guidance: `docs/STABILITY_TEST.md`
+- Contributor guide: `CONTRIBUTING.md`
 
 ## Contributing
 
-See `CONTRIBUTING.md`.
+PRs are welcome. Read `CONTRIBUTING.md` and keep changes aligned to project invariants and quality gates.
+
+## Citation
+
+If you use this system in research or demos, cite the repository URL and commit SHA used for your analysis.
 
 ## License
 
-MIT. See `LICENSE`.
+MIT — see `LICENSE`.

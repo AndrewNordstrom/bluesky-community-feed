@@ -194,3 +194,4 @@ sudo systemctl restart bluesky-feed
 - Only expose `80/443`.
 - Rotate app passwords and admin DID list as needed.
 - Watch `/health` and systemd logs.
+- Use `docs/OPS_RUNBOOK.md` for day-2 operations, retention, alerting, and incident response.
