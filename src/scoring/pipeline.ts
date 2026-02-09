@@ -32,10 +32,13 @@ import {
   filterPosts,
   hasActiveContentRules,
 } from '../governance/content-filter.js';
+import type { ContentRules } from '../governance/governance.types.js';
 import { updateScoringStatus } from '../admin/status-tracker.js';
 
 // Maximum time allowed for a single scoring run (2 minutes)
 const SCORING_TIMEOUT_MS = 120_000;
+const SCORING_CANDIDATE_LIMIT = 10_000;
+const SQL_BOUNDARY_KEYWORD_PATTERN = /^[a-z0-9][a-z0-9\s-]*$/;
 
 // Track last successful run for health checks
 let lastSuccessfulRunAt: Date | null = null;
@@ -82,16 +85,26 @@ async function runScoringPipelineInternal(): Promise<void> {
 
     logger.info({ epochId: epoch.id }, 'Using governance epoch');
 
-    // 2. Get all non-deleted posts in the scoring window
-    const allPosts = await getPostsForScoring();
-    logger.info({ postCount: allPosts.length, epochId: epoch.id }, 'Posts fetched for scoring');
+    // 2. Load content rules and prefilter candidate posts in SQL.
+    // SQL prefilter keeps a larger, relevant candidate pool before the hard LIMIT.
+    const contentRules = await getCurrentContentRules();
+    const allPosts = await getPostsForScoring(contentRules);
+    logger.info(
+      {
+        postCount: allPosts.length,
+        epochId: epoch.id,
+        includeKeywords: contentRules.includeKeywords.length,
+        excludeKeywords: contentRules.excludeKeywords.length,
+      },
+      'Candidate posts fetched for scoring'
+    );
 
     if (allPosts.length === 0) {
       logger.warn({ epochId: epoch.id }, 'No posts to score in the window, clearing feed');
     }
 
-    // 2b. Apply content filtering based on governance rules
-    const contentRules = await getCurrentContentRules();
+    // 2b. Apply content filtering as a backup guard.
+    // SQL prefilter should handle most cases; JS filter catches any regex edge cases.
     let posts = allPosts;
 
     if (hasActiveContentRules(contentRules)) {
@@ -101,13 +114,14 @@ async function runScoringPipelineInternal(): Promise<void> {
       logger.info(
         {
           epochId: epoch.id,
-          totalPosts: allPosts.length,
+          candidatePosts: allPosts.length,
           passedFilter: posts.length,
           filteredOut: filterResult.filtered.length,
           includeKeywords: contentRules.includeKeywords.length,
           excludeKeywords: contentRules.excludeKeywords.length,
+          sqlPrefiltered: true,
         },
-        'Content filtering applied'
+        'Content filtering backup applied'
       );
 
       if (posts.length === 0) {
@@ -164,11 +178,74 @@ async function getActiveEpoch(): Promise<GovernanceEpoch | null> {
 }
 
 /**
- * Get all posts within the scoring window that haven't been deleted.
+ * Build a case-insensitive SQL regex for keyword prefiltering.
+ * ASCII keywords use explicit boundaries. Symbol/non-ASCII terms fall back to literal substring regex.
  */
-async function getPostsForScoring(): Promise<PostForScoring[]> {
+function escapeSqlRegex(value: string): string {
+  return value.replace(/[\\.^$|()?*+\[\]{}]/g, '\\$&');
+}
+
+function toSqlKeywordRegex(keyword: string): string {
+  const normalized = keyword.trim().toLowerCase();
+  if (!normalized) {
+    return '';
+  }
+
+  if (!SQL_BOUNDARY_KEYWORD_PATTERN.test(normalized)) {
+    return escapeSqlRegex(normalized);
+  }
+
+  const phrasePattern = normalized
+    .split(/\s+/)
+    .filter((part) => part.length > 0)
+    .map(escapeSqlRegex)
+    .join('[[:space:]_-]+');
+
+  return `(^|[^[:alnum:]])${phrasePattern}($|[^[:alnum:]])`;
+}
+
+/**
+ * Get posts within the scoring window.
+ * Applies SQL keyword prefiltering so LIMIT is taken from matching posts.
+ */
+async function getPostsForScoring(contentRules: ContentRules): Promise<PostForScoring[]> {
   const cutoffMs = config.SCORING_WINDOW_HOURS * 60 * 60 * 1000;
   const cutoff = new Date(Date.now() - cutoffMs);
+
+  const clauses: string[] = ['p.deleted = FALSE', 'p.created_at > $1'];
+  const params: unknown[] = [cutoff.toISOString()];
+
+  if (contentRules.includeKeywords.length > 0) {
+    const includePredicates: string[] = [];
+    for (const keyword of contentRules.includeKeywords) {
+      const regex = toSqlKeywordRegex(keyword);
+      if (!regex) {
+        continue;
+      }
+      params.push(regex);
+      includePredicates.push(`COALESCE(p.text, '') ~* $${params.length}`);
+    }
+    if (includePredicates.length > 0) {
+      clauses.push(`(${includePredicates.join(' OR ')})`);
+    }
+  }
+
+  if (contentRules.excludeKeywords.length > 0) {
+    const excludePredicates: string[] = [];
+    for (const keyword of contentRules.excludeKeywords) {
+      const regex = toSqlKeywordRegex(keyword);
+      if (!regex) {
+        continue;
+      }
+      params.push(regex);
+      excludePredicates.push(`COALESCE(p.text, '') ~* $${params.length}`);
+    }
+    if (excludePredicates.length > 0) {
+      clauses.push(`NOT (${excludePredicates.join(' OR ')})`);
+    }
+  }
+
+  params.push(SCORING_CANDIDATE_LIMIT);
 
   const result = await db.query(
     `SELECT p.uri, p.cid, p.author_did, p.text, p.reply_root, p.reply_parent,
@@ -178,11 +255,10 @@ async function getPostsForScoring(): Promise<PostForScoring[]> {
             COALESCE(pe.reply_count, 0) as reply_count
      FROM posts p
      LEFT JOIN post_engagement pe ON p.uri = pe.post_uri
-     WHERE p.deleted = FALSE
-       AND p.created_at > $1
+     WHERE ${clauses.join('\n       AND ')}
      ORDER BY p.created_at DESC
-     LIMIT 10000`,
-    [cutoff.toISOString()]
+     LIMIT $${params.length}`,
+    params
   );
 
   return result.rows.map(toPostForScoring);

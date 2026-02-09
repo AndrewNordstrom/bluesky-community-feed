@@ -158,4 +158,27 @@ describe('scoring pipeline empty-feed Redis updates', () => {
       })
     );
   });
+
+  it('builds SQL keyword prefilter so LIMIT applies to matching posts', async () => {
+    dbQueryMock
+      .mockResolvedValueOnce({ rows: [makeEpochRow()] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    getCurrentContentRulesMock.mockResolvedValue({
+      includeKeywords: ['atproto', 'foss'],
+      excludeKeywords: ['nsfw', 'porn'],
+    });
+    hasActiveContentRulesMock.mockReturnValue(false);
+
+    await runScoringPipeline();
+
+    const postsQueryCall = dbQueryMock.mock.calls[1];
+    const queryText = String(postsQueryCall[0]);
+    const queryParams = postsQueryCall[1] as unknown[];
+
+    expect(queryText).toContain("COALESCE(p.text, '') ~*");
+    expect(queryText).toContain('NOT (');
+    expect(queryText).toContain('LIMIT $');
+    expect(queryParams.at(-1)).toBe(10000);
+  });
 });
