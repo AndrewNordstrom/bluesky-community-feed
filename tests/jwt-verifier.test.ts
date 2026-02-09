@@ -21,7 +21,16 @@ vi.mock('@atproto/xrpc-server', () => ({
   AuthRequiredError: MockAuthRequiredError,
 }));
 
+import { config } from '../src/config.js';
 import { verifyRequesterJwt } from '../src/feed/jwt-verifier.js';
+
+const audience = config.FEED_JWT_AUDIENCE.trim() || config.FEEDGEN_SERVICE_DID;
+
+function makeJwt(payload: Record<string, unknown>): string {
+  const header = Buffer.from(JSON.stringify({ alg: 'ES256K', typ: 'JWT' })).toString('base64url');
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  return `${header}.${body}.signature`;
+}
 
 describe('verifyRequesterJwt', () => {
   beforeEach(() => {
@@ -29,22 +38,34 @@ describe('verifyRequesterJwt', () => {
   });
 
   it('returns DID for a valid JWT payload', async () => {
-    verifyJwtMock.mockResolvedValue({
+    const token = makeJwt({
       iss: 'did:plc:validissuer123',
-      aud: 'did:plc:service',
+      aud: audience,
       exp: Math.floor(Date.now() / 1000) + 60,
     });
 
-    const result = await verifyRequesterJwt('valid.jwt.token');
+    verifyJwtMock.mockResolvedValue({
+      iss: 'did:plc:validissuer123',
+      aud: audience,
+      exp: Math.floor(Date.now() / 1000) + 60,
+    });
+
+    const result = await verifyRequesterJwt(token);
     expect(result).toEqual({ did: 'did:plc:validissuer123' });
   });
 
   it('maps bad signature errors to an explicit reason', async () => {
+    const token = makeJwt({
+      iss: 'did:plc:validissuer123',
+      aud: audience,
+      exp: Math.floor(Date.now() / 1000) + 60,
+    });
+
     verifyJwtMock.mockRejectedValue(
       new MockAuthRequiredError('could not verify jwt signature', 'BadJwtSignature')
     );
 
-    const result = await verifyRequesterJwt('invalid.signature.token');
+    const result = await verifyRequesterJwt(token);
     expect(result).toEqual({
       did: null,
       reason: 'BadJwtSignature',
@@ -52,13 +73,19 @@ describe('verifyRequesterJwt', () => {
   });
 
   it('rejects issuers outside the configured allowlist', async () => {
-    verifyJwtMock.mockResolvedValue({
+    const token = makeJwt({
       iss: 'did:example:unsupported',
-      aud: 'did:plc:service',
+      aud: audience,
       exp: Math.floor(Date.now() / 1000) + 60,
     });
 
-    const result = await verifyRequesterJwt('disallowed.issuer.token');
+    verifyJwtMock.mockResolvedValue({
+      iss: 'did:example:unsupported',
+      aud: audience,
+      exp: Math.floor(Date.now() / 1000) + 60,
+    });
+
+    const result = await verifyRequesterJwt(token);
     expect(result).toEqual({
       did: null,
       reason: 'issuer_not_allowed',
@@ -66,9 +93,15 @@ describe('verifyRequesterJwt', () => {
   });
 
   it('maps expired JWT errors correctly', async () => {
+    const token = makeJwt({
+      iss: 'did:plc:validissuer123',
+      aud: audience,
+      exp: Math.floor(Date.now() / 1000) + 60,
+    });
+
     verifyJwtMock.mockRejectedValue(new MockAuthRequiredError('jwt expired', 'JwtExpired'));
 
-    const result = await verifyRequesterJwt('expired.jwt.token');
+    const result = await verifyRequesterJwt(token);
     expect(result).toEqual({
       did: null,
       reason: 'JwtExpired',

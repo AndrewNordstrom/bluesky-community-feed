@@ -76,14 +76,10 @@ export function registerFeedSkeleton(app: FastifyInstance): void {
         });
       }
 
-      // Extract requester DID from JWT (optional: for subscriber tracking)
-      const requesterDid = await verifyRequesterDid(request);
-      if (requesterDid) {
-        // Track subscriber (fire-and-forget, don't block response)
-        trackSubscriber(requesterDid).catch(() => {
-          // Ignore errors - don't fail feed request for tracking
-        });
-      }
+      // Subscriber tracking stays best-effort and must never block feed serving.
+      trackSubscriberFromRequest(request).catch(() => {
+        // Ignore auth/tracking failures - never fail feed requests
+      });
 
       let postUris: string[];
       let offset: number;
@@ -174,6 +170,15 @@ export function registerFeedSkeleton(app: FastifyInstance): void {
       });
     }
   );
+}
+
+async function trackSubscriberFromRequest(request: FastifyRequest): Promise<void> {
+  const requesterDid = await verifyRequesterDid(request);
+  if (!requesterDid) {
+    return;
+  }
+
+  await trackSubscriber(requesterDid);
 }
 
 /**

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../../api/admin';
 import type { AuditEntry } from '../../api/admin';
 import { formatActionName, formatRelative, truncateDid } from '../../utils/format';
@@ -134,7 +134,7 @@ export function AuditLog() {
   const [filter, setFilter] = useState({ action: '', limit: 50 });
   const [isLoading, setIsLoading] = useState(true);
 
-  async function fetchLog() {
+  const fetchLog = useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await adminApi.getAuditLog(filter);
@@ -147,11 +147,11 @@ export function AuditLog() {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [filter]);
 
   useEffect(() => {
     void fetchLog();
-  }, [filter.action, filter.limit]);
+  }, [fetchLog]);
 
   const transitionImpacts = useMemo(() => {
     return entries

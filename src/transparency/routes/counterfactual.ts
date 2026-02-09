@@ -25,6 +25,33 @@ const CounterfactualQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(500).default(50),
 });
 
+interface CurrentScoringRunValue {
+  run_id?: unknown;
+  epoch_id?: unknown;
+}
+
+async function getCurrentScoringRunScope(): Promise<{ runId: string; epochId: number } | null> {
+  const result = await db.query<{ value: CurrentScoringRunValue }>(
+    `SELECT value
+     FROM system_status
+     WHERE key = 'current_scoring_run'`
+  );
+
+  const value = result.rows[0]?.value;
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  if (typeof value.run_id !== 'string' || typeof value.epoch_id !== 'number') {
+    return null;
+  }
+
+  return {
+    runId: value.run_id,
+    epochId: value.epoch_id,
+  };
+}
+
 export function registerCounterfactualRoute(app: FastifyInstance): void {
   app.get(
     '/api/transparency/counterfactual',
@@ -67,10 +94,19 @@ export function registerCounterfactualRoute(app: FastifyInstance): void {
 
         const epoch = epochResult.rows[0];
         const epochId = epoch.id;
+        const runScope = await getCurrentScoringRunScope();
 
         // Fetch top posts with raw scores from current epoch
         // We fetch more than limit to compare rankings properly
         const fetchLimit = Math.min(limit * 2, 1000);
+
+        const postsParams: unknown[] = [epochId];
+        let runScopeClause = '';
+        if (runScope && runScope.epochId === epochId) {
+          postsParams.push(runScope.runId);
+          runScopeClause = `AND component_details->>'run_id' = $${postsParams.length}`;
+        }
+        postsParams.push(fetchLimit);
 
         const postsResult = await db.query(
           `
@@ -84,10 +120,11 @@ export function registerCounterfactualRoute(app: FastifyInstance): void {
             total_score
           FROM post_scores
           WHERE epoch_id = $1
+            ${runScopeClause}
           ORDER BY total_score DESC
-          LIMIT $2
+          LIMIT $${postsParams.length}
           `,
-          [epochId, fetchLimit]
+          postsParams
         );
 
         if (postsResult.rows.length === 0) {

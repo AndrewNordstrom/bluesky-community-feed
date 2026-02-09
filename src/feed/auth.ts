@@ -14,7 +14,27 @@
 
 import { FastifyRequest } from 'fastify';
 import { logger } from '../lib/logger.js';
-import { verifyRequesterJwt } from './jwt-verifier.js';
+import { verifyRequesterJwt, VerificationFailure } from './jwt-verifier.js';
+
+const REQUESTER_JWT_VERIFY_TIMEOUT_MS = 50;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      resolve(fallback);
+    }, timeoutMs);
+
+    promise
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        resolve(fallback);
+      });
+  });
+}
 
 /**
  * Verify the requester DID and return it.
@@ -30,7 +50,11 @@ export async function verifyRequesterDid(request: FastifyRequest): Promise<strin
   }
 
   const token = authHeader.slice('Bearer '.length);
-  const result = await verifyRequesterJwt(token);
+  const result = await withTimeout(
+    verifyRequesterJwt(token),
+    REQUESTER_JWT_VERIFY_TIMEOUT_MS,
+    { did: null, reason: 'jwt_verification_timeout' } as VerificationFailure
+  );
   if (result.did === null) {
     logger.warn({ reason: result.reason }, 'Rejected requester JWT for feed request');
     return null;

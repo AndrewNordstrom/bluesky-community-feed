@@ -33,6 +33,19 @@ interface RankChange {
   change: number | null;
 }
 
+interface VoteCounts {
+  total: number;
+  weightEligible: number;
+}
+
+const WEIGHT_VOTE_ELIGIBILITY_FILTER = `
+  recency_weight IS NOT NULL
+  AND engagement_weight IS NOT NULL
+  AND bridging_weight IS NOT NULL
+  AND source_diversity_weight IS NOT NULL
+  AND relevance_weight IS NOT NULL
+`;
+
 function toFiniteNumber(value: unknown): number {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : 0;
@@ -44,6 +57,22 @@ function toFiniteNumber(value: unknown): number {
   }
 
   return 0;
+}
+
+async function getVoteCountsForEpoch(queryable: SqlQueryable, epochId: number): Promise<VoteCounts> {
+  const result = await queryable.query<{ total: string; weight_eligible: string }>(
+    `SELECT
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE ${WEIGHT_VOTE_ELIGIBILITY_FILTER})::int AS weight_eligible
+     FROM governance_votes
+     WHERE epoch_id = $1`,
+    [epochId]
+  );
+
+  return {
+    total: parseInt(result.rows[0]?.total ?? '0', 10),
+    weightEligible: parseInt(result.rows[0]?.weight_eligible ?? '0', 10),
+  };
 }
 
 async function fetchTopRankedPosts(
@@ -252,15 +281,13 @@ export async function closeCurrentEpochAndCreateNext(): Promise<number> {
     const currentEpochId = currentEpoch.id;
 
     // 2. Check vote count
-    const voteCountResult = await client.query(
-      `SELECT COUNT(*) as count FROM governance_votes WHERE epoch_id = $1`,
-      [currentEpochId]
-    );
-    const voteCount = parseInt(voteCountResult.rows[0].count);
+    const voteCounts = await getVoteCountsForEpoch(client, currentEpochId);
+    const voteCount = voteCounts.total;
+    const weightVoteCount = voteCounts.weightEligible;
 
-    if (voteCount < config.GOVERNANCE_MIN_VOTES) {
+    if (weightVoteCount < config.GOVERNANCE_MIN_VOTES) {
       throw new Error(
-        `Insufficient votes: ${voteCount} < ${config.GOVERNANCE_MIN_VOTES} required`
+        `Insufficient weight votes: ${weightVoteCount} < ${config.GOVERNANCE_MIN_VOTES} required`
       );
     }
 
@@ -305,8 +332,8 @@ export async function closeCurrentEpochAndCreateNext(): Promise<number> {
           include_keywords: contentRules.includeKeywords,
           exclude_keywords: contentRules.excludeKeywords,
         }),
-        voteCount,
-        `Weights updated from epoch ${currentEpochId} based on ${voteCount} community votes.`,
+        weightVoteCount,
+        `Weights updated from epoch ${currentEpochId} based on ${weightVoteCount} weight votes (${voteCount} total votes).`,
       ]
     );
 
@@ -329,7 +356,8 @@ export async function closeCurrentEpochAndCreateNext(): Promise<number> {
         JSON.stringify({
           old_weights: oldWeights,
           new_weights: newWeights,
-          vote_count: voteCount,
+          vote_count: weightVoteCount,
+          total_vote_count: voteCount,
           new_epoch_id: newEpochId,
         }),
       ]
@@ -345,7 +373,8 @@ export async function closeCurrentEpochAndCreateNext(): Promise<number> {
           weights: newWeights,
           content_rules: contentRules,
           derived_from_epoch: currentEpochId,
-          vote_count: voteCount,
+          vote_count: weightVoteCount,
+          total_vote_count: voteCount,
         }),
       ]
     );
@@ -371,7 +400,8 @@ export async function closeCurrentEpochAndCreateNext(): Promise<number> {
       {
         closedEpoch: currentEpochId,
         newEpoch: newEpochId,
-        voteCount,
+        voteCount: weightVoteCount,
+        totalVoteCount: voteCount,
         oldWeights,
         newWeights,
         contentRules: {
@@ -409,6 +439,7 @@ export async function getCurrentEpochStatus(): Promise<{
   epochId: number;
   status: string;
   voteCount: number;
+  totalVoteCount: number;
   minVotesRequired: number;
   canTransition: boolean;
 } | null> {
@@ -424,16 +455,14 @@ export async function getCurrentEpochStatus(): Promise<{
 
   const epoch = result.rows[0];
 
-  const voteCountResult = await db.query(
-    `SELECT COUNT(*) as count FROM governance_votes WHERE epoch_id = $1`,
-    [epoch.id]
-  );
-  const voteCount = parseInt(voteCountResult.rows[0].count);
+  const voteCounts = await getVoteCountsForEpoch(db, epoch.id);
+  const voteCount = voteCounts.weightEligible;
 
   return {
     epochId: epoch.id,
     status: epoch.status,
     voteCount,
+    totalVoteCount: voteCounts.total,
     minVotesRequired: config.GOVERNANCE_MIN_VOTES,
     canTransition: voteCount >= config.GOVERNANCE_MIN_VOTES,
   };
@@ -496,11 +525,9 @@ export async function forceEpochTransition(): Promise<number> {
     const beforeRanking = await fetchTopRankedPosts(client, currentEpochId, 100);
 
     // Get vote count (for logging, not validation)
-    const voteCountResult = await client.query(
-      `SELECT COUNT(*) as count FROM governance_votes WHERE epoch_id = $1`,
-      [currentEpochId]
-    );
-    const voteCount = parseInt(voteCountResult.rows[0].count);
+    const voteCounts = await getVoteCountsForEpoch(client, currentEpochId);
+    const voteCount = voteCounts.total;
+    const weightVoteCount = voteCounts.weightEligible;
 
     // NOTE: Skipping vote count check - this is a forced transition
 
@@ -550,8 +577,8 @@ export async function forceEpochTransition(): Promise<number> {
           include_keywords: contentRules.includeKeywords,
           exclude_keywords: contentRules.excludeKeywords,
         }),
-        voteCount,
-        `FORCED transition from epoch ${currentEpochId} with ${voteCount} votes.`,
+        weightVoteCount,
+        `FORCED transition from epoch ${currentEpochId} with ${weightVoteCount} weight votes (${voteCount} total votes).`,
       ]
     );
 
@@ -574,7 +601,8 @@ export async function forceEpochTransition(): Promise<number> {
         JSON.stringify({
           old_weights: oldWeights,
           new_weights: newWeights,
-          vote_count: voteCount,
+          vote_count: weightVoteCount,
+          total_vote_count: voteCount,
           new_epoch_id: newEpochId,
           forced: true,
         }),
@@ -591,7 +619,8 @@ export async function forceEpochTransition(): Promise<number> {
           weights: newWeights,
           content_rules: contentRules,
           derived_from_epoch: currentEpochId,
-          vote_count: voteCount,
+          vote_count: weightVoteCount,
+          total_vote_count: voteCount,
           forced: true,
         }),
       ]
@@ -622,7 +651,8 @@ export async function forceEpochTransition(): Promise<number> {
       {
         closedEpoch: currentEpochId,
         newEpoch: newEpochId,
-        voteCount,
+        voteCount: weightVoteCount,
+        totalVoteCount: voteCount,
         oldWeights,
         newWeights,
         contentRules: {

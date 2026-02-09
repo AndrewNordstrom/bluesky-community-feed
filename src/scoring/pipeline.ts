@@ -15,6 +15,7 @@ import { db } from '../db/client.js';
 import { redis } from '../db/redis.js';
 import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
+import { randomUUID } from 'crypto';
 import { scoreRecency } from './components/recency.js';
 import { scoreEngagement } from './components/engagement.js';
 import { scoreBridging } from './components/bridging.js';
@@ -82,8 +83,9 @@ async function runScoringPipelineInternal(): Promise<void> {
       logger.error('No active governance epoch found. Cannot score.');
       return;
     }
+    const runId = randomUUID();
 
-    logger.info({ epochId: epoch.id }, 'Using governance epoch');
+    logger.info({ epochId: epoch.id, runId }, 'Using governance epoch');
 
     // 2. Load content rules and prefilter candidate posts in SQL.
     // SQL prefilter keeps a larger, relevant candidate pool before the hard LIMIT.
@@ -132,13 +134,13 @@ async function runScoringPipelineInternal(): Promise<void> {
     logger.info({ postCount: posts.length, epochId: epoch.id }, 'Scoring filtered posts');
 
     // 3. Score each post
-    const scored = await scoreAllPosts(posts, epoch);
+    const scored = await scoreAllPosts(posts, epoch, runId);
 
     // 4. Sort by total score (descending)
     scored.sort((a, b) => b.score.total - a.score.total);
 
     // 5. Write top posts to Redis for fast feed serving
-    await writeToRedis(scored, epoch.id);
+    await writeToRedis(scored, epoch.id, runId);
 
     const elapsed = Date.now() - startTime;
     logger.info(
@@ -156,10 +158,35 @@ async function runScoringPipelineInternal(): Promise<void> {
       posts_scored: posts.length,
       posts_filtered: allPosts.length - posts.length,
     });
+    await updateCurrentRunScope(runId, epoch.id, elapsed, posts.length, allPosts.length - posts.length);
   } catch (err) {
     logger.error({ err }, 'Scoring pipeline failed');
     throw err;
   }
+}
+
+async function updateCurrentRunScope(
+  runId: string,
+  epochId: number,
+  durationMs: number,
+  postsScored: number,
+  postsFiltered: number
+): Promise<void> {
+  await db.query(
+    `INSERT INTO system_status (key, value, updated_at)
+     VALUES ('current_scoring_run', $1, NOW())
+     ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
+    [
+      JSON.stringify({
+        run_id: runId,
+        epoch_id: epochId,
+        timestamp: new Date().toISOString(),
+        duration_ms: durationMs,
+        posts_scored: postsScored,
+        posts_filtered: postsFiltered,
+      }),
+    ]
+  );
 }
 
 /**
@@ -305,7 +332,8 @@ async function getPostsForScoring(contentRules: ContentRules): Promise<PostForSc
  */
 async function scoreAllPosts(
   posts: PostForScoring[],
-  epoch: GovernanceEpoch
+  epoch: GovernanceEpoch,
+  runId: string
 ): Promise<ScoredPost[]> {
   const scored: ScoredPost[] = [];
   const authorCounts = createAuthorCountMap();
@@ -316,7 +344,7 @@ async function scoreAllPosts(
       scored.push(scoredPost);
 
       // Store to database (GOLDEN RULE: all components, weights, and weighted values)
-      await storeScore(scoredPost, epoch);
+      await storeScore(scoredPost, epoch, runId);
     } catch (err) {
       // Log and continue - don't fail entire pipeline for one post
       logger.error({ err, uri: post.uri }, 'Failed to score post');
@@ -383,7 +411,11 @@ async function scorePost(
  * Store the decomposed score to the database.
  * GOLDEN RULE: Store raw, weight, AND weighted values for every component.
  */
-async function storeScore(scoredPost: ScoredPost, epoch: GovernanceEpoch): Promise<void> {
+async function storeScore(
+  scoredPost: ScoredPost,
+  epoch: GovernanceEpoch,
+  runId: string
+): Promise<void> {
   const { uri } = scoredPost;
   const { raw, weights, weighted, total } = scoredPost.score;
 
@@ -423,7 +455,7 @@ async function storeScore(scoredPost: ScoredPost, epoch: GovernanceEpoch): Promi
       weighted.sourceDiversity,
       weighted.relevance,
       total,
-      JSON.stringify({}), // component_details: placeholder for future explainability data
+      JSON.stringify({ run_id: runId }),
     ]
   );
 }
@@ -431,7 +463,7 @@ async function storeScore(scoredPost: ScoredPost, epoch: GovernanceEpoch): Promi
 /**
  * Write the ranked posts to Redis for fast feed serving.
  */
-async function writeToRedis(scored: ScoredPost[], epochId: number): Promise<void> {
+async function writeToRedis(scored: ScoredPost[], epochId: number, runId: string): Promise<void> {
   // Take top N posts for the feed
   const topPosts = scored.slice(0, config.FEED_MAX_POSTS);
 
@@ -448,6 +480,7 @@ async function writeToRedis(scored: ScoredPost[], epochId: number): Promise<void
 
   // Store metadata
   pipeline.set('feed:epoch', epochId.toString());
+  pipeline.set('feed:run_id', runId);
   pipeline.set('feed:updated_at', new Date().toISOString());
   pipeline.set('feed:count', topPosts.length.toString());
 

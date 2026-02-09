@@ -15,6 +15,33 @@ import { db } from '../../db/client.js';
 import { logger } from '../../lib/logger.js';
 import type { FeedStats } from '../transparency.types.js';
 
+interface CurrentScoringRunValue {
+  run_id?: unknown;
+  epoch_id?: unknown;
+}
+
+async function getCurrentScoringRunScope(): Promise<{ runId: string; epochId: number } | null> {
+  const result = await db.query<{ value: CurrentScoringRunValue }>(
+    `SELECT value
+     FROM system_status
+     WHERE key = 'current_scoring_run'`
+  );
+
+  const value = result.rows[0]?.value;
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  if (typeof value.run_id !== 'string' || typeof value.epoch_id !== 'number') {
+    return null;
+  }
+
+  return {
+    runId: value.run_id,
+    epochId: value.epoch_id,
+  };
+}
+
 export function registerFeedStatsRoute(app: FastifyInstance): void {
   app.get('/api/transparency/stats', async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -32,8 +59,16 @@ export function registerFeedStatsRoute(app: FastifyInstance): void {
 
       const epoch = epochResult.rows[0];
       const epochId = epoch.id;
+      const runScope = await getCurrentScoringRunScope();
 
       // Aggregate metrics for current epoch
+      const statsParams: unknown[] = [epochId];
+      let runScopeClause = '';
+      if (runScope && runScope.epochId === epochId) {
+        statsParams.push(runScope.runId);
+        runScopeClause = `AND ps.component_details->>'run_id' = $${statsParams.length}`;
+      }
+
       const statsResult = await db.query(
         `
         SELECT
@@ -46,8 +81,9 @@ export function registerFeedStatsRoute(app: FastifyInstance): void {
         FROM post_scores ps
         JOIN posts p ON ps.post_uri = p.uri
         WHERE ps.epoch_id = $1
+          ${runScopeClause}
         `,
-        [epochId]
+        statsParams
       );
 
       // Vote count for current epoch

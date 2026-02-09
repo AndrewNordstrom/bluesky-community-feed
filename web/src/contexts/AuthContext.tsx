@@ -1,22 +1,23 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { authApi } from '../api/client';
-
-interface AuthContextType {
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  userDid: string | null;
-  userHandle: string | null;
-  login: (handle: string, appPassword: string) => Promise<void>;
-  logout: () => Promise<void>;
-  checkSession: () => Promise<void>;
-  error: string | null;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+import { AuthContext } from './auth-context';
+import type { AuthContextType } from './auth-context';
 
 interface AuthProviderProps {
   children: ReactNode;
+}
+
+function extractErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    const candidate = error as {
+      response?: { data?: { message?: string } };
+      message?: string;
+    };
+    return candidate.response?.data?.message ?? candidate.message ?? fallback;
+  }
+
+  return fallback;
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
@@ -42,7 +43,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUserDid(session.did);
       setUserHandle(session.handle);
       setError(null);
-    } catch (err) {
+    } catch {
       // Session invalid or expired
       localStorage.removeItem('accessJwt');
       localStorage.removeItem('userDid');
@@ -70,9 +71,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setIsAuthenticated(true);
       setUserDid(response.did);
       setUserHandle(response.handle);
-    } catch (err: any) {
-      const message =
-        err.response?.data?.message || err.message || 'Authentication failed';
+    } catch (err: unknown) {
+      const message = extractErrorMessage(err, 'Authentication failed');
       setError(message);
       throw new Error(message);
     } finally {
@@ -85,7 +85,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     try {
       await authApi.logout();
-    } catch (err) {
+    } catch {
       // Ignore logout errors
     }
 
@@ -118,12 +118,4 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth(): AuthContextType {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
 }

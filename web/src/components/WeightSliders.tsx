@@ -44,13 +44,6 @@ export function WeightSliders({ initialWeights, onChange, disabled = false }: We
     initialWeights ?? { ...DEFAULT_WEIGHTS }
   );
 
-  // Update weights when initialWeights changes
-  useEffect(() => {
-    if (initialWeights) {
-      setWeights(initialWeights);
-    }
-  }, [initialWeights]);
-
   /**
    * Handle slider change with linked adjustment.
    *

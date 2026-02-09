@@ -13,7 +13,8 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../db/client.js';
 import { getAdminDid } from '../../auth/admin.js';
-import { forceEpochTransition } from '../../governance/epoch-manager.js';
+import { config } from '../../config.js';
+import { forceEpochTransition, triggerEpochTransition } from '../../governance/epoch-manager.js';
 import { logger } from '../../lib/logger.js';
 
 const UpdateEpochSchema = z.object({
@@ -171,7 +172,15 @@ export function registerEpochRoutes(app: FastifyInstance): void {
     // Get current epoch info before transition
     const current = await db.query(`
       SELECT id,
-        (SELECT COUNT(*) FROM governance_votes WHERE epoch_id = governance_epochs.id) as vote_count
+        (SELECT COUNT(*)::int FROM governance_votes WHERE epoch_id = governance_epochs.id) as vote_count,
+        (SELECT COUNT(*)::int
+         FROM governance_votes
+         WHERE epoch_id = governance_epochs.id
+           AND recency_weight IS NOT NULL
+           AND engagement_weight IS NOT NULL
+           AND bridging_weight IS NOT NULL
+           AND source_diversity_weight IS NOT NULL
+           AND relevance_weight IS NOT NULL) as weight_vote_count
       FROM governance_epochs
       WHERE status IN ('active', 'voting')
       ORDER BY id DESC
@@ -184,24 +193,45 @@ export function registerEpochRoutes(app: FastifyInstance): void {
 
     const previousEpochId = current.rows[0].id;
     const voteCount = parseInt(current.rows[0].vote_count, 10);
+    const weightVoteCount = parseInt(current.rows[0].weight_vote_count, 10);
 
     // Check minimum votes unless forcing
-    const minVotes = 5;
-    if (!body.force && voteCount < minVotes) {
+    const minVotes = config.GOVERNANCE_MIN_VOTES;
+    if (!body.force && weightVoteCount < minVotes) {
       return reply.status(400).send({
-        error: `Insufficient votes for transition. Need ${minVotes}, have ${voteCount}. Use force=true to override.`,
+        error: `Insufficient weight votes for transition. Need ${minVotes}, have ${weightVoteCount}. Use force=true to override.`,
       });
     }
 
     try {
-      // Perform transition using existing function
-      const newEpochId = await forceEpochTransition();
+      // Use normal transition unless explicitly forced.
+      let newEpochId: number;
+      if (body.force) {
+        newEpochId = await forceEpochTransition();
+      } else {
+        const transitionResult = await triggerEpochTransition();
+        if (!transitionResult.success || !transitionResult.newEpochId) {
+          return reply.status(400).send({
+            error: transitionResult.error ?? 'Epoch transition failed',
+          });
+        }
+        newEpochId = transitionResult.newEpochId;
+      }
 
       // Log to audit
       await db.query(
         `INSERT INTO governance_audit_log (action, epoch_id, actor_did, details)
          VALUES ('epoch_transition', $1, $2, $3)`,
-        [newEpochId, adminDid, JSON.stringify({ fromEpoch: previousEpochId, forced: body.force, voteCount })]
+        [
+          newEpochId,
+          adminDid,
+          JSON.stringify({
+            fromEpoch: previousEpochId,
+            forced: body.force,
+            voteCount,
+            weightVoteCount,
+          }),
+        ]
       );
 
       logger.info(
@@ -220,6 +250,7 @@ export function registerEpochRoutes(app: FastifyInstance): void {
           status: newEpoch.rows[0].status,
         },
         voteCount,
+        weightVoteCount,
       });
     } catch (err) {
       logger.error({ err }, 'Epoch transition failed');

@@ -9,6 +9,8 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../db/client.js';
 import { redis } from '../../db/redis.js';
+import { requireAdmin } from '../../auth/admin.js';
+import { config } from '../../config.js';
 import {
   checkContentRules,
   filterPosts,
@@ -16,6 +18,8 @@ import {
 } from '../../governance/content-filter.js';
 
 export function registerDebugRoutes(app: FastifyInstance): void {
+  const preHandler = config.NODE_ENV === 'production' ? requireAdmin : undefined;
+
   /**
    * GET /api/debug/feed-health
    * Returns comprehensive feed health information including:
@@ -24,7 +28,7 @@ export function registerDebugRoutes(app: FastifyInstance): void {
    * - Last scoring run timestamp
    * - Sample post scores
    */
-  app.get('/api/debug/feed-health', async (_request: FastifyRequest, reply: FastifyReply) => {
+  app.get('/api/debug/feed-health', { preHandler }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Get current active epoch
       const epoch = await db.query(
@@ -133,7 +137,7 @@ export function registerDebugRoutes(app: FastifyInstance): void {
    * GET /api/debug/scoring-weights
    * Returns just the current scoring weights (simpler than feed-health).
    */
-  app.get('/api/debug/scoring-weights', async (_request: FastifyRequest, reply: FastifyReply) => {
+  app.get('/api/debug/scoring-weights', { preHandler }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const epoch = await db.query(
         `SELECT id, recency_weight, engagement_weight, bridging_weight,
@@ -175,7 +179,7 @@ export function registerDebugRoutes(app: FastifyInstance): void {
    * GET /api/debug/content-rules
    * Returns current active content rules from cache/DB.
    */
-  app.get('/api/debug/content-rules', async (_request: FastifyRequest, reply: FastifyReply) => {
+  app.get('/api/debug/content-rules', { preHandler }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const rules = await getCurrentContentRules();
       return reply.send({
@@ -218,7 +222,7 @@ export function registerDebugRoutes(app: FastifyInstance): void {
     text: z.string().optional(),
   });
 
-  app.post('/api/debug/test-content-filter', async (request: FastifyRequest, reply: FastifyReply) => {
+  app.post('/api/debug/test-content-filter', { preHandler }, async (request: FastifyRequest, reply: FastifyReply) => {
     const parseResult = TestFilterSchema.safeParse(request.body);
     if (!parseResult.success) {
       return reply.code(400).send({

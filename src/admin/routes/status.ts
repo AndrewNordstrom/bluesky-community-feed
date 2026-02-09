@@ -91,7 +91,7 @@ export function registerStatusRoutes(app: FastifyInstance): void {
     // Get feed size from Redis
     let feedSize = 0;
     try {
-      feedSize = await redis.zcard('feed:ranked');
+      feedSize = await redis.zcard('feed:current');
     } catch {
       // Redis might not be connected
     }

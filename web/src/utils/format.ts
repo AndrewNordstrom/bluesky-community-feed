@@ -10,6 +10,7 @@ export function formatNumber(num: number | null | undefined): string {
 export function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return 'N/A';
   const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return 'N/A';
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -22,6 +23,8 @@ export function formatDate(dateStr: string | null | undefined): string {
 export function formatRelative(dateStr: string | null | undefined): string {
   if (!dateStr) return 'N/A';
   const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return 'N/A';
+
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffSec = Math.floor(diffMs / 1000);
@@ -30,6 +33,17 @@ export function formatRelative(dateStr: string | null | undefined): string {
   const diffDay = Math.floor(diffHour / 24);
 
   if (diffMs < 0) {
+    const futureMs = Math.abs(diffMs);
+    const FUTURE_SKEW_MS = 60 * 1000; // tolerate minor clock drift
+    const MAX_RELATIVE_FUTURE_MS = 24 * 60 * 60 * 1000; // show absolute date for large future offsets
+
+    if (futureMs <= FUTURE_SKEW_MS) {
+      return 'just now';
+    }
+    if (futureMs > MAX_RELATIVE_FUTURE_MS) {
+      return formatDate(dateStr);
+    }
+
     const futureSec = Math.abs(diffSec);
     const futureMin = Math.floor(futureSec / 60);
     const futureHour = Math.floor(futureMin / 60);

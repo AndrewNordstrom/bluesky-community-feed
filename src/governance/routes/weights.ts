@@ -6,8 +6,18 @@
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { z } from 'zod';
 import { db } from '../../db/client.js';
 import { toEpochInfo } from '../governance.types.js';
+
+const HistoryQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+const CompareQuerySchema = z.object({
+  epoch1: z.coerce.number().int().positive(),
+  epoch2: z.coerce.number().int().positive(),
+});
 
 export function registerWeightsRoute(app: FastifyInstance): void {
   /**
@@ -51,8 +61,16 @@ export function registerWeightsRoute(app: FastifyInstance): void {
    * Returns all epochs with their weights (for timeline visualization).
    */
   app.get('/api/governance/weights/history', async (request: FastifyRequest, reply: FastifyReply) => {
-    const query = request.query as { limit?: string };
-    const limit = Math.min(parseInt(query.limit ?? '20'), 100);
+    const parseResult = HistoryQuerySchema.safeParse(request.query);
+    if (!parseResult.success) {
+      return reply.code(400).send({
+        error: 'ValidationError',
+        message: 'Invalid query parameters',
+        details: parseResult.error.issues,
+      });
+    }
+
+    const { limit } = parseResult.data;
 
     const result = await db.query(
       `SELECT * FROM governance_epochs
@@ -94,17 +112,23 @@ export function registerWeightsRoute(app: FastifyInstance): void {
    * Compare weights between two epochs.
    */
   app.get('/api/governance/weights/compare', async (request: FastifyRequest, reply: FastifyReply) => {
-    const query = request.query as { epoch1?: string; epoch2?: string };
-
-    if (!query.epoch1 || !query.epoch2) {
+    const parseResult = CompareQuerySchema.safeParse(request.query);
+    if (!parseResult.success) {
       return reply.code(400).send({
-        error: 'MissingParameters',
-        message: 'Both epoch1 and epoch2 query parameters are required.',
+        error: 'ValidationError',
+        message: 'Invalid query parameters',
+        details: parseResult.error.issues,
       });
     }
 
-    const epoch1Id = parseInt(query.epoch1);
-    const epoch2Id = parseInt(query.epoch2);
+    const { epoch1: epoch1Id, epoch2: epoch2Id } = parseResult.data;
+
+    if (epoch1Id === epoch2Id) {
+      return reply.code(400).send({
+        error: 'ValidationError',
+        message: 'epoch1 and epoch2 must be different values',
+      });
+    }
 
     const result = await db.query(
       `SELECT * FROM governance_epochs WHERE id IN ($1, $2) ORDER BY id`,

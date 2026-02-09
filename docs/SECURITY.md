@@ -2,6 +2,17 @@
 
 This document covers operational and contributor security expectations for this project.
 
+## Active hardening execution note
+
+Current execution plan: "Plan V1 — No-Drift Hardening Execution".
+Current branch: `codex/no-drift-hardening-v1`.
+
+Phase 0 baseline recorded before functional changes:
+- Backend build: pass
+- Backend tests: pass
+- Web build: pass
+- Web lint: failing due to existing frontend lint debt (scheduled for Phase 5)
+
 ## Threat model highlights
 
 - Governance integrity is critical: voting and epoch transitions must be hard to manipulate.

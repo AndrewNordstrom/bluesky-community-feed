@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { EpochTimeline } from '../components/EpochTimeline';
 import { ScoreRadar } from '../components/ScoreRadar';
 import { HistorySkeleton } from '../components/Skeleton';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/useAuth';
 import { useAdminStatus } from '../hooks/useAdminStatus';
 import { transparencyApi } from '../api/client';
 import type { EpochResponse, AuditLogEntry } from '../api/client';
@@ -36,6 +36,18 @@ const WEIGHT_LABELS: Record<keyof EpochResponse['weights'], string> = {
 };
 
 const ROUND_DIFF_EPSILON = 0.0005;
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    const candidate = error as {
+      response?: { data?: { message?: string } };
+      message?: string;
+    };
+    return candidate.response?.data?.message ?? candidate.message ?? fallback;
+  }
+
+  return fallback;
+}
 
 function normalizeKeywords(values: string[] | undefined): string[] {
   if (!Array.isArray(values)) {
@@ -116,8 +128,8 @@ export function History() {
         } else if (epochsData.epochs.length > 0) {
           setSelectedEpoch(epochsData.epochs[0]);
         }
-      } catch (err: any) {
-        setError(err.message || 'Failed to load history');
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, 'Failed to load history'));
       } finally {
         setIsLoading(false);
       }

@@ -9,7 +9,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { isAxiosError } from 'axios';
 import { adminApi } from '../api/admin';
 import type { AdminStatus } from '../api/admin';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/useAuth';
 
 export function useAdminStatus() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();

@@ -15,7 +15,7 @@ export function FeedHealth() {
     try {
       const data = await adminApi.getFeedHealth();
       setHealth(data);
-    } catch (err) {
+    } catch {
       setMessage({ type: 'error', text: 'Failed to load feed health' });
     } finally {
       setIsLoading(false);
@@ -44,7 +44,7 @@ export function FeedHealth() {
         setIsRescoring(false);
         setMessage({ type: 'success', text: 'Scoring complete!' });
       }, 5000);
-    } catch (err) {
+    } catch {
       setMessage({ type: 'error', text: 'Failed to trigger rescore' });
       setIsRescoring(false);
     }
@@ -61,7 +61,7 @@ export function FeedHealth() {
         fetchHealth();
         setIsReconnectingJetstream(false);
       }, 2000);
-    } catch (err) {
+    } catch {
       setMessage({ type: 'error', text: 'Failed to trigger Jetstream reconnect' });
       setIsReconnectingJetstream(false);
     }
@@ -70,11 +70,6 @@ export function FeedHealth() {
   if (isLoading || !health) {
     return <AdminPanelSkeleton />;
   }
-
-  const newestPostDate = health.database.newestPost ? new Date(health.database.newestPost) : null;
-  const newestLooksFuture = newestPostDate
-    ? newestPostDate.getTime() > Date.now() + 60 * 1000
-    : false;
 
   return (
     <div className="content-loaded">
@@ -110,9 +105,7 @@ export function FeedHealth() {
           <span>Newest post</span>
           <strong>
             {health.database.newestPost
-              ? newestLooksFuture
-                ? formatDate(health.database.newestPost)
-                : formatRelative(health.database.newestPost)
+              ? formatRelative(health.database.newestPost)
               : 'N/A'}
           </strong>
         </div>

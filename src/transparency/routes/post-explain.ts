@@ -14,6 +14,33 @@ import { db } from '../../db/client.js';
 import { logger } from '../../lib/logger.js';
 import type { PostExplanation } from '../transparency.types.js';
 
+interface CurrentScoringRunValue {
+  run_id?: unknown;
+  epoch_id?: unknown;
+}
+
+async function getCurrentScoringRunScope(): Promise<{ runId: string; epochId: number } | null> {
+  const result = await db.query<{ value: CurrentScoringRunValue }>(
+    `SELECT value
+     FROM system_status
+     WHERE key = 'current_scoring_run'`
+  );
+
+  const value = result.rows[0]?.value;
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  if (typeof value.run_id !== 'string' || typeof value.epoch_id !== 'number') {
+    return null;
+  }
+
+  return {
+    runId: value.run_id,
+    epochId: value.epoch_id,
+  };
+}
+
 export function registerPostExplainRoute(app: FastifyInstance): void {
   app.get(
     '/api/transparency/post/:uri',
@@ -24,15 +51,42 @@ export function registerPostExplainRoute(app: FastifyInstance): void {
       const decodedUri = decodeURIComponent(uri);
 
       try {
-        // Get the most recent score for this post
+        const epochResult = await db.query<{ id: number }>(
+          `SELECT id
+           FROM governance_epochs
+           WHERE status = 'active'
+           ORDER BY id DESC
+           LIMIT 1`
+        );
+
+        if (epochResult.rows.length === 0) {
+          return reply.code(404).send({
+            error: 'NoActiveEpoch',
+            message: 'No active governance epoch found.',
+          });
+        }
+
+        const epochId = epochResult.rows[0].id;
+        const runScope = await getCurrentScoringRunScope();
+
+        // Get the most recent score for this post in the active epoch/current run
+        const scoreParams: unknown[] = [decodedUri, epochId];
+        let runScopeClause = '';
+        if (runScope?.epochId === epochId) {
+          scoreParams.push(runScope.runId);
+          runScopeClause = `AND ps.component_details->>'run_id' = $${scoreParams.length}`;
+        }
+
         const scoreResult = await db.query(
           `SELECT ps.*, ge.description as epoch_description
            FROM post_scores ps
            JOIN governance_epochs ge ON ps.epoch_id = ge.id
            WHERE ps.post_uri = $1
+             AND ps.epoch_id = $2
+             ${runScopeClause}
            ORDER BY ps.scored_at DESC
            LIMIT 1`,
-          [decodedUri]
+          scoreParams
         );
 
         if (scoreResult.rows.length === 0) {
@@ -43,21 +97,43 @@ export function registerPostExplainRoute(app: FastifyInstance): void {
         }
 
         const s = scoreResult.rows[0];
+        const scopedRunId =
+          s.component_details &&
+          typeof s.component_details === 'object' &&
+          typeof (s.component_details as { run_id?: unknown }).run_id === 'string'
+            ? (s.component_details as { run_id: string }).run_id
+            : null;
 
         // Get rank position (how many posts have higher scores in same epoch)
+        const rankParams: unknown[] = [s.epoch_id, s.total_score];
+        let rankRunClause = '';
+        if (scopedRunId) {
+          rankParams.push(scopedRunId);
+          rankRunClause = `AND component_details->>'run_id' = $${rankParams.length}`;
+        }
+
         const rankResult = await db.query(
           `SELECT COUNT(*) + 1 as rank
            FROM post_scores
-           WHERE epoch_id = $1 AND total_score > $2`,
-          [s.epoch_id, s.total_score]
+           WHERE epoch_id = $1 AND total_score > $2
+             ${rankRunClause}`,
+          rankParams
         );
 
         // Compute counterfactual: what would rank be with pure engagement?
+        const engagementRankParams: unknown[] = [s.epoch_id, s.engagement_score];
+        let engagementRunClause = '';
+        if (scopedRunId) {
+          engagementRankParams.push(scopedRunId);
+          engagementRunClause = `AND component_details->>'run_id' = $${engagementRankParams.length}`;
+        }
+
         const engagementRankResult = await db.query(
           `SELECT COUNT(*) + 1 as rank
            FROM post_scores
-           WHERE epoch_id = $1 AND engagement_score > $2`,
-          [s.epoch_id, s.engagement_score]
+           WHERE epoch_id = $1 AND engagement_score > $2
+             ${engagementRunClause}`,
+          engagementRankParams
         );
 
         const rank = parseInt(rankResult.rows[0].rank, 10);

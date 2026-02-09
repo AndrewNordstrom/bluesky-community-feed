@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ScoreRadar } from '../components/ScoreRadar';
 import { DashboardSkeleton } from '../components/Skeleton';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/useAuth';
 import { useAdminStatus } from '../hooks/useAdminStatus';
 import { transparencyApi } from '../api/client';
 import type { FeedStatsResponse, AuditLogEntry, EpochResponse } from '../api/client';
@@ -39,6 +39,18 @@ const WEIGHT_LABELS: Record<keyof EpochResponse['weights'], string> = {
 };
 
 const ROUND_DIFF_EPSILON = 0.0005;
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    const candidate = error as {
+      response?: { data?: { message?: string } };
+      message?: string;
+    };
+    return candidate.response?.data?.message ?? candidate.message ?? fallback;
+  }
+
+  return fallback;
+}
 
 function normalizeKeywords(values: string[] | undefined): string[] {
   if (!Array.isArray(values)) {
@@ -133,9 +145,9 @@ export function Dashboard() {
       setAuditLog(auditData.entries);
       setEpochHistory(historyData.epochs);
       setError(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (!silent || !hasInitialLoad) {
-        setError(err.message || 'Failed to load dashboard data');
+        setError(getErrorMessage(err, 'Failed to load dashboard data'));
       }
     } finally {
       if (!silent) {

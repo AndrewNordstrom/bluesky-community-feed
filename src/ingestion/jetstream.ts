@@ -30,31 +30,46 @@ const CURSOR_SAVE_INTERVAL = 1000; // Save cursor every N events
 const MAX_RECONNECT_DELAY = 60_000; // 60 seconds max backoff
 const FALLBACK_THRESHOLD = 5; // Switch to fallback after N consecutive failures
 const MAX_CONCURRENT_EVENTS = 10; // Limit concurrent DB operations to leave pool room for API
+const MAX_PENDING_EVENTS = 5_000; // Bounded queue to avoid unbounded memory growth on spikes
 
 // Concurrency control — prevents ingestion from starving the DB pool
 let activeEventCount = 0;
-const eventQueue: (() => void)[] = [];
+const eventQueue: Array<(acquired: boolean) => void> = [];
+let queueOverflowReconnectInProgress = false;
 
 /** Acquire a slot before processing an event (blocks if at limit). */
-function acquireSlot(): Promise<void> {
+function acquireSlot(): Promise<boolean> {
   if (activeEventCount < MAX_CONCURRENT_EVENTS) {
     activeEventCount++;
-    return Promise.resolve();
+    return Promise.resolve(true);
   }
-  return new Promise<void>((resolve) => {
-    eventQueue.push(() => {
-      activeEventCount++;
-      resolve();
-    });
+
+  if (eventQueue.length >= MAX_PENDING_EVENTS) {
+    return Promise.resolve(false);
+  }
+
+  return new Promise<boolean>((resolve) => {
+    eventQueue.push(resolve);
   });
 }
 
 /** Release a slot after processing, unblocking the next queued event. */
 function releaseSlot(): void {
-  activeEventCount--;
-  if (eventQueue.length > 0) {
-    const next = eventQueue.shift()!;
-    next();
+  if (activeEventCount > 0) {
+    activeEventCount--;
+  }
+
+  const next = eventQueue.shift();
+  if (next) {
+    activeEventCount++;
+    next(true);
+  }
+}
+
+function drainQueuedSlots(acquired: boolean): void {
+  while (eventQueue.length > 0) {
+    const resolve = eventQueue.shift();
+    resolve?.(acquired);
   }
 }
 
@@ -108,6 +123,8 @@ export async function startJetstream(): Promise<void> {
  */
 export async function stopJetstream(): Promise<void> {
   isShuttingDown = true;
+  queueOverflowReconnectInProgress = false;
+  drainQueuedSlots(false);
 
   // Save final cursor
   if (lastCursorUs) {
@@ -157,12 +174,20 @@ function connect(cursor?: bigint): void {
     logger.info({ instanceType }, 'Jetstream connection established');
     reconnectAttempts = 0;
     consecutiveFailures = 0;
+    queueOverflowReconnectInProgress = false;
     lastDisconnectedAt = null;
   });
 
   ws.on('message', async (data: Buffer) => {
     // Concurrency gate — wait for a slot so we don't exhaust the DB pool
-    await acquireSlot();
+    const acquired = await acquireSlot();
+    if (!acquired) {
+      if (!isShuttingDown && ws && ws.readyState === WebSocket.OPEN) {
+        handleQueueOverload();
+      }
+      return;
+    }
+
     try {
       const event = JSON.parse(data.toString()) as JetstreamEvent;
       await processEvent(event);
@@ -198,6 +223,8 @@ function connect(cursor?: bigint): void {
   ws.on('close', (code, reason) => {
     ws = null;
     lastDisconnectedAt = new Date();
+    queueOverflowReconnectInProgress = false;
+    drainQueuedSlots(false);
     logger.warn({ code, reason: reason.toString() }, 'Jetstream connection closed');
     if (!isShuttingDown) {
       consecutiveFailures++;
@@ -209,6 +236,38 @@ function connect(cursor?: bigint): void {
     logger.error({ err }, 'Jetstream WebSocket error');
     // 'close' event will fire after this, triggering reconnect
   });
+}
+
+function handleQueueOverload(): void {
+  if (queueOverflowReconnectInProgress || isShuttingDown) {
+    return;
+  }
+  queueOverflowReconnectInProgress = true;
+
+  const queuedEvents = eventQueue.length;
+  logger.error(
+    {
+      queuedEvents,
+      maxPendingEvents: MAX_PENDING_EVENTS,
+      activeEventCount,
+      maxConcurrentEvents: MAX_CONCURRENT_EVENTS,
+    },
+    'Jetstream ingestion queue saturated; forcing reconnect for recovery'
+  );
+
+  // Drop queued-but-not-started handlers; active handlers continue and release naturally.
+  drainQueuedSlots(false);
+
+  void (async () => {
+    if (lastCursorUs) {
+      await saveCursor(lastCursorUs);
+      logger.warn({ cursor: lastCursorUs.toString() }, 'Saved cursor before overload reconnect');
+    }
+
+    if (ws) {
+      ws.close(1013, 'event_queue_overflow');
+    }
+  })();
 }
 
 /**
@@ -314,6 +373,8 @@ export function getJetstreamDisconnectedAt(): Date | null {
 export function triggerJetstreamReconnect(): void {
   reconnectAttempts = 0;
   consecutiveFailures = 0;
+  queueOverflowReconnectInProgress = false;
+  drainQueuedSlots(false);
 
   if (ws) {
     ws.close(1012, 'admin reconnect');
@@ -325,3 +386,22 @@ export function triggerJetstreamReconnect(): void {
     connect(cursor);
   })();
 }
+
+/**
+ * Test-only helpers for queue/backpressure behavior.
+ */
+export const __testJetstreamQueue = {
+  maxConcurrentEvents: MAX_CONCURRENT_EVENTS,
+  maxPendingEvents: MAX_PENDING_EVENTS,
+  acquireSlot,
+  releaseSlot,
+  drainQueuedSlots,
+  reset(): void {
+    activeEventCount = 0;
+    eventQueue.length = 0;
+    queueOverflowReconnectInProgress = false;
+  },
+  getState(): { active: number; queued: number } {
+    return { active: activeEventCount, queued: eventQueue.length };
+  },
+};

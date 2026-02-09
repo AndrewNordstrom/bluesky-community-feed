@@ -4,6 +4,17 @@ import { ScoreRadar } from '../components/ScoreRadar';
 import { transparencyApi } from '../api/client';
 import type { PostExplanationResponse } from '../api/client';
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    const candidate = error as {
+      response?: { data?: { message?: string } };
+      message?: string;
+    };
+    return candidate.response?.data?.message ?? candidate.message ?? fallback;
+  }
+  return fallback;
+}
+
 export function PostExplain() {
   const { uri } = useParams<{ uri: string }>();
   const [explanation, setExplanation] = useState<PostExplanationResponse | null>(null);
@@ -19,8 +30,8 @@ export function PostExplain() {
         setError(null);
         const data = await transparencyApi.getPostExplanation(uri);
         setExplanation(data);
-      } catch (err: any) {
-        setError(err.response?.data?.message || err.message || 'Failed to load post explanation');
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, 'Failed to load post explanation'));
       } finally {
         setIsLoading(false);
       }

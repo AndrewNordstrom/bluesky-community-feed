@@ -1,7 +1,15 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/useAuth';
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    const candidate = error as { message?: string };
+    return candidate.message ?? fallback;
+  }
+  return fallback;
+}
 
 export function Login() {
   const [handle, setHandle] = useState('');
@@ -26,8 +34,8 @@ export function Login() {
     try {
       await login(handle, appPassword);
       navigate('/vote');
-    } catch (err: any) {
-      setError(err.message || 'Login failed');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Login failed'));
     } finally {
       setIsSubmitting(false);
     }

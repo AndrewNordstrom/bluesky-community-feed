@@ -7,12 +7,30 @@
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { z } from 'zod';
 import { db } from '../../db/client.js';
 import { config } from '../../config.js';
 import { logger } from '../../lib/logger.js';
 import { toEpochInfo, toContentRules, ContentRulesRow } from '../governance.types.js';
 import { getAuthenticatedDid, SessionStoreUnavailableError } from '../auth.js';
 import { triggerEpochTransition, forceEpochTransition, getCurrentEpochStatus } from '../epoch-manager.js';
+
+const EpochListQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  status: z.enum(['active', 'voting', 'closed']).optional(),
+});
+
+const EpochIdParamsSchema = z.object({
+  id: z.coerce.number().int().positive(),
+});
+
+const ForceFlagSchema = z
+  .union([z.boolean(), z.enum(['true', 'false'])])
+  .transform((value) => (typeof value === 'boolean' ? value : value === 'true'));
+
+const TransitionQuerySchema = z.object({
+  force: ForceFlagSchema.optional().default(false),
+});
 
 /**
  * Check if DID is an admin.
@@ -28,15 +46,22 @@ export function registerEpochsRoute(app: FastifyInstance): void {
    * Returns a list of all governance epochs.
    */
   app.get('/api/governance/epochs', async (request: FastifyRequest, reply: FastifyReply) => {
-    const query = request.query as { limit?: string; status?: string };
-    const limit = Math.min(parseInt(query.limit ?? '50'), 100);
+    const parseResult = EpochListQuerySchema.safeParse(request.query);
+    if (!parseResult.success) {
+      return reply.code(400).send({
+        error: 'ValidationError',
+        message: 'Invalid query parameters',
+        details: parseResult.error.issues,
+      });
+    }
+    const { limit, status } = parseResult.data;
 
     let sql = `SELECT * FROM governance_epochs`;
     const params: unknown[] = [];
 
-    if (query.status) {
+    if (status) {
       sql += ` WHERE status = $1`;
-      params.push(query.status);
+      params.push(status);
     }
 
     sql += ` ORDER BY id DESC LIMIT $${params.length + 1}`;
@@ -134,15 +159,15 @@ export function registerEpochsRoute(app: FastifyInstance): void {
    * Returns details for a specific epoch.
    */
   app.get('/api/governance/epochs/:id', async (request: FastifyRequest, reply: FastifyReply) => {
-    const params = request.params as { id: string };
-    const epochId = parseInt(params.id);
-
-    if (isNaN(epochId)) {
+    const parseResult = EpochIdParamsSchema.safeParse(request.params);
+    if (!parseResult.success) {
       return reply.code(400).send({
-        error: 'InvalidEpochId',
-        message: 'Epoch ID must be a number.',
+        error: 'ValidationError',
+        message: 'Invalid epoch id',
+        details: parseResult.error.issues,
       });
     }
+    const { id: epochId } = parseResult.data;
 
     const result = await db.query(`SELECT * FROM governance_epochs WHERE id = $1`, [epochId]);
 
@@ -274,8 +299,15 @@ export function registerEpochsRoute(app: FastifyInstance): void {
       });
     }
 
-    const query = request.query as { force?: string };
-    const force = query.force === 'true';
+    const queryParseResult = TransitionQuerySchema.safeParse(request.query);
+    if (!queryParseResult.success) {
+      return reply.code(400).send({
+        error: 'ValidationError',
+        message: 'Invalid query parameters',
+        details: queryParseResult.error.issues,
+      });
+    }
+    const { force } = queryParseResult.data;
 
     try {
       // Get current status first

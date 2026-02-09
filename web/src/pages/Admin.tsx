@@ -18,7 +18,7 @@ import { AnnouncementPanel } from '../components/admin/AnnouncementPanel';
 import { FeedHealth } from '../components/admin/FeedHealth';
 import { AuditLog } from '../components/admin/AuditLog';
 import { TabPanel } from '../components/TabPanel';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/useAuth';
 import '../styles/admin.css';
 
 type AdminTab = 'overview' | 'governance' | 'announcements' | 'health' | 'audit';

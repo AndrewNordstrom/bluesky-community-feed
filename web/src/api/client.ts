@@ -194,6 +194,64 @@ export interface EpochResponse {
   };
 }
 
+interface EpochApiResponse {
+  epoch_id?: number;
+  id?: number;
+  status: string;
+  phase?: 'running' | 'voting' | 'results';
+  weights: {
+    recency: number;
+    engagement: number;
+    bridging: number;
+    sourceDiversity?: number;
+    source_diversity?: number;
+    relevance: number;
+  };
+  vote_count: number;
+  subscriber_count?: number;
+  created_at: string;
+  closed_at?: string;
+  description?: string;
+  voting_started_at?: string | null;
+  voting_ends_at?: string | null;
+  voting_closed_at?: string | null;
+  content_rules?: {
+    include_keywords?: string[];
+    exclude_keywords?: string[];
+  };
+}
+
+function toEpochResponse(epoch: EpochApiResponse): EpochResponse {
+  return {
+    id: epoch.epoch_id ?? epoch.id ?? 0,
+    status: epoch.status,
+    phase: epoch.phase,
+    weights: {
+      recency: epoch.weights.recency,
+      engagement: epoch.weights.engagement,
+      bridging: epoch.weights.bridging,
+      source_diversity: epoch.weights.sourceDiversity ?? epoch.weights.source_diversity ?? 0,
+      relevance: epoch.weights.relevance,
+    },
+    vote_count: epoch.vote_count,
+    subscriber_count: epoch.subscriber_count,
+    created_at: epoch.created_at,
+    closed_at: epoch.closed_at,
+    description: epoch.description,
+    voting_started_at: epoch.voting_started_at,
+    voting_ends_at: epoch.voting_ends_at,
+    voting_closed_at: epoch.voting_closed_at,
+    content_rules: {
+      include_keywords: Array.isArray(epoch.content_rules?.include_keywords)
+        ? epoch.content_rules.include_keywords
+        : [],
+      exclude_keywords: Array.isArray(epoch.content_rules?.exclude_keywords)
+        ? epoch.content_rules.exclude_keywords
+        : [],
+    },
+  };
+}
+
 // Weights API
 export const weightsApi = {
   getCurrent: async (): Promise<WeightsResponse> => {
@@ -209,29 +267,8 @@ export const weightsApi = {
   },
 
   getCurrentEpoch: async (): Promise<EpochResponse> => {
-    const response = await api.get<any>('/api/governance/epochs/current');
-    const e = response.data;
-    // Transform API response to match expected interface
-    return {
-      id: e.epoch_id ?? e.id,
-      status: e.status,
-      phase: e.phase,
-      weights: {
-        recency: e.weights.recency,
-        engagement: e.weights.engagement,
-        bridging: e.weights.bridging,
-        source_diversity: e.weights.sourceDiversity ?? e.weights.source_diversity,
-        relevance: e.weights.relevance,
-      },
-      vote_count: e.vote_count,
-      subscriber_count: e.subscriber_count,
-      created_at: e.created_at,
-      closed_at: e.closed_at,
-      description: e.description,
-      voting_started_at: e.voting_started_at,
-      voting_ends_at: e.voting_ends_at,
-      voting_closed_at: e.voting_closed_at,
-    };
+    const response = await api.get<EpochApiResponse>('/api/governance/epochs/current');
+    return toEpochResponse(response.data);
   },
 };
 
@@ -399,35 +436,10 @@ export const transparencyApi = {
   },
 
   getEpochHistory: async (limit = 20): Promise<{ epochs: EpochResponse[] }> => {
-    const response = await api.get<{ epochs: any[] }>('/api/governance/epochs', {
+    const response = await api.get<{ epochs: EpochApiResponse[] }>('/api/governance/epochs', {
       params: { limit },
     });
-    // Transform API response to match expected interface
-    const epochs = response.data.epochs.map((e: any) => ({
-      id: e.epoch_id ?? e.id,
-      status: e.status,
-      phase: e.phase,
-      weights: {
-        recency: e.weights.recency,
-        engagement: e.weights.engagement,
-        bridging: e.weights.bridging,
-        source_diversity: e.weights.sourceDiversity ?? e.weights.source_diversity,
-        relevance: e.weights.relevance,
-      },
-      vote_count: e.vote_count,
-      subscriber_count: e.subscriber_count,
-      created_at: e.created_at,
-      closed_at: e.closed_at,
-      description: e.description,
-      content_rules: {
-        include_keywords: Array.isArray(e.content_rules?.include_keywords)
-          ? e.content_rules.include_keywords
-          : [],
-        exclude_keywords: Array.isArray(e.content_rules?.exclude_keywords)
-          ? e.content_rules.exclude_keywords
-          : [],
-      },
-    }));
+    const epochs = response.data.epochs.map(toEpochResponse);
     return { epochs };
   },
 };

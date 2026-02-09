@@ -11,7 +11,7 @@ const issuerPrefixes = config.FEED_JWT_ALLOWED_ISSUER_PREFIXES
 type JwtPayload = {
   iss: string;
   exp: number;
-  aud: string;
+  aud: string | string[];
   nbf?: number;
   iat?: number;
 };
@@ -25,8 +25,89 @@ export type VerificationFailure = {
   reason: string;
 };
 
+function base64UrlDecode(input: string): string | null {
+  try {
+    const normalized = input.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = `${normalized}${'='.repeat((4 - (normalized.length % 4)) % 4)}`;
+    return Buffer.from(padded, 'base64').toString('utf8');
+  } catch {
+    return null;
+  }
+}
+
+function decodeJwtPayload(jwt: string): JwtPayload | null {
+  const parts = jwt.split('.');
+  if (parts.length !== 3) {
+    return null;
+  }
+
+  const decoded = base64UrlDecode(parts[1]);
+  if (!decoded) {
+    return null;
+  }
+
+  try {
+    const payload = JSON.parse(decoded) as Partial<JwtPayload>;
+    if (
+      typeof payload.iss !== 'string' ||
+      typeof payload.exp !== 'number' ||
+      (!Array.isArray(payload.aud) && typeof payload.aud !== 'string')
+    ) {
+      return null;
+    }
+    return payload as JwtPayload;
+  } catch {
+    return null;
+  }
+}
+
+function audienceIncludes(payloadAudience: string | string[], expectedAudience: string): boolean {
+  if (Array.isArray(payloadAudience)) {
+    return payloadAudience.includes(expectedAudience);
+  }
+
+  return payloadAudience === expectedAudience;
+}
+
+function validateTemporalClaims(payload: JwtPayload): VerificationFailure | null {
+  const now = Math.floor(Date.now() / 1000);
+  const skew = config.FEED_JWT_MAX_FUTURE_SKEW_SECONDS;
+
+  if (payload.exp <= now) {
+    return { did: null, reason: 'JwtExpired' };
+  }
+
+  if (typeof payload.nbf === 'number' && payload.nbf > now + skew) {
+    return { did: null, reason: 'jwt_not_yet_valid' };
+  }
+
+  if (typeof payload.iat === 'number' && payload.iat > now + skew) {
+    return { did: null, reason: 'jwt_issued_in_future' };
+  }
+
+  return null;
+}
+
 export async function verifyRequesterJwt(jwt: string): Promise<VerifiedRequester | VerificationFailure> {
   const audience = config.FEED_JWT_AUDIENCE.trim() || config.FEEDGEN_SERVICE_DID;
+  const decodedPayload = decodeJwtPayload(jwt);
+
+  if (!decodedPayload) {
+    return { did: null, reason: 'BadJwt' };
+  }
+
+  if (!isIssuerAllowed(decodedPayload.iss)) {
+    return { did: null, reason: 'issuer_not_allowed' };
+  }
+
+  if (!audienceIncludes(decodedPayload.aud, audience)) {
+    return { did: null, reason: 'aud_mismatch' };
+  }
+
+  const temporalFailure = validateTemporalClaims(decodedPayload);
+  if (temporalFailure) {
+    return temporalFailure;
+  }
 
   try {
     const payload = (await verifyJwt(
@@ -41,15 +122,13 @@ export async function verifyRequesterJwt(jwt: string): Promise<VerifiedRequester
       return { did: null, reason: 'issuer_not_allowed' };
     }
 
-    const now = Math.floor(Date.now() / 1000);
-    const skew = config.FEED_JWT_MAX_FUTURE_SKEW_SECONDS;
-
-    if (typeof payload.nbf === 'number' && payload.nbf > now + skew) {
-      return { did: null, reason: 'jwt_not_yet_valid' };
+    if (!audienceIncludes(payload.aud, audience)) {
+      return { did: null, reason: 'aud_mismatch' };
     }
 
-    if (typeof payload.iat === 'number' && payload.iat > now + skew) {
-      return { did: null, reason: 'jwt_issued_in_future' };
+    const verifiedTemporalFailure = validateTemporalClaims(payload);
+    if (verifiedTemporalFailure) {
+      return verifiedTemporalFailure;
     }
 
     return { did: payload.iss };

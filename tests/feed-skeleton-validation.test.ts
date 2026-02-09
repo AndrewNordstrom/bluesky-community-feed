@@ -73,6 +73,28 @@ describe('getFeedSkeleton query validation', () => {
     await app.close();
   });
 
+  it.each([
+    { s: 'snap', o: -1 },
+    { s: 'snap', o: 1.5 },
+    { s: 'snap', o: '2' },
+  ])('returns 400 for structurally invalid cursor payload %o', async (payload) => {
+    const app = Fastify();
+    registerFeedSkeleton(app);
+
+    const cursor = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    const response = await app.inject({
+      method: 'GET',
+      url: `/xrpc/app.bsky.feed.getFeedSkeleton?feed=${encodeURIComponent(feedUri)}&cursor=${encodeURIComponent(cursor)}`,
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      error: 'ValidationError',
+    });
+
+    await app.close();
+  });
+
   it('returns 200 for valid query', async () => {
     const app = Fastify();
     registerFeedSkeleton(app);

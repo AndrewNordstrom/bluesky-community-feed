@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
 
 interface TabPanelProps {
   children: ReactNode;
@@ -13,18 +12,6 @@ interface TabPanelProps {
  * This avoids remount flicker and preserves local state between tab switches.
  */
 export function TabPanel({ children, isActive, tabKey, keepMounted = true }: TabPanelProps) {
-  const [hasBeenActive, setHasBeenActive] = useState(isActive);
-
-  useEffect(() => {
-    if (isActive) {
-      setHasBeenActive(true);
-    }
-  }, [isActive]);
-
-  if (!hasBeenActive && keepMounted) {
-    return null;
-  }
-
   if (!keepMounted && !isActive) {
     return null;
   }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/useAuth';
 import { useAdminStatus } from '../hooks/useAdminStatus';
 import { WeightSliders } from '../components/WeightSliders';
 import { KeywordInput } from '../components/KeywordInput';
@@ -9,6 +9,18 @@ import { VoteSkeleton } from '../components/Skeleton';
 import type { GovernanceWeights } from '../components/WeightSliders';
 import { voteApi, weightsApi } from '../api/client';
 import type { EpochResponse, ContentVote, ContentRulesResponse } from '../api/client';
+
+function extractErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    const candidate = error as {
+      response?: { data?: { message?: string } };
+      message?: string;
+    };
+    return candidate.response?.data?.message ?? candidate.message ?? fallback;
+  }
+
+  return fallback;
+}
 
 export function Vote() {
   const { isAuthenticated, isLoading: authLoading, userHandle, logout } = useAuth();
@@ -111,8 +123,8 @@ export function Vote() {
       } catch {
         // Content rules endpoint might not exist yet
       }
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to load data');
+    } catch (err: unknown) {
+      setError(extractErrorMessage(err, 'Failed to load data'));
     } finally {
       setIsLoadingData(false);
     }
@@ -197,8 +209,8 @@ export function Vote() {
         const updatedRules = await voteApi.getContentRules();
         setCurrentContentRules(updatedRules);
       }
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to submit vote');
+    } catch (err: unknown) {
+      setError(extractErrorMessage(err, 'Failed to submit vote'));
     } finally {
       setIsSubmitting(false);
     }

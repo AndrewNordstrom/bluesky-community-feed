@@ -239,6 +239,33 @@ function toTextPreview(text: string | null): string | null {
   return `${trimmed.slice(0, 157)}...`;
 }
 
+interface CurrentScoringRunValue {
+  run_id?: unknown;
+  epoch_id?: unknown;
+}
+
+async function getCurrentScoringRunScope(): Promise<{ runId: string; epochId: number } | null> {
+  const result = await db.query<{ value: CurrentScoringRunValue }>(
+    `SELECT value
+     FROM system_status
+     WHERE key = 'current_scoring_run'`
+  );
+
+  const value = result.rows[0]?.value;
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  if (typeof value.run_id !== 'string' || typeof value.epoch_id !== 'number') {
+    return null;
+  }
+
+  return {
+    runId: value.run_id,
+    epochId: value.epoch_id,
+  };
+}
+
 export function registerAuditAnalysisRoutes(app: FastifyInstance): void {
   app.get('/audit/weight-impact', async (request: FastifyRequest, reply: FastifyReply) => {
     const parseResult = QuerySchema.safeParse(request.query);
@@ -275,6 +302,7 @@ export function registerAuditAnalysisRoutes(app: FastifyInstance): void {
 
     const epoch = epochResult.rows[0];
     const currentWeights = toWeights(epoch);
+    const runScope = await getCurrentScoringRunScope();
 
     let feedEntries: string[];
     try {
@@ -312,6 +340,13 @@ export function registerAuditAnalysisRoutes(app: FastifyInstance): void {
 
     const uris = rankedFeed.map((entry) => entry.uri);
 
+    const scoreParams: unknown[] = [epoch.id, uris];
+    let runScopeClause = '';
+    if (runScope?.epochId === epoch.id) {
+      scoreParams.push(runScope.runId);
+      runScopeClause = `AND ps.component_details->>'run_id' = $${scoreParams.length}`;
+    }
+
     const scoreResult = await db.query<ScoreRow>(
       `SELECT
         ps.post_uri,
@@ -325,8 +360,9 @@ export function registerAuditAnalysisRoutes(app: FastifyInstance): void {
        FROM post_scores ps
        LEFT JOIN posts p ON p.uri = ps.post_uri
        WHERE ps.epoch_id = $1
-         AND ps.post_uri = ANY($2::text[])`,
-      [epoch.id, uris]
+         AND ps.post_uri = ANY($2::text[])
+         ${runScopeClause}`,
+      scoreParams
     );
 
     const scoreMap = new Map(scoreResult.rows.map((row) => [row.post_uri, row]));

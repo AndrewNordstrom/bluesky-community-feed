@@ -72,6 +72,16 @@ describe('admin weight impact audit endpoint', () => {
       .mockResolvedValueOnce({
         rows: [
           {
+            value: {
+              run_id: 'run-123',
+              epoch_id: 2,
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
             post_uri: 'at://did:plc:a/post/1',
             text: 'first post',
             total_score: 0.82,
@@ -129,7 +139,8 @@ describe('admin weight impact audit endpoint', () => {
     expect(body.weightSensitivity).toHaveProperty('engagement');
     expect(body.analyzedPosts).toBe(3);
     expect(redisZRevRangeMock).toHaveBeenCalledWith('feed:current', 0, 99, 'WITHSCORES');
-    expect(dbQueryMock).toHaveBeenCalledTimes(2);
+    expect(dbQueryMock).toHaveBeenCalledTimes(3);
+    expect(String(dbQueryMock.mock.calls[2]?.[0])).toContain("component_details->>'run_id'");
 
     await app.close();
   });

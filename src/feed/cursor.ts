@@ -26,6 +26,16 @@ export interface ParsedCursor {
   offset: number;
 }
 
+function isValidOffset(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= Number.MAX_SAFE_INTEGER
+  );
+}
+
 /**
  * Encode a cursor for the response.
  *
@@ -34,6 +44,10 @@ export interface ParsedCursor {
  * @returns Base64url-encoded cursor string
  */
 export function encodeCursor(snapshotId: string, offset: number): string {
+  if (!snapshotId || !isValidOffset(offset)) {
+    throw new Error('Invalid cursor payload');
+  }
+
   const payload = JSON.stringify({ s: snapshotId, o: offset });
   return Buffer.from(payload).toString('base64url');
 }
@@ -50,7 +64,11 @@ export function decodeCursor(cursor: string): ParsedCursor | null {
     const parsed = JSON.parse(payload);
 
     // Validate required fields
-    if (typeof parsed.s !== 'string' || typeof parsed.o !== 'number') {
+    if (
+      typeof parsed.s !== 'string' ||
+      parsed.s.trim().length === 0 ||
+      !isValidOffset(parsed.o)
+    ) {
       return null;
     }
 
