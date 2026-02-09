@@ -9,6 +9,8 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "migrate": "tsx scripts/migrate.ts",
+    "generate-feed-did": "tsx scripts/generate-feed-did.ts",
+    "publish-feed": "tsx scripts/publish-feed.ts",
     "test": "vitest"
   },
   "dependencies": {
@@ -17,6 +19,7 @@
     "@atproto/identity": "^0.4.0",
     "@atproto/xrpc-server": "^0.6.0",
     "@fastify/cors": "^10.0.0",
+    "@fastify/helmet": "^13.0.2",
     "@fastify/jwt": "^9.0.0",
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/static": "^8.0.0",

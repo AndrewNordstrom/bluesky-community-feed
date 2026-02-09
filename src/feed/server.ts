@@ -1,5 +1,6 @@
 import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import path from 'path';
@@ -48,6 +49,28 @@ export async function createServer() {
       }
 
       cb(null, allowedOrigins.has(origin));
+    },
+  });
+
+  // Security headers for browser-facing endpoints
+  await app.register(helmet, {
+    crossOriginEmbedderPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        baseUri: ["'self'"],
+        frameAncestors: ["'none'"],
+        objectSrc: ["'none'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'https:'],
+        fontSrc: ["'self'", 'data:', 'https:'],
+        connectSrc: ["'self'", 'https:', 'wss:'],
+        formAction: ["'self'"],
+      },
+    },
+    referrerPolicy: {
+      policy: 'strict-origin-when-cross-origin',
     },
   });
 
