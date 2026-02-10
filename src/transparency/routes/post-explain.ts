@@ -46,9 +46,16 @@ export function registerPostExplainRoute(app: FastifyInstance): void {
     '/api/transparency/post/:uri',
     async (request: FastifyRequest<{ Params: { uri: string } }>, reply: FastifyReply) => {
       const { uri } = request.params;
-
-      // Decode the URI (may be URL-encoded)
-      const decodedUri = decodeURIComponent(uri);
+      let decodedUri: string;
+      try {
+        // Decode the URI (may be URL-encoded)
+        decodedUri = decodeURIComponent(uri);
+      } catch {
+        return reply.code(400).send({
+          error: 'ValidationError',
+          message: 'Invalid post URI encoding',
+        });
+      }
 
       try {
         const epochResult = await db.query<{ id: number }>(

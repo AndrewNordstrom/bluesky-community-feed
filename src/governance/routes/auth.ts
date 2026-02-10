@@ -10,17 +10,66 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import {
   authenticateWithBluesky,
-  extractBearerToken,
+  extractSessionToken,
   getSession,
   invalidateSession,
   SessionStoreUnavailableError,
 } from '../auth.js';
 import { logger } from '../../lib/logger.js';
+import { config } from '../../config.js';
 
 const LoginSchema = z.object({
   handle: z.string().min(1, 'Handle is required'),
   appPassword: z.string().min(1, 'App password is required'),
 });
+
+function formatSameSite(value: 'strict' | 'lax' | 'none'): 'Strict' | 'Lax' | 'None' {
+  switch (value) {
+    case 'strict':
+      return 'Strict';
+    case 'none':
+      return 'None';
+    default:
+      return 'Lax';
+  }
+}
+
+function shouldUseSecureCookie(): boolean {
+  return config.NODE_ENV === 'production' || config.GOVERNANCE_SESSION_COOKIE_SAME_SITE === 'none';
+}
+
+function serializeSessionCookie(token: string, expiresAt: Date): string {
+  const parts = [
+    `${config.GOVERNANCE_SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`,
+    'HttpOnly',
+    'Path=/',
+    `SameSite=${formatSameSite(config.GOVERNANCE_SESSION_COOKIE_SAME_SITE)}`,
+    `Expires=${expiresAt.toUTCString()}`,
+  ];
+
+  if (shouldUseSecureCookie()) {
+    parts.push('Secure');
+  }
+
+  return parts.join('; ');
+}
+
+function serializeClearedSessionCookie(): string {
+  const parts = [
+    `${config.GOVERNANCE_SESSION_COOKIE_NAME}=`,
+    'HttpOnly',
+    'Path=/',
+    `SameSite=${formatSameSite(config.GOVERNANCE_SESSION_COOKIE_SAME_SITE)}`,
+    'Expires=Thu, 01 Jan 1970 00:00:00 GMT',
+    'Max-Age=0',
+  ];
+
+  if (shouldUseSecureCookie()) {
+    parts.push('Secure');
+  }
+
+  return parts.join('; ');
+}
 
 export function registerAuthRoute(app: FastifyInstance): void {
   /**
@@ -52,6 +101,7 @@ export function registerAuthRoute(app: FastifyInstance): void {
       }
 
       logger.info({ did: session.did, handle: session.handle }, 'User logged in');
+      reply.header('set-cookie', serializeSessionCookie(session.accessJwt, session.expiresAt));
 
       return reply.send({
         success: true,
@@ -113,7 +163,9 @@ export function registerAuthRoute(app: FastifyInstance): void {
    * Invalidate the current session.
    */
   app.post('/api/governance/auth/logout', async (request: FastifyRequest, reply: FastifyReply) => {
-    const token = extractBearerToken(request);
+    const token = extractSessionToken(request);
+    reply.header('set-cookie', serializeClearedSessionCookie());
+
     if (!token) {
       return reply.send({ success: true, message: 'No session to invalidate' });
     }

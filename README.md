@@ -183,7 +183,12 @@ See source route registration in `src/feed/server.ts`.
 - Governance audit log is append-only (DB-enforced)
 - Weight sums are validated (DB/API/UI)
 - `getFeedSkeleton` avoids external API calls and serves from local data
-- Feed JWT handling is verification-based and availability-safe
+- Feed serving path uses Redis/PostgreSQL only (no external identity lookups)
+
+## Auth Session Model
+
+- Governance/admin login now uses an HttpOnly session cookie by default.
+- Bearer token responses remain temporarily for non-browser compatibility, but the web app no longer stores tokens in `localStorage`.
 
 ## Deployment and Operations
 

@@ -1210,6 +1210,14 @@ export function registerGovernanceRoutes(app: FastifyInstance): void {
         return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
       }
 
+      if (toPhase(epoch) !== 'voting') {
+        await client.query('ROLLBACK');
+        return reply.code(409).send({
+          error: 'VotingClosed',
+          message: 'Voting can only be extended while the round is in voting phase.',
+        });
+      }
+
       const updatedResult = await client.query<GovernanceEpochRow>(
         `UPDATE governance_epochs
          SET voting_ends_at = COALESCE(voting_ends_at, NOW()) + make_interval(hours => $1)

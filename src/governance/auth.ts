@@ -11,6 +11,7 @@ import { randomBytes } from 'crypto';
 import { logger } from '../lib/logger.js';
 import { SessionInfo } from './governance.types.js';
 import { deleteSession, getSessionByToken, saveSession } from './session-store.js';
+import { config } from '../config.js';
 
 // Session expiration time (24 hours)
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -22,6 +23,37 @@ export class SessionStoreUnavailableError extends Error {
   }
 }
 
+function parseCookieHeader(cookieHeader: string | undefined): Record<string, string> {
+  if (!cookieHeader) {
+    return {};
+  }
+
+  return cookieHeader
+    .split(';')
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .reduce<Record<string, string>>((acc, segment) => {
+      const separatorIndex = segment.indexOf('=');
+      if (separatorIndex <= 0) {
+        return acc;
+      }
+
+      const key = segment.slice(0, separatorIndex).trim();
+      const rawValue = segment.slice(separatorIndex + 1).trim();
+      if (!key) {
+        return acc;
+      }
+
+      try {
+        acc[key] = decodeURIComponent(rawValue);
+      } catch {
+        acc[key] = rawValue;
+      }
+
+      return acc;
+    }, {});
+}
+
 export function extractBearerToken(request: FastifyRequest): string | null {
   const authHeader = request.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -30,6 +62,16 @@ export function extractBearerToken(request: FastifyRequest): string | null {
 
   const token = authHeader.slice('Bearer '.length).trim();
   return token.length > 0 ? token : null;
+}
+
+export function extractSessionToken(request: FastifyRequest): string | null {
+  const cookies = parseCookieHeader(request.headers.cookie);
+  const cookieToken = cookies[config.GOVERNANCE_SESSION_COOKIE_NAME];
+  if (cookieToken && cookieToken.length > 0) {
+    return cookieToken;
+  }
+
+  return extractBearerToken(request);
 }
 
 /**
@@ -103,7 +145,7 @@ export async function getAuthenticatedDid(request: FastifyRequest): Promise<stri
  * @returns Session info if authenticated, null otherwise
  */
 export async function getSession(request: FastifyRequest): Promise<SessionInfo | null> {
-  const token = extractBearerToken(request);
+  const token = extractSessionToken(request);
   if (!token) {
     return null;
   }

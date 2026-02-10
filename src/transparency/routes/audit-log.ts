@@ -14,12 +14,54 @@ import { db } from '../../db/client.js';
 import { logger } from '../../lib/logger.js';
 import type { AuditLogResponse, AuditLogEntry } from '../transparency.types.js';
 
+const VOTE_ACTIONS = new Set(['vote_cast', 'vote_updated']);
+
 const AuditLogQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(20),
   offset: z.coerce.number().min(0).default(0),
   action: z.string().optional(),
   epoch_id: z.coerce.number().optional(),
 });
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function keywordCount(value: unknown): number {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function redactDetails(
+  action: string,
+  details: unknown,
+  epochId: number | null
+): Record<string, unknown> {
+  const safeDetails = asRecord(details) ?? {};
+  if (!VOTE_ACTIONS.has(action)) {
+    return safeDetails;
+  }
+
+  const contentVote = asRecord(safeDetails.content_vote);
+  const includeKeywordCount = keywordCount(contentVote?.include_keywords);
+  const excludeKeywordCount = keywordCount(contentVote?.exclude_keywords);
+  const hasWeights = asRecord(safeDetails.weights) !== null || asRecord(safeDetails.original_weights) !== null;
+
+  const summary: Record<string, unknown> = {
+    hasWeights,
+    hasContentVote: includeKeywordCount > 0 || excludeKeywordCount > 0,
+    includeKeywordCount,
+    excludeKeywordCount,
+  };
+
+  if (typeof epochId === 'number') {
+    summary.epochId = epochId;
+  }
+
+  return summary;
+}
 
 export function registerAuditLogRoute(app: FastifyInstance): void {
   app.get('/api/transparency/audit', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -74,9 +116,9 @@ export function registerAuditLogRoute(app: FastifyInstance): void {
       const entries: AuditLogEntry[] = entriesResult.rows.map((row) => ({
         id: row.id,
         action: row.action,
-        actor_did: row.actor_did,
+        actor_did: null,
         epoch_id: row.epoch_id,
-        details: row.details || {},
+        details: redactDetails(row.action, row.details, row.epoch_id),
         created_at: row.created_at,
       }));
 

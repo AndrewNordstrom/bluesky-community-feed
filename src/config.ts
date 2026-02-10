@@ -26,7 +26,7 @@ const ConfigSchema = z.object({
 
   // Feed requester JWT verification
   FEED_JWT_AUDIENCE: z.string().default(''),
-  FEED_JWT_ALLOWED_ISSUER_PREFIXES: z.string().default('did:plc:,did:web:'),
+  FEED_JWT_ALLOWED_ISSUER_PREFIXES: z.string().default('did:plc:'),
   FEED_JWT_MAX_FUTURE_SKEW_SECONDS: z.coerce.number().default(300),
 
   // Scoring
@@ -48,6 +48,11 @@ const ConfigSchema = z.object({
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   CORS_ALLOWED_ORIGINS: z.string().default(''),
+  TRUST_PROXY: z.string().default('loopback'),
+  GOVERNANCE_SESSION_COOKIE_NAME: z.string().default('governance_session'),
+  GOVERNANCE_SESSION_COOKIE_SAME_SITE: z
+    .enum(['strict', 'lax', 'none'])
+    .default('lax'),
 
   // API rate limiting
   RATE_LIMIT_ENABLED: z.coerce.boolean().default(true),

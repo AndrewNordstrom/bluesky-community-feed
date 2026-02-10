@@ -8,12 +8,13 @@
  *
  * Usage:
  *   npx tsx scripts/create-did-plc.ts
+ *   npx tsx scripts/create-did-plc.ts --print-private-key
  *
  * This script:
  * 1. Generates an ECDSA keypair (secp256k1)
  * 2. Creates a did:plc document
  * 3. Registers it with the PLC directory
- * 4. Outputs the DID and private key for storage
+ * 4. Outputs DID setup details (private key is hidden unless explicitly requested)
  *
  * Note: For testing, you can use your existing Bluesky account's DID
  * as both FEEDGEN_SERVICE_DID and FEEDGEN_PUBLISHER_DID.
@@ -38,6 +39,7 @@ interface PlcOperation {
 
 async function createDidPlc() {
   console.log('=== DID:PLC Generator for Feed Generator ===\n');
+  const shouldPrintPrivateKey = process.argv.includes('--print-private-key');
 
   // Check if hostname is configured
   const hostname = process.env.FEEDGEN_HOSTNAME;
@@ -62,9 +64,15 @@ async function createDidPlc() {
   const privateKeyHex = Buffer.from(privateKeyBytes).toString('hex');
 
   console.log('IMPORTANT: Save these values securely!\n');
-  console.log('=== Private Key (KEEP SECRET) ===');
-  console.log(privateKeyHex);
-  console.log('');
+  if (shouldPrintPrivateKey) {
+    console.log('=== Private Key (KEEP SECRET) ===');
+    console.log(privateKeyHex);
+    console.log('');
+  } else {
+    console.log('Private key output is hidden by default.');
+    console.log('Re-run with --print-private-key if you need to export it.');
+    console.log('');
+  }
 
   // Create the PLC operation
   // Note: In production, you would sign and submit this to plc.directory

@@ -1,23 +1,16 @@
 import Fastify from 'fastify';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { redisMock, dbQueryMock } = vi.hoisted(() => ({
+const { redisMock } = vi.hoisted(() => ({
   redisMock: {
     zrevrange: vi.fn(),
     setex: vi.fn(),
     get: vi.fn(),
   },
-  dbQueryMock: vi.fn(),
 }));
 
 vi.mock('../src/db/redis.js', () => ({
   redis: redisMock,
-}));
-
-vi.mock('../src/db/client.js', () => ({
-  db: {
-    query: dbQueryMock,
-  },
 }));
 
 import { config } from '../src/config.js';
@@ -33,10 +26,9 @@ describe('getFeedSkeleton auth handling', () => {
     ]);
     redisMock.setex.mockResolvedValue('OK');
     redisMock.get.mockResolvedValue(null);
-    dbQueryMock.mockReset();
   });
 
-  it('returns 200 without auth header and does not track subscriber', async () => {
+  it('returns 200 without auth header', async () => {
     const app = Fastify();
     registerFeedSkeleton(app);
 
@@ -48,12 +40,11 @@ describe('getFeedSkeleton auth handling', () => {
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.feed).toHaveLength(2);
-    expect(dbQueryMock).not.toHaveBeenCalled();
 
     await app.close();
   });
 
-  it('returns 200 with malformed auth header and does not track subscriber', async () => {
+  it('returns 200 with malformed auth header', async () => {
     const app = Fastify();
     registerFeedSkeleton(app);
 
@@ -68,7 +59,6 @@ describe('getFeedSkeleton auth handling', () => {
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.feed).toHaveLength(2);
-    expect(dbQueryMock).not.toHaveBeenCalled();
 
     await app.close();
   });

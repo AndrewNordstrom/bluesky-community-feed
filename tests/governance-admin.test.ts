@@ -223,8 +223,8 @@ describe('admin governance routes', () => {
   it('extends voting and returns updated round', async () => {
     clientQueryMock
       .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [epochRow()] })
-      .mockResolvedValueOnce({ rows: [epochRow({ voting_ends_at: '2026-02-11T00:00:00.000Z' })] })
+      .mockResolvedValueOnce({ rows: [epochRow({ phase: 'voting' })] })
+      .mockResolvedValueOnce({ rows: [epochRow({ phase: 'voting', voting_ends_at: '2026-02-11T00:00:00.000Z' })] })
       .mockResolvedValueOnce({ rows: [{ count: '4' }] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });

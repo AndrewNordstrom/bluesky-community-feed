@@ -15,9 +15,7 @@ import { z } from 'zod';
 import { config } from '../../config.js';
 import { logger } from '../../lib/logger.js';
 import { redis } from '../../db/redis.js';
-import { db } from '../../db/client.js';
 import { encodeCursor, decodeCursor } from '../cursor.js';
-import { verifyRequesterDid } from '../auth.js';
 
 // The AT-URI for this feed
 const FEED_URI = `at://${config.FEEDGEN_PUBLISHER_DID}/app.bsky.feed.generator/community-gov`;
@@ -75,11 +73,6 @@ export function registerFeedSkeleton(app: FastifyInstance): void {
           message: 'Unknown feed',
         });
       }
-
-      // Subscriber tracking stays best-effort and must never block feed serving.
-      trackSubscriberFromRequest(request).catch(() => {
-        // Ignore auth/tracking failures - never fail feed requests
-      });
 
       let postUris: string[];
       let offset: number;
@@ -169,27 +162,5 @@ export function registerFeedSkeleton(app: FastifyInstance): void {
         cursor: hasMore ? encodeCursor(snapshotId, nextOffset) : undefined,
       });
     }
-  );
-}
-
-async function trackSubscriberFromRequest(request: FastifyRequest): Promise<void> {
-  const requesterDid = await verifyRequesterDid(request);
-  if (!requesterDid) {
-    return;
-  }
-
-  await trackSubscriber(requesterDid);
-}
-
-/**
- * Track subscriber in the database (fire-and-forget).
- * Updates last_seen timestamp and ensures is_active is TRUE.
- */
-async function trackSubscriber(did: string): Promise<void> {
-  await db.query(
-    `INSERT INTO subscribers (did, last_seen)
-     VALUES ($1, NOW())
-     ON CONFLICT (did) DO UPDATE SET last_seen = NOW(), is_active = TRUE`,
-    [did]
   );
 }

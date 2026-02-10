@@ -28,14 +28,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [error, setError] = useState<string | null>(null);
 
   const checkSession = useCallback(async () => {
-    const token = localStorage.getItem('accessJwt');
-    if (!token) {
-      setIsAuthenticated(false);
-      setUserDid(null);
-      setUserHandle(null);
-      setIsLoading(false);
-      return;
-    }
+    setIsLoading(true);
 
     try {
       const session = await authApi.getSession();
@@ -45,9 +38,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setError(null);
     } catch {
       // Session invalid or expired
-      localStorage.removeItem('accessJwt');
-      localStorage.removeItem('userDid');
-      localStorage.removeItem('userHandle');
       setIsAuthenticated(false);
       setUserDid(null);
       setUserHandle(null);
@@ -62,11 +52,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     try {
       const response = await authApi.login(handle, appPassword);
-
-      // Store session info
-      localStorage.setItem('accessJwt', response.accessJwt);
-      localStorage.setItem('userDid', response.did);
-      localStorage.setItem('userHandle', response.handle);
 
       setIsAuthenticated(true);
       setUserDid(response.did);
@@ -88,11 +73,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } catch {
       // Ignore logout errors
     }
-
-    // Clear local storage
-    localStorage.removeItem('accessJwt');
-    localStorage.removeItem('userDid');
-    localStorage.removeItem('userHandle');
 
     setIsAuthenticated(false);
     setUserDid(null);

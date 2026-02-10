@@ -2,16 +2,12 @@
 
 This document covers operational and contributor security expectations for this project.
 
-## Active hardening execution note
+## Current secure defaults
 
-Current execution plan: "Plan V1 — No-Drift Hardening Execution".
-Current branch: `codex/no-drift-hardening-v1`.
-
-Phase 0 baseline recorded before functional changes:
-- Backend build: pass
-- Backend tests: pass
-- Web build: pass
-- Web lint: failing due to existing frontend lint debt (scheduled for Phase 5)
+- Governance/admin web auth uses HttpOnly session cookies.
+- Browser CORS should use explicit allowlists (`CORS_ALLOWED_ORIGINS`).
+- Proxy trust is explicit via `TRUST_PROXY` (avoid blanket trust in forwarded headers).
+- Public transparency audit output redacts participant identity and sensitive vote payload details.
 
 ## Threat model highlights
 
@@ -40,6 +36,7 @@ Phase 0 baseline recorded before functional changes:
 - Keep `BOT_ADMIN_DIDS` minimal.
 - Review `governance_audit_log` regularly.
 - Investigate repeated `429`, auth failures, or rejected transition/rescore attempts.
+- Extend voting only during the voting phase.
 
 ## Runtime health
 

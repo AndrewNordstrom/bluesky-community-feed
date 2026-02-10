@@ -3,6 +3,7 @@ import { adminApi } from '../../api/admin';
 import type { Announcement } from '../../api/admin';
 import { formatRelative } from '../../utils/format';
 import { Skeleton } from '../Skeleton';
+import { openAnnouncementPost } from './announcement-link';
 
 export function AnnouncementPanel() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -44,7 +45,7 @@ export function AnnouncementPanel() {
       fetchAnnouncements();
 
       // Open in new tab
-      window.open(result.announcement.postUrl, '_blank');
+      openAnnouncementPost(result.announcement.postUrl);
     } catch (err) {
       setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to post' });
     } finally {

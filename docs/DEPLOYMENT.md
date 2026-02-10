@@ -66,6 +66,12 @@ Edit `.env` and set required values:
 - `BSKY_APP_PASSWORD`
 - `BOT_ADMIN_DIDS`
 
+Recommended security defaults:
+
+- `CORS_ALLOWED_ORIGINS` should be explicit for your production UI origin(s)
+- `TRUST_PROXY` should match your reverse-proxy topology (typical single-host Nginx: `loopback`)
+- `GOVERNANCE_SESSION_COOKIE_SAME_SITE=lax` (or `strict` if your deployment allows)
+
 ### DID bootstrap
 
 Resolve and print `.env` DID values:
@@ -164,6 +170,8 @@ Issue certificate:
 ```bash
 sudo certbot --nginx -d feed.yourdomain.com
 ```
+
+After enabling Nginx, confirm the app is not directly exposed on `FEEDGEN_PORT` from the internet and relies on trusted proxy headers only.
 
 ## 11. Verify deployment
 

@@ -139,6 +139,7 @@ export interface CounterfactualResult {
 export interface AuditLogEntry {
   id: number;
   action: string;
+  // Public transparency responses redact actor identity.
   actor_did: string | null;
   epoch_id: number | null;
   details: Record<string, unknown>;

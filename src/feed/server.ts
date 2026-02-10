@@ -35,13 +35,14 @@ declare module 'fastify' {
 export async function createServer() {
   const app = Fastify({
     logger: false, // We use our own pino logger
-    trustProxy: true,
+    trustProxy: parseTrustProxyConfig(config.TRUST_PROXY),
   });
 
   const allowedOrigins = parseAllowedOrigins();
 
   // Register CORS for cross-origin requests
   await app.register(cors, {
+    credentials: true,
     origin: (origin, cb) => {
       if (!origin) {
         cb(null, true);
@@ -392,4 +393,33 @@ function parseAllowedOrigins(): Set<string> {
         ];
 
   return new Set(defaults);
+}
+
+export function parseTrustProxyConfig(value: string): boolean | number | string | string[] {
+  const normalized = value.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  const lower = normalized.toLowerCase();
+  if (lower === 'true' || lower === 'on') {
+    return true;
+  }
+
+  if (lower === 'false' || lower === 'off') {
+    return false;
+  }
+
+  if (/^\d+$/.test(normalized)) {
+    return Number.parseInt(normalized, 10);
+  }
+
+  if (normalized.includes(',')) {
+    return normalized
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+  }
+
+  return normalized;
 }
