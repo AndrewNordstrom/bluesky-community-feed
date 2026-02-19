@@ -148,3 +148,24 @@ export async function announceVoteScheduled(scheduledVote: ScheduledVoteLike): P
 
   await publishIfEnabled('vote_scheduled', message);
 }
+
+export async function announceLegalUpdate(
+  documentType: 'tos' | 'privacy' | 'both'
+): Promise<void> {
+  if (!(await isAnnouncementEnabled('legal_update'))) {
+    logger.debug('Legal update announcement skipped: setting disabled');
+    return;
+  }
+
+  const baseUrl = `https://${config.FEEDGEN_HOSTNAME}`;
+  const url =
+    documentType === 'privacy'
+      ? `${baseUrl}/privacy`
+      : `${baseUrl}/tos`;
+
+  await postAnnouncementSafe({
+    type: 'legal_update',
+    documentType,
+    url,
+  });
+}

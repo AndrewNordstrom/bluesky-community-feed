@@ -435,3 +435,46 @@ export const transparencyApi = {
     return { epochs };
   },
 };
+
+// Legal document types
+export interface LegalDocResponse {
+  content: string;
+  document: 'tos' | 'privacy';
+  version: string;
+  lastUpdated: string;
+}
+
+// Legal API
+export const legalApi = {
+  getTos: async (): Promise<LegalDocResponse> => {
+    const response = await api.get<LegalDocResponse>('/api/legal/tos');
+    return response.data;
+  },
+
+  getPrivacy: async (): Promise<LegalDocResponse> => {
+    const response = await api.get<LegalDocResponse>('/api/legal/privacy');
+    return response.data;
+  },
+};
+
+// Research consent types
+export interface ResearchConsentResponse {
+  consent: boolean | null;
+  consentedAt: string | null;
+  consentVersion: string | null;
+}
+
+// Research consent API
+export const consentApi = {
+  getStatus: async (): Promise<ResearchConsentResponse> => {
+    const response = await api.get<ResearchConsentResponse>('/api/governance/research-consent');
+    return response.data;
+  },
+
+  submit: async (consent: boolean): Promise<{ success: boolean }> => {
+    const response = await api.post<{ success: boolean }>('/api/governance/research-consent', {
+      consent,
+    });
+    return response.data;
+  },
+};

@@ -12,6 +12,7 @@ import { registerEpochsRoute } from './routes/epochs.js';
 import { registerAuthRoute } from './routes/auth.js';
 import { registerPolisRoute } from './routes/polis.js';
 import { registerContentRulesRoute } from './routes/content-rules.js';
+import { registerResearchConsentRoute } from './routes/research-consent.js';
 import { logger } from '../lib/logger.js';
 
 /**
@@ -52,6 +53,9 @@ export function registerGovernanceRoutes(app: FastifyInstance): void {
 
   // Content rules route
   registerContentRulesRoute(app);
+
+  // Research consent route
+  registerResearchConsentRoute(app);
 
   logger.info('Governance routes registered');
 }

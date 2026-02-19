@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/useAuth';
+import { api } from '../api/client';
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === 'object') {
@@ -33,6 +34,20 @@ export function Login() {
 
     try {
       await login(handle, appPassword);
+
+      // Check if user needs to complete research consent
+      try {
+        const consentResponse = await api.get<{ consent: boolean | null }>(
+          '/api/governance/research-consent'
+        );
+        if (consentResponse.data.consent === null) {
+          navigate('/research-consent');
+          return;
+        }
+      } catch {
+        // If consent check fails, proceed to vote (non-blocking)
+      }
+
       navigate('/vote');
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Login failed'));
@@ -98,6 +113,18 @@ export function Login() {
             {isSubmitting ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
+
+        <p className="login-legal">
+          By signing in, you agree to our{' '}
+          <a href="/tos" target="_blank" rel="noopener noreferrer">
+            Terms of Service
+          </a>{' '}
+          and{' '}
+          <a href="/privacy" target="_blank" rel="noopener noreferrer">
+            Privacy Policy
+          </a>
+          .
+        </p>
 
         <div className="login-info">
           <h3>Why app password?</h3>
@@ -241,6 +268,23 @@ const styles = `
   .login-button:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+
+  .login-legal {
+    margin-top: var(--space-4);
+    text-align: center;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    line-height: var(--leading-relaxed);
+  }
+
+  .login-legal a {
+    color: var(--text-secondary);
+    text-decoration: underline;
+  }
+
+  .login-legal a:hover {
+    color: var(--accent-blue);
   }
 
   .login-info {

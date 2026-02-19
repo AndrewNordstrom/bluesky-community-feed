@@ -9,7 +9,7 @@ import { GovernanceWeights } from '../governance/governance.types.js';
 /**
  * Announcement types that can be posted.
  */
-export type AnnouncementType = 'voting_opened' | 'epoch_transition' | 'manual';
+export type AnnouncementType = 'voting_opened' | 'epoch_transition' | 'manual' | 'legal_update';
 
 /**
  * Stored announcement record.
@@ -55,12 +55,22 @@ export interface ManualAnnouncementPayload {
 }
 
 /**
+ * Payload for legal document update announcement.
+ */
+export interface LegalUpdatePayload {
+  type: 'legal_update';
+  documentType: 'tos' | 'privacy' | 'both';
+  url: string;
+}
+
+/**
  * Union of all announcement payload types.
  */
 export type AnnouncementPayload =
   | VotingOpenedPayload
   | EpochTransitionPayload
-  | ManualAnnouncementPayload;
+  | ManualAnnouncementPayload
+  | LegalUpdatePayload;
 
 /**
  * Cached bot session stored in Redis.

@@ -11,6 +11,7 @@ import type {
   VotingOpenedPayload,
   EpochTransitionPayload,
   ManualAnnouncementPayload,
+  LegalUpdatePayload,
 } from './bot.types.js';
 
 /**
@@ -97,6 +98,24 @@ export function generateManualAnnouncementText(payload: ManualAnnouncementPayloa
 }
 
 /**
+ * Generate text for legal document update announcement.
+ */
+export function generateLegalUpdateText(payload: LegalUpdatePayload): string {
+  const docLabel =
+    payload.documentType === 'both'
+      ? 'Terms of Service and Privacy Policy have'
+      : payload.documentType === 'tos'
+        ? 'Terms of Service has'
+        : 'Privacy Policy has';
+
+  return (
+    `Important: Our ${docLabel} been updated.\n\n` +
+    `Review the changes: ${payload.url}\n\n` +
+    `Your continued use of the feed constitutes acceptance of the updated terms.`
+  );
+}
+
+/**
  * Generate announcement text based on payload type.
  */
 export function generateAnnouncementText(payload: AnnouncementPayload): string {
@@ -107,6 +126,8 @@ export function generateAnnouncementText(payload: AnnouncementPayload): string {
       return generateEpochTransitionText(payload);
     case 'manual':
       return generateManualAnnouncementText(payload);
+    case 'legal_update':
+      return generateLegalUpdateText(payload);
     default:
       throw new Error(`Unknown announcement type: ${(payload as AnnouncementPayload).type}`);
   }

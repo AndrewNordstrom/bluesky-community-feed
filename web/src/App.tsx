@@ -7,6 +7,8 @@ import { Dashboard } from './pages/Dashboard';
 import { PostExplain } from './pages/PostExplain';
 import { History } from './pages/History';
 import { AdminPage } from './pages/Admin';
+import { LegalDocument } from './pages/LegalDocument';
+import { ResearchConsent } from './pages/ResearchConsent';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,6 +26,9 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/tos" element={<LegalDocument document="tos" />} />
+            <Route path="/privacy" element={<LegalDocument document="privacy" />} />
+            <Route path="/research-consent" element={<ResearchConsent />} />
             <Route path="/vote" element={<Vote />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/post/:uri" element={<PostExplain />} />
