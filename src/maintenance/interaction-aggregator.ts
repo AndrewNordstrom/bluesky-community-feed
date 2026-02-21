@@ -122,45 +122,65 @@ async function runAllJobs(): Promise<void> {
 async function rollupDailyStats(): Promise<void> {
   try {
     const result = await db.query(
-      `INSERT INTO feed_request_daily_stats (
+      `WITH base_stats AS (
+        SELECT
+          fr.requested_at::date AS date,
+          fr.epoch_id,
+          COUNT(DISTINCT fr.viewer_did) FILTER (WHERE fr.viewer_did IS NOT NULL) AS unique_viewers,
+          COUNT(*) FILTER (WHERE fr.viewer_did IS NULL) AS anonymous_requests,
+          COUNT(*) AS total_requests,
+          COUNT(*) AS total_pages,
+          MAX(fr.page_offset + fr.posts_served) AS max_scroll_depth
+        FROM feed_requests fr
+        WHERE fr.requested_at::date < CURRENT_DATE
+        GROUP BY fr.requested_at::date, fr.epoch_id
+      ),
+      session_pages AS (
+        SELECT
+          fr.requested_at::date AS date,
+          fr.epoch_id,
+          AVG(cnt)::float AS avg_pages_per_session
+        FROM (
+          SELECT requested_at::date AS requested_at, epoch_id, snapshot_id, COUNT(*) AS cnt
+          FROM feed_requests
+          WHERE requested_at::date < CURRENT_DATE
+          GROUP BY requested_at::date, epoch_id, snapshot_id
+        ) fr
+        GROUP BY fr.requested_at, fr.epoch_id
+      ),
+      returning AS (
+        SELECT
+          fr.requested_at::date AS date,
+          fr.epoch_id,
+          COUNT(DISTINCT fr.viewer_did) AS returning_viewers
+        FROM feed_requests fr
+        WHERE fr.requested_at::date < CURRENT_DATE
+          AND fr.viewer_did IS NOT NULL
+          AND EXISTS (
+            SELECT 1 FROM feed_requests fr2
+            WHERE fr2.viewer_did = fr.viewer_did
+              AND fr2.requested_at::date < fr.requested_at::date
+          )
+        GROUP BY fr.requested_at::date, fr.epoch_id
+      )
+      INSERT INTO feed_request_daily_stats (
         date, epoch_id, unique_viewers, anonymous_requests,
         total_requests, total_pages, avg_pages_per_session,
         max_scroll_depth, returning_viewers
       )
       SELECT
-        fr.requested_at::date AS date,
-        fr.epoch_id,
-        COUNT(DISTINCT fr.viewer_did) FILTER (WHERE fr.viewer_did IS NOT NULL) AS unique_viewers,
-        COUNT(*) FILTER (WHERE fr.viewer_did IS NULL) AS anonymous_requests,
-        COUNT(*) AS total_requests,
-        COUNT(*) AS total_pages,
-        -- avg pages per session (group by snapshot_id)
-        (
-          SELECT AVG(cnt)::float FROM (
-            SELECT COUNT(*) AS cnt
-            FROM feed_requests fr2
-            WHERE fr2.requested_at::date = fr.requested_at::date
-              AND fr2.epoch_id = fr.epoch_id
-            GROUP BY fr2.snapshot_id
-          ) sub
-        ) AS avg_pages_per_session,
-        MAX(fr.page_offset + fr.posts_served) AS max_scroll_depth,
-        -- returning viewers: seen on any prior day
-        (
-          SELECT COUNT(DISTINCT fr3.viewer_did)
-          FROM feed_requests fr3
-          WHERE fr3.requested_at::date = fr.requested_at::date
-            AND fr3.epoch_id = fr.epoch_id
-            AND fr3.viewer_did IS NOT NULL
-            AND EXISTS (
-              SELECT 1 FROM feed_requests fr4
-              WHERE fr4.viewer_did = fr3.viewer_did
-                AND fr4.requested_at::date < fr3.requested_at::date
-            )
-        ) AS returning_viewers
-      FROM feed_requests fr
-      WHERE fr.requested_at::date < CURRENT_DATE
-      GROUP BY fr.requested_at::date, fr.epoch_id
+        bs.date,
+        bs.epoch_id,
+        bs.unique_viewers,
+        bs.anonymous_requests,
+        bs.total_requests,
+        bs.total_pages,
+        COALESCE(sp.avg_pages_per_session, 0),
+        bs.max_scroll_depth,
+        COALESCE(r.returning_viewers, 0)
+      FROM base_stats bs
+      LEFT JOIN session_pages sp ON sp.date = bs.date AND sp.epoch_id = bs.epoch_id
+      LEFT JOIN returning r ON r.date = bs.date AND r.epoch_id = bs.epoch_id
       ON CONFLICT (date, epoch_id) DO UPDATE SET
         unique_viewers = EXCLUDED.unique_viewers,
         anonymous_requests = EXCLUDED.anonymous_requests,
