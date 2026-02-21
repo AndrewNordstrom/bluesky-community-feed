@@ -220,6 +220,86 @@ export interface WeightImpactResponse {
   generatedAt: string;
 }
 
+// Interaction types
+export interface InteractionOverview {
+  today: {
+    totalRequests: number;
+    uniqueViewers: number;
+    anonymousRequests: number;
+    avgScrollDepth: number;
+    avgResponseTimeMs: number;
+    returningViewers: number;
+  };
+  yesterday: {
+    totalRequests: number;
+    uniqueViewers: number;
+    anonymousRequests: number;
+    avgScrollDepth: number;
+    returningViewers: number;
+  } | null;
+  trend: Array<{
+    date: string;
+    totalRequests: number;
+    uniqueViewers: number;
+    anonymousRequests: number;
+    maxScrollDepth: number;
+    avgPagesPerSession: number;
+    returningViewers: number;
+  }>;
+}
+
+export interface ScrollDepthData {
+  histogram: Array<{
+    bucket: string;
+    sessionCount: number;
+  }>;
+}
+
+export interface EngagementData {
+  overall: {
+    totalServed: number;
+    totalEngaged: number;
+    engagementRate: number;
+    likes: number;
+    reposts: number;
+  };
+  byPosition: Array<{
+    bucket: string;
+    served: number;
+    engaged: number;
+    rate: number;
+  }>;
+}
+
+export interface EpochComparisonData {
+  epochs: Array<{
+    epochId: number;
+    totalFeedLoads: number;
+    uniqueViewers: number;
+    avgScrollDepth: number | null;
+    returningViewerPct: number | null;
+    engagementRate: number | null;
+    avgEngagementPosition: number | null;
+    postsServed: number;
+    postsWithEngagement: number;
+    computedAt: string;
+    epochStartedAt: string;
+  }>;
+}
+
+export interface KeywordPerformanceData {
+  keywords: Array<{
+    keyword: string;
+    served: number;
+    engaged: number;
+    rate: number;
+  }>;
+  currentRules: {
+    includeKeywords: string[];
+    excludeKeywords: string[];
+  };
+}
+
 // API Functions
 export const adminApi = {
   async getStatus(): Promise<AdminStatus> {
@@ -440,6 +520,32 @@ export const adminApi = {
 
   async getVoteSchedule(): Promise<{ scheduledVotes: ScheduledVote[] }> {
     const response = await api.get('/api/admin/governance/schedule');
+    return response.data;
+  },
+
+  // Interaction tracking endpoints
+  async getInteractionOverview(): Promise<InteractionOverview> {
+    const response = await api.get('/api/admin/interactions/overview');
+    return response.data;
+  },
+
+  async getScrollDepth(): Promise<ScrollDepthData> {
+    const response = await api.get('/api/admin/interactions/scroll-depth');
+    return response.data;
+  },
+
+  async getEngagement(): Promise<EngagementData> {
+    const response = await api.get('/api/admin/interactions/engagement');
+    return response.data;
+  },
+
+  async getEpochComparison(): Promise<EpochComparisonData> {
+    const response = await api.get('/api/admin/interactions/epoch-comparison');
+    return response.data;
+  },
+
+  async getKeywordPerformance(): Promise<KeywordPerformanceData> {
+    const response = await api.get('/api/admin/interactions/keyword-performance');
     return response.data;
   },
 };
