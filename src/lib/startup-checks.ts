@@ -10,6 +10,7 @@ import { redis } from '../db/redis.js';
 import { logger } from './logger.js';
 
 const STARTUP_CHECK_TIMEOUT = 5000; // 5 seconds per check
+const MIN_REQUIRED_MIGRATION = 14;
 
 /**
  * Run all startup checks.
@@ -23,7 +24,11 @@ export async function runStartupChecks(): Promise<void> {
     await checkPostgres();
     logger.info('PostgreSQL: OK');
 
-    // 2. Verify Redis connection
+    // 2. Verify migration state on PostgreSQL
+    await checkMigrationVersion();
+    logger.info({ minRequiredMigration: MIN_REQUIRED_MIGRATION }, 'PostgreSQL migrations: OK');
+
+    // 3. Verify Redis connection
     await checkRedis();
     logger.info('Redis: OK');
 
@@ -79,5 +84,27 @@ async function checkRedis(): Promise<void> {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     throw new Error(`Redis startup check failed: ${message}`);
+  }
+}
+
+/**
+ * Check that required database migrations have been applied.
+ */
+async function checkMigrationVersion(): Promise<void> {
+  try {
+    const result = await db.query<{ max_migration: number | null }>(
+      `SELECT MAX((substring(filename FROM '^([0-9]+)'))::int) AS max_migration
+       FROM schema_migrations`
+    );
+
+    const maxMigration = result.rows[0]?.max_migration ?? 0;
+    if (maxMigration < MIN_REQUIRED_MIGRATION) {
+      throw new Error(
+        `database migrations are behind (max=${maxMigration}, required=${MIN_REQUIRED_MIGRATION})`
+      );
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    throw new Error(`Migration startup check failed: ${message}`);
   }
 }
