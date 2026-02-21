@@ -67,7 +67,10 @@ async function trackFeedRequest(context: FeedRequestTrackingContext): Promise<vo
       requested_at: new Date().toISOString(),
     });
 
-    await redis.rpush('feed:request_log', logEntry);
+    const pipeline = redis.pipeline();
+    pipeline.rpush('feed:request_log', logEntry);
+    pipeline.ltrim('feed:request_log', -100000, -1);
+    await pipeline.exec();
   } catch (err) {
     logger.warn({ err }, 'Failed to log feed request to Redis');
   }

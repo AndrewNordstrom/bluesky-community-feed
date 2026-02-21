@@ -16,11 +16,14 @@ import { redis } from '../db/redis.js';
 import { logger } from '../lib/logger.js';
 
 const DRAIN_INTERVAL_MS = 5_000; // 5 seconds
-const BATCH_SIZE = 100;
+const BATCH_SIZE = 500;
+const QUEUE_DEPTH_LOG_INTERVAL_MS = 60_000; // 60 seconds
+const QUEUE_DEPTH_WARN_THRESHOLD = 50_000;
 
 let isRunning = false;
 let isDraining = false;
 let intervalId: NodeJS.Timeout | null = null;
+let queueDepthIntervalId: NodeJS.Timeout | null = null;
 let isShuttingDown = false;
 
 interface FeedRequestLogEntry {
@@ -58,6 +61,9 @@ export async function startInteractionLogger(): Promise<void> {
 
   // Schedule recurring runs
   intervalId = setInterval(runWithGuard, DRAIN_INTERVAL_MS);
+  queueDepthIntervalId = setInterval(() => {
+    void logQueueDepth();
+  }, QUEUE_DEPTH_LOG_INTERVAL_MS);
 
   logger.info('Interaction logger started');
 }
@@ -77,6 +83,10 @@ export async function stopInteractionLogger(): Promise<void> {
   if (intervalId) {
     clearInterval(intervalId);
     intervalId = null;
+  }
+  if (queueDepthIntervalId) {
+    clearInterval(queueDepthIntervalId);
+    queueDepthIntervalId = null;
   }
 
   // Wait for in-progress drain to complete
@@ -111,6 +121,21 @@ async function runWithGuard(): Promise<void> {
     logger.error({ err }, 'Interaction logger drain failed');
   } finally {
     isDraining = false;
+  }
+}
+
+async function logQueueDepth(): Promise<void> {
+  try {
+    const depth = await redis.llen('feed:request_log');
+    logger.info({ queueDepth: depth }, 'Interaction logger queue depth');
+    if (depth > QUEUE_DEPTH_WARN_THRESHOLD) {
+      logger.warn(
+        { queueDepth: depth, threshold: QUEUE_DEPTH_WARN_THRESHOLD },
+        'Interaction logger queue depth is above warning threshold'
+      );
+    }
+  } catch (err) {
+    logger.warn({ err }, 'Failed to read interaction logger queue depth');
   }
 }
 

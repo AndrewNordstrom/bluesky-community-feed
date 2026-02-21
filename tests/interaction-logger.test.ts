@@ -9,6 +9,7 @@ const { redisMock, dbQueryMock } = vi.hoisted(() => ({
   redisMock: {
     lpop: vi.fn(),
     rpush: vi.fn().mockResolvedValue(1),
+    llen: vi.fn().mockResolvedValue(0),
   },
   dbQueryMock: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
 }));
@@ -37,6 +38,7 @@ vi.mock('../src/lib/logger.js', () => ({
 const { startInteractionLogger, stopInteractionLogger } = await import(
   '../src/maintenance/interaction-logger.js'
 );
+const { logger } = await import('../src/lib/logger.js');
 
 function makeLogEntry(overrides: Record<string, unknown> = {}) {
   return JSON.stringify({
@@ -174,5 +176,26 @@ describe('interaction logger', () => {
     const placeholderCount = (sql.match(/\$\d+/g) || []).length;
     // 3 entries × 7 columns = 21 placeholders
     expect(placeholderCount).toBe(21);
+  });
+
+  it('logs queue depth and warns when queue exceeds threshold', async () => {
+    vi.useFakeTimers();
+    redisMock.lpop.mockResolvedValue(null);
+    redisMock.llen.mockResolvedValue(51001);
+
+    await startInteractionLogger();
+    await vi.advanceTimersByTimeAsync(60_000);
+    await stopInteractionLogger();
+
+    expect(logger.info).toHaveBeenCalledWith(
+      { queueDepth: 51001 },
+      'Interaction logger queue depth'
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      { queueDepth: 51001, threshold: 50000 },
+      'Interaction logger queue depth is above warning threshold'
+    );
+
+    vi.useRealTimers();
   });
 });
