@@ -16,7 +16,7 @@ import { registerTransparencyRoutes } from '../transparency/server.js';
 import { registerDebugRoutes } from './routes/debug.js';
 import { registerAdminRoutes } from '../admin/routes/index.js';
 import { registerLegalRoutes } from '../legal/server.js';
-import { getHealthStatus, isLive, isReady } from '../lib/health.js';
+import { getPublicHealthStatus, isLive, isReady } from '../lib/health.js';
 import { generateCorrelationId } from '../lib/correlation.js';
 import { AppError, isAppError } from '../lib/errors.js';
 import { redis } from '../db/redis.js';
@@ -159,9 +159,9 @@ export async function createServer() {
   // Register legal document routes
   registerLegalRoutes(app);
 
-  // Deep health check endpoint - returns detailed component status
+  // Public health check endpoint - redacted status only
   app.get('/health', async () => {
-    return getHealthStatus();
+    return getPublicHealthStatus();
   });
 
   // Liveness probe - just checks if process is running (k8s liveness)

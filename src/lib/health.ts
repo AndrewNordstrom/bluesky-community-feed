@@ -41,6 +41,10 @@ export interface HealthStatus {
   };
 }
 
+export interface PublicHealthStatus {
+  status: 'ok' | 'degraded';
+}
+
 // Timeout for health check queries (ms)
 const HEALTH_CHECK_TIMEOUT = 2000;
 
@@ -194,6 +198,13 @@ export async function getHealthStatus(): Promise<HealthStatus> {
     status,
     timestamp: new Date().toISOString(),
     components,
+  };
+}
+
+export async function getPublicHealthStatus(): Promise<PublicHealthStatus> {
+  const health = await getHealthStatus();
+  return {
+    status: health.status === 'healthy' ? 'ok' : 'degraded',
   };
 }
 
