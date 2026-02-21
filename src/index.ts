@@ -11,6 +11,7 @@ import { registerBotRoutes } from './bot/server.js';
 import { initializeBot } from './bot/agent.js';
 import { startEpochScheduler, stopEpochScheduler } from './scheduler/epoch-scheduler.js';
 import { startCleanup, stopCleanup } from './maintenance/cleanup.js';
+import { startInteractionLogger, stopInteractionLogger } from './maintenance/interaction-logger.js';
 
 async function main() {
   logger.info('Starting Community Feed Generator...');
@@ -115,6 +116,14 @@ async function main() {
     logger.warn({ err }, 'Cleanup scheduler failed to start - non-fatal, will retry on next startup');
   }
 
+  // 6.8. Start interaction logger (drains feed request queue from Redis to PostgreSQL)
+  try {
+    await startInteractionLogger();
+    logger.info('Interaction logger started');
+  } catch (err) {
+    logger.warn({ err }, 'Interaction logger failed to start - non-fatal');
+  }
+
   // 7. Register graceful shutdown handlers
   registerShutdownHandlers({
     server: app,
@@ -122,6 +131,7 @@ async function main() {
     stopJetstream,
     stopEpochScheduler,
     stopCleanup,
+    stopInteractionLogger,
   });
 
   // 8. Log startup complete
