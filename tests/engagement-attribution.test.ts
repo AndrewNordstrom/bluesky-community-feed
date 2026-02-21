@@ -32,7 +32,7 @@ describe('engagement attribution - likes', () => {
     vi.clearAllMocks();
   });
 
-  it('fires attribution UPDATE after successful like insert', async () => {
+  it('fires epoch-scoped attribution UPDATE after successful like insert', async () => {
     // First call: INSERT like → success (new row)
     dbQueryMock.mockResolvedValueOnce({ rows: [{ uri: 'at://like/1' }], rowCount: 1 });
     // Second call: UPDATE post_engagement
@@ -55,6 +55,9 @@ describe('engagement attribution - likes', () => {
     const attributionCall = dbQueryMock.mock.calls[2];
     expect(attributionCall[0]).toContain('UPDATE engagement_attributions');
     expect(attributionCall[0]).toContain("engagement_type = 'like'");
+    expect(attributionCall[0]).toContain('WITH active_epoch AS');
+    expect(attributionCall[0]).toContain("WHERE status = 'active'");
+    expect(attributionCall[0]).toContain('ea.epoch_id = active_epoch.id');
     expect(attributionCall[0]).toContain('engaged_at IS NULL');
     expect(attributionCall[1]).toEqual([
       'at://did:plc:author/app.bsky.feed.post/1',
@@ -97,6 +100,26 @@ describe('engagement attribution - likes', () => {
     // Like and engagement were still stored (first 2 calls succeeded)
     expect(dbQueryMock).toHaveBeenCalledTimes(3);
   });
+
+  it('leaves attribution untouched when active epoch does not match', async () => {
+    // INSERT like → success
+    dbQueryMock.mockResolvedValueOnce({ rows: [{ uri: 'at://like/1' }], rowCount: 1 });
+    // UPDATE post_engagement → success
+    dbQueryMock.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    // UPDATE attribution → no row updated (epoch mismatch)
+    dbQueryMock.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    await handleLike(
+      'at://did:plc:liker/app.bsky.feed.like/1',
+      'did:plc:liker',
+      { subject: { uri: 'at://did:plc:author/app.bsky.feed.post/1' } }
+    );
+
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(dbQueryMock).toHaveBeenCalledTimes(3);
+    expect(dbQueryMock.mock.calls[2][0]).toContain('ea.epoch_id = active_epoch.id');
+  });
 });
 
 describe('engagement attribution - reposts', () => {
@@ -104,7 +127,7 @@ describe('engagement attribution - reposts', () => {
     vi.clearAllMocks();
   });
 
-  it('fires attribution UPDATE after successful repost insert', async () => {
+  it('fires epoch-scoped attribution UPDATE after successful repost insert', async () => {
     dbQueryMock.mockResolvedValueOnce({ rows: [{ uri: 'at://repost/1' }], rowCount: 1 });
     dbQueryMock.mockResolvedValueOnce({ rows: [], rowCount: 1 });
     dbQueryMock.mockResolvedValueOnce({ rows: [], rowCount: 0 });
@@ -122,6 +145,9 @@ describe('engagement attribution - reposts', () => {
     const attributionCall = dbQueryMock.mock.calls[2];
     expect(attributionCall[0]).toContain('UPDATE engagement_attributions');
     expect(attributionCall[0]).toContain("engagement_type = 'repost'");
+    expect(attributionCall[0]).toContain('WITH active_epoch AS');
+    expect(attributionCall[0]).toContain("WHERE status = 'active'");
+    expect(attributionCall[0]).toContain('ea.epoch_id = active_epoch.id');
     expect(attributionCall[1]).toEqual([
       'at://did:plc:author/app.bsky.feed.post/1',
       'did:plc:reposter',
@@ -156,5 +182,22 @@ describe('engagement attribution - reposts', () => {
     await new Promise((r) => setTimeout(r, 10));
 
     expect(dbQueryMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('updates attribution when active epoch matches', async () => {
+    dbQueryMock.mockResolvedValueOnce({ rows: [{ uri: 'at://repost/1' }], rowCount: 1 });
+    dbQueryMock.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    dbQueryMock.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+
+    await handleRepost(
+      'at://did:plc:reposter/app.bsky.feed.repost/1',
+      'did:plc:reposter',
+      { subject: { uri: 'at://did:plc:author/app.bsky.feed.post/1' } }
+    );
+
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(dbQueryMock).toHaveBeenCalledTimes(3);
+    expect(dbQueryMock.mock.calls[2][0]).toContain('ea.epoch_id = active_epoch.id');
   });
 });

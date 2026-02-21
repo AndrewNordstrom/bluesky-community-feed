@@ -51,9 +51,20 @@ export async function handleLike(
 
       // Fire-and-forget: mark engagement attribution if this user was served this post
       db.query(
-        `UPDATE engagement_attributions
+        `WITH active_epoch AS (
+           SELECT id
+           FROM governance_epochs
+           WHERE status = 'active'
+           ORDER BY id DESC
+           LIMIT 1
+         )
+         UPDATE engagement_attributions ea
          SET engaged_at = NOW(), engagement_type = 'like'
-         WHERE post_uri = $1 AND viewer_did = $2 AND engaged_at IS NULL`,
+         FROM active_epoch
+         WHERE ea.post_uri = $1
+           AND ea.viewer_did = $2
+           AND ea.epoch_id = active_epoch.id
+           AND ea.engaged_at IS NULL`,
         [subjectUri, authorDid]
       ).catch((err) => logger.warn({ err, subjectUri }, 'Attribution update failed'));
     }
