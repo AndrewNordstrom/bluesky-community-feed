@@ -7,6 +7,7 @@
 
 import { db } from '../../db/client.js';
 import { logger } from '../../lib/logger.js';
+import { getCurrentContentRules, checkContentRules, hasActiveContentRules } from '../../governance/content-filter.js';
 
 interface PostRecord {
   text?: string;
@@ -40,6 +41,24 @@ export async function handlePost(
 
   // Check for media
   const hasMedia = !!(postRecord.embed?.images?.length || postRecord.embed?.video);
+
+  // Pre-ingestion content filtering: skip posts that don't match include keywords.
+  // Fail-open: if the filter check fails, insert anyway (cleanup handles it later).
+  try {
+    const rules = await getCurrentContentRules();
+    if (hasActiveContentRules(rules)) {
+      const filterResult = checkContentRules(text, rules);
+      if (!filterResult.passes) {
+        logger.debug(
+          { uri, reason: filterResult.reason, keyword: filterResult.matchedKeyword },
+          'Post skipped by content filter'
+        );
+        return;
+      }
+    }
+  } catch (err) {
+    logger.warn({ err, uri }, 'Content filter check failed, inserting post anyway');
+  }
 
   try {
     // UPSERT post - ON CONFLICT DO NOTHING handles duplicates

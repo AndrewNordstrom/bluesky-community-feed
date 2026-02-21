@@ -10,6 +10,7 @@ import { registerJetstreamHealth, registerScoringHealth, JetstreamHealth, Scorin
 import { registerBotRoutes } from './bot/server.js';
 import { initializeBot } from './bot/agent.js';
 import { startEpochScheduler, stopEpochScheduler } from './scheduler/epoch-scheduler.js';
+import { startCleanup, stopCleanup } from './maintenance/cleanup.js';
 
 async function main() {
   logger.info('Starting Community Feed Generator...');
@@ -106,12 +107,21 @@ async function main() {
   // 6.6. Start epoch scheduler (for auto-transitions)
   startEpochScheduler();
 
+  // 6.7. Start cleanup scheduler (hourly post retention cleanup)
+  try {
+    await startCleanup();
+    logger.info('Cleanup scheduler started');
+  } catch (err) {
+    logger.warn({ err }, 'Cleanup scheduler failed to start - non-fatal, will retry on next startup');
+  }
+
   // 7. Register graceful shutdown handlers
   registerShutdownHandlers({
     server: app,
     stopScoring,
     stopJetstream,
     stopEpochScheduler,
+    stopCleanup,
   });
 
   // 8. Log startup complete
