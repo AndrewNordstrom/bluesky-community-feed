@@ -149,7 +149,7 @@ export function registerFeedHealthRoutes(app: FastifyInstance): void {
   app.post('/feed/rescore', async (request: FastifyRequest, reply: FastifyReply) => {
     const adminDid = getAdminDid(request);
 
-    if (!tryTriggerManualScoringRun()) {
+    if (!(await tryTriggerManualScoringRun())) {
       logger.warn({ adminDid }, 'Manual rescore rejected because scoring is already in progress');
       return reply.code(409).send({
         error: 'Conflict',

@@ -6,19 +6,23 @@
  *
  * Features:
  * - Runs immediately on start (don't wait 5 minutes for first run)
- * - Prevents overlapping runs (skips if previous run is still in progress)
+ * - Prevents overlapping runs via Redis distributed lock
  * - Graceful shutdown (completes current run before stopping)
  * - Error isolation (failed runs don't crash the scheduler)
  */
 
 import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
+import { redis } from '../db/redis.js';
 import { runScoringPipeline } from './pipeline.js';
+
+const SCORING_LOCK_KEY = 'lock:scoring';
+const SCORING_LOCK_TTL = 300; // 5-minute safety TTL (auto-expires if process crashes)
 
 /** Whether the scheduler is currently running */
 let isRunning = false;
 
-/** Whether a scoring run is in progress */
+/** Local mirror of lock state for synchronous health checks */
 let isScoring = false;
 
 /** The interval timer */
@@ -91,8 +95,8 @@ async function runWithGuard(): Promise<void> {
     return;
   }
 
-  // Don't start if previous run is still going
-  if (!acquireScoringLock()) {
+  // Don't start if previous run is still going (Redis distributed lock)
+  if (!(await acquireScoringLock())) {
     logger.warn('Skipping scoring run - previous run still in progress');
     return;
   }
@@ -103,7 +107,9 @@ async function runWithGuard(): Promise<void> {
     // Log error but don't crash - next run will try again
     logger.error({ err }, 'Scoring pipeline failed');
   } finally {
-    releaseScoringLock();
+    await releaseScoringLock().catch((err) => {
+      logger.error({ err }, 'Failed to release scoring lock (TTL will expire)');
+    });
   }
 }
 
@@ -111,13 +117,13 @@ async function runWithGuard(): Promise<void> {
  * Try to trigger a manual scoring run without waiting for completion.
  * Returns false when a run is already in progress or scheduler is shutting down.
  */
-export function tryTriggerManualScoringRun(): boolean {
+export async function tryTriggerManualScoringRun(): Promise<boolean> {
   if (isShuttingDown) {
     logger.warn('Manual scoring run rejected - scheduler is shutting down');
     return false;
   }
 
-  if (!acquireScoringLock()) {
+  if (!(await acquireScoringLock())) {
     logger.warn('Manual scoring run rejected - scoring already in progress');
     return false;
   }
@@ -128,8 +134,10 @@ export function tryTriggerManualScoringRun(): boolean {
     .catch((err) => {
       logger.error({ err }, 'Manual scoring pipeline failed');
     })
-    .finally(() => {
-      releaseScoringLock();
+    .finally(async () => {
+      await releaseScoringLock().catch((err) => {
+        logger.error({ err }, 'Failed to release scoring lock after manual run');
+      });
     });
 
   return true;
@@ -153,6 +161,7 @@ export function isSchedulerRunning(): boolean {
 
 /**
  * Check if a scoring run is in progress.
+ * Uses local boolean mirror for synchronous health check compatibility.
  */
 export function isScoringInProgress(): boolean {
   return isScoring;
@@ -165,15 +174,36 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function acquireScoringLock(): boolean {
-  if (isScoring) {
-    return false;
+/**
+ * Acquire the scoring lock via Redis SET NX EX.
+ * Returns true if lock was acquired, false if already held.
+ */
+async function acquireScoringLock(): Promise<boolean> {
+  try {
+    const result = await redis.set(SCORING_LOCK_KEY, Date.now().toString(), 'EX', SCORING_LOCK_TTL, 'NX');
+    const acquired = result === 'OK';
+    if (acquired) {
+      isScoring = true;
+    }
+    return acquired;
+  } catch (err) {
+    // If Redis is down, fall back to local boolean to avoid deadlocking the scheduler
+    logger.warn({ err }, 'Redis lock acquire failed, using local fallback');
+    if (isScoring) return false;
+    isScoring = true;
+    return true;
   }
-
-  isScoring = true;
-  return true;
 }
 
-function releaseScoringLock(): void {
+/**
+ * Release the scoring lock by deleting the Redis key.
+ */
+async function releaseScoringLock(): Promise<void> {
   isScoring = false;
+  try {
+    await redis.del(SCORING_LOCK_KEY);
+  } catch (err) {
+    // Lock will auto-expire via TTL; log and continue
+    logger.warn({ err }, 'Redis lock release failed (TTL will expire)');
+  }
 }

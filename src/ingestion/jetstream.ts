@@ -73,6 +73,10 @@ function drainQueuedSlots(acquired: boolean): void {
   }
 }
 
+// Queue saturation metrics
+let droppedEventCount = 0;
+let metricsIntervalId: NodeJS.Timeout | null = null;
+
 // State
 let ws: WebSocket | null = null;
 let eventCounter = 0;
@@ -115,6 +119,20 @@ export async function startJetstream(): Promise<void> {
     logger.info('Starting fresh (no cursor)');
   }
   connect(cursor);
+
+  // Start periodic queue health reporting (every 60s)
+  metricsIntervalId = setInterval(() => {
+    const state = { active: activeEventCount, queued: eventQueue.length };
+    if (droppedEventCount > 0) {
+      logger.warn(
+        { droppedEvents: droppedEventCount, ...state },
+        `Dropped ${droppedEventCount} events in last 60s (queue full)`
+      );
+      droppedEventCount = 0;
+    } else {
+      logger.debug(state, 'Ingestion queue health');
+    }
+  }, 60_000);
 }
 
 /**
@@ -125,6 +143,12 @@ export async function stopJetstream(): Promise<void> {
   isShuttingDown = true;
   queueOverflowReconnectInProgress = false;
   drainQueuedSlots(false);
+
+  // Stop metrics reporting
+  if (metricsIntervalId) {
+    clearInterval(metricsIntervalId);
+    metricsIntervalId = null;
+  }
 
   // Save final cursor
   if (lastCursorUs) {
@@ -182,6 +206,7 @@ function connect(cursor?: bigint): void {
     // Concurrency gate — wait for a slot so we don't exhaust the DB pool
     const acquired = await acquireSlot();
     if (!acquired) {
+      droppedEventCount++;
       if (!isShuttingDown && ws && ws.readyState === WebSocket.OPEN) {
         handleQueueOverload();
       }
@@ -400,8 +425,15 @@ export const __testJetstreamQueue = {
     activeEventCount = 0;
     eventQueue.length = 0;
     queueOverflowReconnectInProgress = false;
+    droppedEventCount = 0;
   },
   getState(): { active: number; queued: number } {
     return { active: activeEventCount, queued: eventQueue.length };
+  },
+  getDroppedCount(): number {
+    return droppedEventCount;
+  },
+  resetDroppedCount(): void {
+    droppedEventCount = 0;
   },
 };

@@ -264,7 +264,7 @@ async function getCurrentEpochForUpdate(client: PoolClient): Promise<GovernanceE
 }
 
 async function triggerManualRescore(reason: string): Promise<boolean> {
-  const triggered = tryTriggerManualScoringRun();
+  const triggered = await tryTriggerManualScoringRun();
 
   if (!triggered) {
     logger.warn({ reason }, 'Manual rescore skipped because scoring pipeline is already running');
