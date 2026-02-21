@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
 
-const { redisMock, dbQueryMock } = vi.hoisted(() => ({
+const { redisMock, dbQueryMock, verifyFeedRequesterDidMock } = vi.hoisted(() => ({
   redisMock: {
     zrevrange: vi.fn(),
     setex: vi.fn(),
@@ -9,6 +9,7 @@ const { redisMock, dbQueryMock } = vi.hoisted(() => ({
     rpush: vi.fn().mockResolvedValue(1),
   },
   dbQueryMock: vi.fn(),
+  verifyFeedRequesterDidMock: vi.fn(),
 }));
 
 vi.mock('../src/db/redis.js', () => ({
@@ -21,23 +22,34 @@ vi.mock('../src/db/client.js', () => ({
   },
 }));
 
+vi.mock('../src/feed/jwt-verifier.js', () => ({
+  verifyFeedRequesterDid: verifyFeedRequesterDidMock,
+}));
+
 import { config } from '../src/config.js';
 import { registerFeedSkeleton } from '../src/feed/routes/feed-skeleton.js';
 
 describe('getFeedSkeleton requester auth hot path', () => {
-  it('returns 200 without invoking requester auth verification', async () => {
+  it('returns 200 without blocking on requester auth verification', async () => {
     redisMock.zrevrange.mockResolvedValue([
       'at://did:plc:testauthor/app.bsky.feed.post/1',
       'at://did:plc:testauthor/app.bsky.feed.post/2',
     ]);
     redisMock.setex.mockResolvedValue('OK');
-    redisMock.get.mockResolvedValue(null);
+    redisMock.get.mockImplementation((key: string) => {
+      if (key === 'feed:epoch') return Promise.resolve('1');
+      return Promise.resolve(null);
+    });
+    verifyFeedRequesterDidMock.mockImplementation(
+      () => new Promise<string | null>(() => undefined)
+    );
 
     const feedUri = `at://${config.FEEDGEN_PUBLISHER_DID}/app.bsky.feed.generator/community-gov`;
 
     const app = Fastify();
     registerFeedSkeleton(app);
 
+    const startedAt = Date.now();
     const response = await app.inject({
       method: 'GET',
       url: `/xrpc/app.bsky.feed.getFeedSkeleton?feed=${encodeURIComponent(feedUri)}&limit=2`,
@@ -48,6 +60,7 @@ describe('getFeedSkeleton requester auth hot path', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json().feed).toHaveLength(2);
+    expect(Date.now() - startedAt).toBeLessThan(1000);
 
     await app.close();
   });

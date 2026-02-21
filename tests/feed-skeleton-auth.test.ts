@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { redisMock, dbQueryMock } = vi.hoisted(() => ({
+const { redisMock, dbQueryMock, verifyFeedRequesterDidMock } = vi.hoisted(() => ({
   redisMock: {
     zrevrange: vi.fn(),
     setex: vi.fn(),
@@ -9,6 +9,7 @@ const { redisMock, dbQueryMock } = vi.hoisted(() => ({
     rpush: vi.fn().mockResolvedValue(1),
   },
   dbQueryMock: vi.fn(),
+  verifyFeedRequesterDidMock: vi.fn(),
 }));
 
 vi.mock('../src/db/redis.js', () => ({
@@ -19,6 +20,10 @@ vi.mock('../src/db/client.js', () => ({
   db: {
     query: dbQueryMock,
   },
+}));
+
+vi.mock('../src/feed/jwt-verifier.js', () => ({
+  verifyFeedRequesterDid: verifyFeedRequesterDidMock,
 }));
 
 import { config } from '../src/config.js';
@@ -33,7 +38,12 @@ describe('getFeedSkeleton auth handling', () => {
       'at://did:plc:testauthor/app.bsky.feed.post/2',
     ]);
     redisMock.setex.mockResolvedValue('OK');
-    redisMock.get.mockResolvedValue(null);
+    redisMock.get.mockImplementation((key: string) => {
+      if (key === 'feed:epoch') return Promise.resolve('1');
+      return Promise.resolve(null);
+    });
+    verifyFeedRequesterDidMock.mockResolvedValue(null);
+    dbQueryMock.mockReset();
   });
 
   it('returns 200 without auth header', async () => {
@@ -48,6 +58,8 @@ describe('getFeedSkeleton auth handling', () => {
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.feed).toHaveLength(2);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(verifyFeedRequesterDidMock).toHaveBeenCalledWith(undefined);
 
     await app.close();
   });
@@ -67,6 +79,8 @@ describe('getFeedSkeleton auth handling', () => {
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.feed).toHaveLength(2);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(verifyFeedRequesterDidMock).toHaveBeenCalledWith('Bearer malformed');
 
     await app.close();
   });
