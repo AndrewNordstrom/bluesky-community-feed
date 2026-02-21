@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last Updated:** February 19, 2026
+**Last Updated:** February 20, 2026
 
 **Effective Date:** February 19, 2026
 
@@ -24,6 +24,8 @@ When Bluesky requests the feed on your behalf, the Service records:
 |------|---------|---------|
 | Your Bluesky DID | Identify subscriber | PostgreSQL, indefinite |
 | First seen / last seen timestamps | Track subscriber activity | PostgreSQL, indefinite |
+| Feed request logs (timestamps, pagination depth, posts included in response) | Measure feed quality and governance outcomes | PostgreSQL, 30-day retention then aggregated |
+| Engagement attributions (which served posts you later liked or reposted) | Evaluate whether governance decisions improve the feed | PostgreSQL, 30-day retention then deleted |
 
 Your DID is a public Bluesky identifier. No additional personal information is collected from feed subscribers.
 
@@ -58,7 +60,7 @@ This is all publicly available data on the AT Protocol network. The Service does
 
 - IP addresses are **not stored** in any database. They are used ephemerally for rate limiting and discarded.
 - We do not use cookies for tracking. The only cookie is the governance session cookie (HttpOnly, 24-hour expiry).
-- We do not use any analytics services (no Google Analytics, Mixpanel, Segment, Sentry, or similar).
+- We do not use third-party analytics services (no Google Analytics, Mixpanel, Segment, Sentry, or similar). The Service collects first-party feed interaction data (request frequency, scroll depth, and which posts were included in feed responses) to measure feed quality. This data is not shared externally.
 - We do not collect device information, browser fingerprints, or location data.
 - We do not collect or process your main Bluesky password.
 
@@ -71,7 +73,8 @@ Your data is used for:
 1. **Feed ranking** — Public post and engagement data is scored and ranked according to community-voted weights.
 2. **Governance** — Your votes are aggregated to determine ranking weights and content filtering rules.
 3. **Audit and transparency** — Governance actions are logged. Public transparency endpoints expose aggregate data with voter identities redacted. The admin interface shows unredacted voter DIDs to authorized administrators only.
-4. **Research** — With your separate consent, participation data may be used for academic research on algorithmic governance (see Research Use below).
+4. **Feed quality measurement** — Feed request patterns and engagement correlations are used to evaluate whether community governance decisions are improving the feed. Raw interaction data is retained for 30 days, then aggregated into anonymous daily and per-epoch statistics retained indefinitely.
+5. **Research** — With your separate consent, participation data may be used for academic research on algorithmic governance (see Research Use below).
 
 ---
 
@@ -99,6 +102,10 @@ All scoring, ranking, aggregation, and data processing happens locally on the Op
 | Subscriber records (PostgreSQL) | Indefinite | No automated purge |
 | Vote records (PostgreSQL) | Indefinite | No automated purge |
 | Audit log (PostgreSQL) | Indefinite | **Cannot be deleted** (append-only, database-enforced) |
+| Feed request logs (PostgreSQL) | 30 days | Automatic deletion + aggregation |
+| Engagement attributions (PostgreSQL) | 30 days | Automatic deletion |
+| Daily interaction stats (PostgreSQL) | Indefinite | One row per day (aggregated, no individual data) |
+| Epoch engagement stats (PostgreSQL) | Indefinite | One row per epoch (aggregated, no individual data) |
 | Ingested post/engagement data (PostgreSQL) | Indefinite | Soft delete only (marked as deleted, not erased) |
 
 When content is deleted on Bluesky, the Service marks it as deleted (soft delete) but retains the record for referential integrity. Soft-deleted content is never surfaced in the feed or displayed on the transparency dashboard. This is consistent with how the AT Protocol handles deletions.
