@@ -48,6 +48,14 @@ export async function handleLike(
          WHERE post_uri = $1`,
         [subjectUri]
       );
+
+      // Fire-and-forget: mark engagement attribution if this user was served this post
+      db.query(
+        `UPDATE engagement_attributions
+         SET engaged_at = NOW(), engagement_type = 'like'
+         WHERE post_uri = $1 AND viewer_did = $2 AND engaged_at IS NULL`,
+        [subjectUri, authorDid]
+      ).catch((err) => logger.warn({ err, subjectUri }, 'Attribution update failed'));
     }
 
     logger.debug({ uri, subjectUri }, 'Like indexed');
