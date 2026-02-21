@@ -148,7 +148,7 @@ async function rollupDailyStats(): Promise<void> {
         ) fr
         GROUP BY fr.requested_at, fr.epoch_id
       ),
-      returning AS (
+      returning_viewers_cte AS (
         SELECT
           fr.requested_at::date AS date,
           fr.epoch_id,
@@ -177,10 +177,10 @@ async function rollupDailyStats(): Promise<void> {
         bs.total_pages,
         COALESCE(sp.avg_pages_per_session, 0),
         bs.max_scroll_depth,
-        COALESCE(r.returning_viewers, 0)
+        COALESCE(rv.returning_viewers, 0)
       FROM base_stats bs
       LEFT JOIN session_pages sp ON sp.date = bs.date AND sp.epoch_id = bs.epoch_id
-      LEFT JOIN returning r ON r.date = bs.date AND r.epoch_id = bs.epoch_id
+      LEFT JOIN returning_viewers_cte rv ON rv.date = bs.date AND rv.epoch_id = bs.epoch_id
       ON CONFLICT (date, epoch_id) DO UPDATE SET
         unique_viewers = EXCLUDED.unique_viewers,
         anonymous_requests = EXCLUDED.anonymous_requests,
