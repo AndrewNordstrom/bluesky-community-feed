@@ -2,7 +2,7 @@
  * Graceful Shutdown Module
  *
  * Handles clean shutdown of all system components with a timeout.
- * Order: HTTP server → Scoring → Jetstream → Epoch Scheduler → Cleanup → Interaction Logger → Interaction Aggregator → Database → Redis
+ * Order: HTTP server → Scoring → Jetstream → Epoch Scheduler → Maintenance Worker Supervisor → Cleanup → Interaction Logger → Interaction Aggregator → Database → Redis
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -18,6 +18,7 @@ export interface ShutdownDependencies {
   stopScoring: () => Promise<void>;
   stopJetstream: () => Promise<void>;
   stopEpochScheduler?: () => void;
+  stopMaintenanceWorkerSupervisor?: () => Promise<void>;
   stopCleanup?: () => Promise<void>;
   stopInteractionLogger?: () => Promise<void>;
   stopInteractionAggregator?: () => Promise<void>;
@@ -68,25 +69,30 @@ export async function gracefulShutdown(deps: ShutdownDependencies): Promise<void
       logger.info('Epoch scheduler stopped');
     }
 
-    // 3.6. Stop cleanup scheduler
-    if (deps.stopCleanup) {
-      logger.info('Stopping cleanup scheduler...');
-      await deps.stopCleanup();
-      logger.info('Cleanup scheduler stopped');
-    }
+    // 3.6. Stop maintenance worker supervisor (includes cleanup/logger/aggregator)
+    if (deps.stopMaintenanceWorkerSupervisor) {
+      logger.info('Stopping maintenance worker supervisor...');
+      await deps.stopMaintenanceWorkerSupervisor();
+      logger.info('Maintenance worker supervisor stopped');
+    } else {
+      // Backwards-compatible fallback when no supervisor is registered.
+      if (deps.stopCleanup) {
+        logger.info('Stopping cleanup scheduler...');
+        await deps.stopCleanup();
+        logger.info('Cleanup scheduler stopped');
+      }
 
-    // 3.7. Stop interaction logger (drains remaining queue entries)
-    if (deps.stopInteractionLogger) {
-      logger.info('Stopping interaction logger...');
-      await deps.stopInteractionLogger();
-      logger.info('Interaction logger stopped');
-    }
+      if (deps.stopInteractionLogger) {
+        logger.info('Stopping interaction logger...');
+        await deps.stopInteractionLogger();
+        logger.info('Interaction logger stopped');
+      }
 
-    // 3.8. Stop interaction aggregator
-    if (deps.stopInteractionAggregator) {
-      logger.info('Stopping interaction aggregator...');
-      await deps.stopInteractionAggregator();
-      logger.info('Interaction aggregator stopped');
+      if (deps.stopInteractionAggregator) {
+        logger.info('Stopping interaction aggregator...');
+        await deps.stopInteractionAggregator();
+        logger.info('Interaction aggregator stopped');
+      }
     }
 
     // 4. Close database pool

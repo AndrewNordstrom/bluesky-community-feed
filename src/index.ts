@@ -10,9 +10,13 @@ import { registerJetstreamHealth, registerScoringHealth, JetstreamHealth, Scorin
 import { registerBotRoutes } from './bot/server.js';
 import { initializeBot } from './bot/agent.js';
 import { startEpochScheduler, stopEpochScheduler } from './scheduler/epoch-scheduler.js';
-import { startCleanup, stopCleanup } from './maintenance/cleanup.js';
-import { startInteractionLogger, stopInteractionLogger } from './maintenance/interaction-logger.js';
-import { startInteractionAggregator, stopInteractionAggregator } from './maintenance/interaction-aggregator.js';
+import { stopCleanup } from './maintenance/cleanup.js';
+import { stopInteractionLogger } from './maintenance/interaction-logger.js';
+import { stopInteractionAggregator } from './maintenance/interaction-aggregator.js';
+import {
+  startMaintenanceWorkerSupervisor,
+  stopMaintenanceWorkerSupervisor,
+} from './maintenance/worker-supervisor.js';
 
 async function main() {
   logger.info('Starting Community Feed Generator...');
@@ -109,28 +113,13 @@ async function main() {
   // 6.6. Start epoch scheduler (for auto-transitions)
   startEpochScheduler();
 
-  // 6.7. Start cleanup scheduler (hourly post retention cleanup)
+  // 6.7-6.9. Start maintenance workers under a supervisor
   try {
-    await startCleanup();
-    logger.info('Cleanup scheduler started');
+    await startMaintenanceWorkerSupervisor();
+    logger.info('Maintenance worker supervisor started');
   } catch (err) {
-    logger.warn({ err }, 'Cleanup scheduler failed to start - non-fatal, will retry on next startup');
-  }
-
-  // 6.8. Start interaction logger (drains feed request queue from Redis to PostgreSQL)
-  try {
-    await startInteractionLogger();
-    logger.info('Interaction logger started');
-  } catch (err) {
-    logger.warn({ err }, 'Interaction logger failed to start - non-fatal');
-  }
-
-  // 6.9. Start interaction aggregator (hourly stats rollup + retention cleanup)
-  try {
-    await startInteractionAggregator();
-    logger.info('Interaction aggregator started');
-  } catch (err) {
-    logger.warn({ err }, 'Interaction aggregator failed to start - non-fatal');
+    logger.fatal({ err }, 'Failed to start maintenance worker supervisor');
+    process.exit(1);
   }
 
   // 7. Register graceful shutdown handlers
@@ -139,6 +128,8 @@ async function main() {
     stopScoring,
     stopJetstream,
     stopEpochScheduler,
+    stopMaintenanceWorkerSupervisor,
+    // Kept for backwards compatibility in shutdown flow.
     stopCleanup,
     stopInteractionLogger,
     stopInteractionAggregator,

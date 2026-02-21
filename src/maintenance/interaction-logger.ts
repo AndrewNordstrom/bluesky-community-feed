@@ -106,6 +106,10 @@ export async function stopInteractionLogger(): Promise<void> {
   logger.info('Interaction logger stopped');
 }
 
+export function isInteractionLoggerRunning(): boolean {
+  return isRunning;
+}
+
 async function runWithGuard(): Promise<void> {
   if (isShuttingDown) return;
 

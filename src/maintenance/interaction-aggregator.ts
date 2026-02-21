@@ -80,6 +80,10 @@ export async function stopInteractionAggregator(): Promise<void> {
   logger.info('Interaction aggregator stopped');
 }
 
+export function isInteractionAggregatorRunning(): boolean {
+  return isRunning;
+}
+
 async function runWithGuard(): Promise<void> {
   if (isShuttingDown) return;
 
