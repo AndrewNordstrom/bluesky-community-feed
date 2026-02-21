@@ -17,11 +17,12 @@ import { GovernancePanel } from '../components/admin/GovernancePanel';
 import { AnnouncementPanel } from '../components/admin/AnnouncementPanel';
 import { FeedHealth } from '../components/admin/FeedHealth';
 import { AuditLog } from '../components/admin/AuditLog';
+import { InteractionsPanel } from '../components/admin/InteractionsPanel';
 import { TabPanel } from '../components/TabPanel';
 import { useAuth } from '../contexts/useAuth';
 import '../styles/admin.css';
 
-type AdminTab = 'overview' | 'governance' | 'announcements' | 'health' | 'audit';
+type AdminTab = 'overview' | 'governance' | 'announcements' | 'health' | 'interactions' | 'audit';
 
 export function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -67,6 +68,7 @@ export function AdminPage() {
               { id: 'governance', label: 'Governance' },
               { id: 'announcements', label: 'Announcements' },
               { id: 'health', label: 'Feed Health' },
+              { id: 'interactions', label: 'Interactions' },
               { id: 'audit', label: 'Audit Log' }
             ].map(tab => (
               <button
@@ -92,6 +94,9 @@ export function AdminPage() {
               </TabPanel>
               <TabPanel isActive={activeTab === 'health'} tabKey="health">
                 <FeedHealth />
+              </TabPanel>
+              <TabPanel isActive={activeTab === 'interactions'} tabKey="interactions">
+                <InteractionsPanel />
               </TabPanel>
               <TabPanel isActive={activeTab === 'audit'} tabKey="audit">
                 <AuditLog />
