@@ -30,7 +30,35 @@ export function registerAnnounceRoute(app: FastifyInstance): void {
    * GET /api/bot/status
    * Get bot status and current pinned announcement.
    */
-  app.get('/api/bot/status', async (_request: FastifyRequest, reply: FastifyReply) => {
+  app.get('/api/bot/status', async (request: FastifyRequest, reply: FastifyReply) => {
+    let requesterDid: string | null;
+    try {
+      requesterDid = await getAuthenticatedDid(request);
+    } catch (err) {
+      if (err instanceof SessionStoreUnavailableError) {
+        return reply.code(503).send({
+          error: 'SessionStoreUnavailable',
+          message: 'Authentication service is temporarily unavailable. Please try again.',
+        });
+      }
+      throw err;
+    }
+
+    if (!requesterDid) {
+      return reply.code(401).send({
+        error: 'Unauthorized',
+        message: 'Authentication required',
+      });
+    }
+
+    if (!isAdmin(requesterDid)) {
+      logger.warn({ did: requesterDid }, 'Non-admin attempted to access bot status');
+      return reply.code(403).send({
+        error: 'Forbidden',
+        message: 'Admin access required',
+      });
+    }
+
     const pinned = await getPinnedAnnouncement();
     const retryQueueLength = await getRetryQueueLength();
 
