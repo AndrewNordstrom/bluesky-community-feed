@@ -26,13 +26,23 @@ export interface ParsedCursor {
   offset: number;
 }
 
-function isValidOffset(value: unknown): value is number {
+function isEncodableOffset(value: unknown): value is number {
   return (
     typeof value === 'number' &&
     Number.isFinite(value) &&
     Number.isInteger(value) &&
     value >= 0 &&
     value <= Number.MAX_SAFE_INTEGER
+  );
+}
+
+function isValidCursorOffset(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    Number.isInteger(value) &&
+    value <= Number.MAX_SAFE_INTEGER &&
+    value >= Number.MIN_SAFE_INTEGER
   );
 }
 
@@ -44,7 +54,7 @@ function isValidOffset(value: unknown): value is number {
  * @returns Base64url-encoded cursor string
  */
 export function encodeCursor(snapshotId: string, offset: number): string {
-  if (!snapshotId || !isValidOffset(offset)) {
+  if (!snapshotId || !isEncodableOffset(offset)) {
     throw new Error('Invalid cursor payload');
   }
 
@@ -67,7 +77,7 @@ export function decodeCursor(cursor: string): ParsedCursor | null {
     if (
       typeof parsed.s !== 'string' ||
       parsed.s.trim().length === 0 ||
-      !isValidOffset(parsed.o)
+      !isValidCursorOffset(parsed.o)
     ) {
       return null;
     }

@@ -86,7 +86,6 @@ describe('getFeedSkeleton query validation', () => {
   });
 
   it.each([
-    { s: 'snap', o: -1 },
     { s: 'snap', o: 1.5 },
     { s: 'snap', o: '2' },
   ])('returns 400 for structurally invalid cursor payload %o', async (payload) => {
@@ -102,6 +101,68 @@ describe('getFeedSkeleton query validation', () => {
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({
       error: 'ValidationError',
+    });
+
+    await app.close();
+  });
+
+  it('returns empty feed for cursor offset above max bound', async () => {
+    const app = Fastify();
+    registerFeedSkeleton(app);
+
+    const cursor = Buffer.from(JSON.stringify({ s: 'snap', o: 999999999 })).toString('base64url');
+    const response = await app.inject({
+      method: 'GET',
+      url: `/xrpc/app.bsky.feed.getFeedSkeleton?feed=${encodeURIComponent(feedUri)}&cursor=${encodeURIComponent(cursor)}`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ feed: [] });
+
+    await app.close();
+  });
+
+  it('returns empty feed for cursor offset below min bound', async () => {
+    const app = Fastify();
+    registerFeedSkeleton(app);
+
+    const cursor = Buffer.from(JSON.stringify({ s: 'snap', o: -1 })).toString('base64url');
+    const response = await app.inject({
+      method: 'GET',
+      url: `/xrpc/app.bsky.feed.getFeedSkeleton?feed=${encodeURIComponent(feedUri)}&cursor=${encodeURIComponent(cursor)}`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ feed: [] });
+
+    await app.close();
+  });
+
+  it('supports in-range cursor offsets for pagination', async () => {
+    const app = Fastify();
+    registerFeedSkeleton(app);
+
+    const allUris = Array.from(
+      { length: 200 },
+      (_, index) => `at://did:plc:testauthor/app.bsky.feed.post/${index + 1}`
+    );
+    redisMock.get.mockResolvedValueOnce(JSON.stringify(allUris));
+
+    const cursor = Buffer.from(JSON.stringify({ s: 'snap', o: 150 })).toString('base64url');
+    const response = await app.inject({
+      method: 'GET',
+      url: `/xrpc/app.bsky.feed.getFeedSkeleton?feed=${encodeURIComponent(feedUri)}&cursor=${encodeURIComponent(cursor)}&limit=5`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      feed: [
+        { post: 'at://did:plc:testauthor/app.bsky.feed.post/151' },
+        { post: 'at://did:plc:testauthor/app.bsky.feed.post/152' },
+        { post: 'at://did:plc:testauthor/app.bsky.feed.post/153' },
+        { post: 'at://did:plc:testauthor/app.bsky.feed.post/154' },
+        { post: 'at://did:plc:testauthor/app.bsky.feed.post/155' },
+      ],
     });
 
     await app.close();

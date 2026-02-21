@@ -21,6 +21,8 @@ import { verifyFeedRequesterDid } from '../jwt-verifier.js';
 
 // The AT-URI for this feed
 const FEED_URI = `at://${config.FEEDGEN_PUBLISHER_DID}/app.bsky.feed.generator/community-gov`;
+const MIN_CURSOR_OFFSET = 0;
+const MAX_CURSOR_OFFSET = 10000;
 
 /**
  * Fire-and-forget subscriber UPSERT.
@@ -155,6 +157,11 @@ export function registerFeedSkeleton(app: FastifyInstance): void {
 
         snapshotId = parsed.snapshotId;
         offset = parsed.offset;
+
+        if (offset < MIN_CURSOR_OFFSET || offset > MAX_CURSOR_OFFSET) {
+          logger.warn({ snapshotId, offset }, 'Cursor offset out of supported bounds');
+          return reply.send({ feed: [] });
+        }
 
         // Try to get snapshot from Redis
         const snapshotData = await redis.get(`snapshot:${snapshotId}`);
