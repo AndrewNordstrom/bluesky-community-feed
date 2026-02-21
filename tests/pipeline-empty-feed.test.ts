@@ -46,7 +46,7 @@ vi.mock('../src/admin/status-tracker.js', () => ({
   updateScoringStatus: updateScoringStatusMock,
 }));
 
-import { runScoringPipeline } from '../src/scoring/pipeline.js';
+import { runScoringPipeline, __resetPipelineState } from '../src/scoring/pipeline.js';
 
 function makeEpochRow() {
   return {
@@ -83,6 +83,7 @@ function makePostRow() {
 
 describe('scoring pipeline empty-feed Redis updates', () => {
   beforeEach(() => {
+    __resetPipelineState();
     dbQueryMock.mockReset();
     redisPipelineFactoryMock.mockReset();
     pipelineDelMock.mockReset();
@@ -105,8 +106,10 @@ describe('scoring pipeline empty-feed Redis updates', () => {
 
   it('clears feed and writes metadata when all posts are filtered out', async () => {
     dbQueryMock
-      .mockResolvedValueOnce({ rows: [makeEpochRow()] })
-      .mockResolvedValueOnce({ rows: [makePostRow()] });
+      .mockResolvedValueOnce({ rows: [makeEpochRow()] })   // getActiveEpoch
+      .mockResolvedValueOnce({ rows: [makePostRow()] })     // getPostsForScoring
+      .mockResolvedValueOnce({ rows: [] })                   // writeToRedisFromDb
+      .mockResolvedValueOnce({ rows: [] });                  // updateCurrentRunScope
 
     getCurrentContentRulesMock.mockResolvedValue({
       includeKeywords: ['topic'],
@@ -135,8 +138,10 @@ describe('scoring pipeline empty-feed Redis updates', () => {
 
   it('clears feed and writes metadata when no posts are fetched', async () => {
     dbQueryMock
-      .mockResolvedValueOnce({ rows: [makeEpochRow()] })
-      .mockResolvedValueOnce({ rows: [] });
+      .mockResolvedValueOnce({ rows: [makeEpochRow()] })   // getActiveEpoch
+      .mockResolvedValueOnce({ rows: [] })                   // getPostsForScoring
+      .mockResolvedValueOnce({ rows: [] })                   // writeToRedisFromDb
+      .mockResolvedValueOnce({ rows: [] });                  // updateCurrentRunScope
 
     getCurrentContentRulesMock.mockResolvedValue({
       includeKeywords: [],
@@ -161,8 +166,10 @@ describe('scoring pipeline empty-feed Redis updates', () => {
 
   it('builds SQL keyword prefilter so LIMIT applies to matching posts', async () => {
     dbQueryMock
-      .mockResolvedValueOnce({ rows: [makeEpochRow()] })
-      .mockResolvedValueOnce({ rows: [] });
+      .mockResolvedValueOnce({ rows: [makeEpochRow()] })   // getActiveEpoch
+      .mockResolvedValueOnce({ rows: [] })                   // getPostsForScoring
+      .mockResolvedValueOnce({ rows: [] })                   // writeToRedisFromDb
+      .mockResolvedValueOnce({ rows: [] });                  // updateCurrentRunScope
 
     getCurrentContentRulesMock.mockResolvedValue({
       includeKeywords: ['atproto', 'foss'],

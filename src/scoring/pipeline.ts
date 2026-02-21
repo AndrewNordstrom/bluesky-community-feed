@@ -44,11 +44,22 @@ const SQL_BOUNDARY_KEYWORD_PATTERN = /^[a-z0-9][a-z0-9\s-]*$/;
 // Track last successful run for health checks
 let lastSuccessfulRunAt: Date | null = null;
 
+// Track last scored epoch to detect epoch transitions (triggers full rescore)
+let lastScoredEpochId: number | null = null;
+
 /**
  * Get the timestamp of the last successful scoring run.
  */
 export function getLastScoringRunAt(): Date | null {
   return lastSuccessfulRunAt;
+}
+
+/**
+ * Reset module-level state for testing.
+ */
+export function __resetPipelineState(): void {
+  lastSuccessfulRunAt = null;
+  lastScoredEpochId = null;
 }
 
 /**
@@ -87,21 +98,40 @@ async function runScoringPipelineInternal(): Promise<void> {
 
     logger.info({ epochId: epoch.id, runId }, 'Using governance epoch');
 
-    // 2. Load content rules and prefilter candidate posts in SQL.
-    // SQL prefilter keeps a larger, relevant candidate pool before the hard LIMIT.
+    // 2. Load content rules and determine scoring mode (full vs incremental).
     const contentRules = await getCurrentContentRules();
-    const allPosts = await getPostsForScoring(contentRules);
-    logger.info(
-      {
-        postCount: allPosts.length,
-        epochId: epoch.id,
-        includeKeywords: contentRules.includeKeywords.length,
-        excludeKeywords: contentRules.excludeKeywords.length,
-      },
-      'Candidate posts fetched for scoring'
-    );
+    const epochChanged = lastScoredEpochId !== null && lastScoredEpochId !== epoch.id;
+    const useIncremental = lastSuccessfulRunAt !== null && !epochChanged;
 
-    if (allPosts.length === 0) {
+    let allPosts: PostForScoring[];
+    if (useIncremental) {
+      allPosts = await getPostsForIncrementalScoring(contentRules, epoch.id);
+      logger.info(
+        {
+          mode: 'incremental',
+          postCount: allPosts.length,
+          epochId: epoch.id,
+          includeKeywords: contentRules.includeKeywords.length,
+          excludeKeywords: contentRules.excludeKeywords.length,
+        },
+        'Incremental candidate posts fetched for scoring'
+      );
+    } else {
+      allPosts = await getPostsForScoring(contentRules);
+      logger.info(
+        {
+          mode: 'full',
+          postCount: allPosts.length,
+          epochId: epoch.id,
+          reason: epochChanged ? 'epoch_changed' : 'first_run',
+          includeKeywords: contentRules.includeKeywords.length,
+          excludeKeywords: contentRules.excludeKeywords.length,
+        },
+        'Full candidate posts fetched for scoring'
+      );
+    }
+
+    if (allPosts.length === 0 && !useIncremental) {
       logger.warn({ epochId: epoch.id }, 'No posts to score in the window, clearing feed');
     }
 
@@ -126,30 +156,31 @@ async function runScoringPipelineInternal(): Promise<void> {
         'Content filtering backup applied'
       );
 
-      if (posts.length === 0) {
+      if (posts.length === 0 && !useIncremental) {
         logger.warn({ epochId: epoch.id }, 'All posts filtered out by content rules, clearing feed');
       }
     }
 
-    logger.info({ postCount: posts.length, epochId: epoch.id }, 'Scoring filtered posts');
+    logger.info({ postCount: posts.length, epochId: epoch.id, mode: useIncremental ? 'incremental' : 'full' }, 'Scoring filtered posts');
 
     // 3. Score each post
     const scored = await scoreAllPosts(posts, epoch, runId);
 
-    // 4. Sort by total score (descending)
-    scored.sort((a, b) => b.score.total - a.score.total);
-
-    // 5. Write top posts to Redis for fast feed serving
-    await writeToRedis(scored, epoch.id, runId);
+    // 4. Write the full ranked feed to Redis from stored scores.
+    // In incremental mode, only new/changed posts were scored above, but
+    // previous scores remain in post_scores. Reading from DB gives the
+    // complete, correctly-ranked feed.
+    await writeToRedisFromDb(epoch.id, runId);
 
     const elapsed = Date.now() - startTime;
     logger.info(
-      { elapsed, postsScored: posts.length, epochId: epoch.id },
+      { elapsed, postsScored: posts.length, epochId: epoch.id, mode: useIncremental ? 'incremental' : 'full' },
       'Scoring pipeline complete'
     );
 
     // Track successful run for health checks
     lastSuccessfulRunAt = new Date();
+    lastScoredEpochId = epoch.id;
 
     // Update scoring status for admin dashboard
     await updateScoringStatus({
@@ -327,6 +358,115 @@ async function getPostsForScoring(contentRules: ContentRules): Promise<PostForSc
 }
 
 /**
+ * Get only posts that need rescoring: new posts (never scored in this epoch)
+ * and posts whose engagement changed since their last score.
+ *
+ * Uses post_engagement.updated_at (maintained by like/repost/reply handlers)
+ * compared against post_scores.scored_at to detect changes.
+ */
+async function getPostsForIncrementalScoring(
+  contentRules: ContentRules,
+  epochId: number,
+): Promise<PostForScoring[]> {
+  const cutoffMs = config.SCORING_WINDOW_HOURS * 60 * 60 * 1000;
+  const cutoff = new Date(Date.now() - cutoffMs);
+
+  // Build content filter clauses (shared between both halves of the UNION)
+  const sharedClauses: string[] = [];
+  const sharedParams: unknown[] = [];
+
+  if (contentRules.includeKeywords.length > 0) {
+    const includePredicates: string[] = [];
+    for (const keyword of contentRules.includeKeywords) {
+      const likePattern = toSqlLikePattern(keyword);
+      const regex = toSqlKeywordRegex(keyword);
+      if (!likePattern || !regex) continue;
+      sharedParams.push(likePattern);
+      const likeIdx = sharedParams.length;
+      sharedParams.push(regex);
+      const regexIdx = sharedParams.length;
+      includePredicates.push(
+        `(p.text IS NOT NULL AND p.text ILIKE $${likeIdx} ESCAPE '\\' AND p.text ~* $${regexIdx})`
+      );
+    }
+    if (includePredicates.length > 0) {
+      sharedClauses.push(`(${includePredicates.join(' OR ')})`);
+    }
+  }
+
+  if (contentRules.excludeKeywords.length > 0) {
+    const excludePredicates: string[] = [];
+    for (const keyword of contentRules.excludeKeywords) {
+      const likePattern = toSqlLikePattern(keyword);
+      const regex = toSqlKeywordRegex(keyword);
+      if (!likePattern || !regex) continue;
+      sharedParams.push(likePattern);
+      const likeIdx = sharedParams.length;
+      sharedParams.push(regex);
+      const regexIdx = sharedParams.length;
+      excludePredicates.push(
+        `(p.text IS NOT NULL AND p.text ILIKE $${likeIdx} ESCAPE '\\' AND p.text ~* $${regexIdx})`
+      );
+    }
+    if (excludePredicates.length > 0) {
+      sharedClauses.push(`NOT (${excludePredicates.join(' OR ')})`);
+    }
+  }
+
+  const contentFilterSql = sharedClauses.length > 0
+    ? ' AND ' + sharedClauses.join(' AND ')
+    : '';
+
+  // Parameters: $1 = cutoff, $2 = epochId, $3 = limit, then shared content filter params
+  // We need to offset the shared param indices by 3.
+  const baseParamCount = 3;
+  const offsetContentFilterSql = sharedParams.length > 0
+    ? contentFilterSql.replace(/\$(\d+)/g, (_, n) => `$${Number(n) + baseParamCount}`)
+    : '';
+
+  const params: unknown[] = [cutoff.toISOString(), epochId, SCORING_CANDIDATE_LIMIT, ...sharedParams];
+
+  const result = await db.query(
+    `(
+      SELECT p.uri, p.cid, p.author_did, p.text, p.reply_root, p.reply_parent,
+             p.langs, p.has_media, p.created_at,
+             COALESCE(pe.like_count, 0) as like_count,
+             COALESCE(pe.repost_count, 0) as repost_count,
+             COALESCE(pe.reply_count, 0) as reply_count
+      FROM posts p
+      LEFT JOIN post_engagement pe ON p.uri = pe.post_uri
+      LEFT JOIN post_scores ps ON p.uri = ps.post_uri AND ps.epoch_id = $2
+      WHERE p.deleted = FALSE
+        AND p.created_at > $1
+        AND ps.post_uri IS NULL
+        ${offsetContentFilterSql}
+      ORDER BY p.created_at DESC
+      LIMIT $3
+    )
+    UNION ALL
+    (
+      SELECT p.uri, p.cid, p.author_did, p.text, p.reply_root, p.reply_parent,
+             p.langs, p.has_media, p.created_at,
+             COALESCE(pe.like_count, 0) as like_count,
+             COALESCE(pe.repost_count, 0) as repost_count,
+             COALESCE(pe.reply_count, 0) as reply_count
+      FROM posts p
+      INNER JOIN post_engagement pe ON p.uri = pe.post_uri
+      INNER JOIN post_scores ps ON p.uri = ps.post_uri AND ps.epoch_id = $2
+      WHERE p.deleted = FALSE
+        AND p.created_at > $1
+        AND pe.updated_at > ps.scored_at
+        ${offsetContentFilterSql}
+      ORDER BY p.created_at DESC
+      LIMIT $3
+    )`,
+    params
+  );
+
+  return result.rows.map(toPostForScoring);
+}
+
+/**
  * Score all posts with all 5 components.
  * Also stores decomposed scores to the database (GOLDEN RULE).
  */
@@ -461,11 +601,25 @@ async function storeScore(
 }
 
 /**
- * Write the ranked posts to Redis for fast feed serving.
+ * Write the ranked feed to Redis by reading all stored scores from the database.
+ *
+ * Works for both full and incremental runs: in incremental mode, only new/changed
+ * posts were scored and upserted into post_scores, but previous scores remain.
+ * Reading from DB produces the complete, correctly-ranked feed.
  */
-async function writeToRedis(scored: ScoredPost[], epochId: number, runId: string): Promise<void> {
-  // Take top N posts for the feed
-  const topPosts = scored.slice(0, config.FEED_MAX_POSTS);
+async function writeToRedisFromDb(epochId: number, runId: string): Promise<void> {
+  const result = await db.query<{ post_uri: string; total_score: number }>(
+    `SELECT ps.post_uri, ps.total_score
+     FROM post_scores ps
+     INNER JOIN posts p ON p.uri = ps.post_uri
+     WHERE ps.epoch_id = $1
+       AND p.deleted = FALSE
+     ORDER BY ps.total_score DESC
+     LIMIT $2`,
+    [epochId, config.FEED_MAX_POSTS]
+  );
+
+  const topPosts = result.rows;
 
   // Use Redis pipeline for atomic batch write
   const pipeline = redis.pipeline();
@@ -475,7 +629,7 @@ async function writeToRedis(scored: ScoredPost[], epochId: number, runId: string
 
   // Add all posts to sorted set (score = total_score)
   for (const post of topPosts) {
-    pipeline.zadd('feed:current', post.score.total, post.uri);
+    pipeline.zadd('feed:current', post.total_score, post.post_uri);
   }
 
   // Store metadata
