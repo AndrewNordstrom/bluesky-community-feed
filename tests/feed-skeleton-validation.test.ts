@@ -6,6 +6,7 @@ const { redisMock, dbQueryMock } = vi.hoisted(() => ({
     zrevrange: vi.fn(),
     setex: vi.fn(),
     get: vi.fn(),
+    rpush: vi.fn().mockResolvedValue(1),
   },
   dbQueryMock: vi.fn(),
 }));

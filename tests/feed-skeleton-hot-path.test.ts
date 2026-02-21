@@ -1,16 +1,24 @@
 import Fastify from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
 
-const { redisMock } = vi.hoisted(() => ({
+const { redisMock, dbQueryMock } = vi.hoisted(() => ({
   redisMock: {
     zrevrange: vi.fn(),
     setex: vi.fn(),
     get: vi.fn(),
+    rpush: vi.fn().mockResolvedValue(1),
   },
+  dbQueryMock: vi.fn(),
 }));
 
 vi.mock('../src/db/redis.js', () => ({
   redis: redisMock,
+}));
+
+vi.mock('../src/db/client.js', () => ({
+  db: {
+    query: dbQueryMock,
+  },
 }));
 
 import { config } from '../src/config.js';
