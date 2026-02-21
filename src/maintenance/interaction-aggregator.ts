@@ -1,0 +1,317 @@
+/**
+ * Interaction Aggregator — Background Jobs
+ *
+ * Three jobs running on a single hourly interval:
+ *
+ * 1. Daily stats rollup: Aggregates feed_requests into feed_request_daily_stats
+ *    for completed days (yesterday and earlier).
+ *
+ * 2. Epoch engagement stats: Computes engagement rate, scroll depth, viewer
+ *    count for the current epoch from raw data. UPSERTs epoch_engagement_stats.
+ *
+ * 3. Retention cleanup: Deletes feed_requests and engagement_attributions
+ *    older than 30 days. Runs once daily.
+ *
+ * Follows the same start/stop/guard pattern as cleanup.ts.
+ */
+
+import { db } from '../db/client.js';
+import { logger } from '../lib/logger.js';
+
+const AGGREGATION_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+const RETENTION_DAYS = 30;
+
+let isRunning = false;
+let isAggregating = false;
+let intervalId: NodeJS.Timeout | null = null;
+let isShuttingDown = false;
+let lastRetentionDate: string | null = null; // Track daily cleanup
+
+/**
+ * Start the interaction aggregator.
+ * Runs immediately, then every hour.
+ */
+export async function startInteractionAggregator(): Promise<void> {
+  if (isRunning) {
+    logger.warn('Interaction aggregator already running');
+    return;
+  }
+
+  isRunning = true;
+  isShuttingDown = false;
+
+  logger.info(
+    { intervalMs: AGGREGATION_INTERVAL_MS, retentionDays: RETENTION_DAYS },
+    'Starting interaction aggregator'
+  );
+
+  // Run immediately on start
+  await runWithGuard();
+
+  // Schedule recurring runs
+  intervalId = setInterval(runWithGuard, AGGREGATION_INTERVAL_MS);
+
+  logger.info('Interaction aggregator started');
+}
+
+/**
+ * Stop the interaction aggregator.
+ */
+export async function stopInteractionAggregator(): Promise<void> {
+  if (!isRunning) {
+    return;
+  }
+
+  logger.info('Stopping interaction aggregator...');
+  isShuttingDown = true;
+
+  if (intervalId) {
+    clearInterval(intervalId);
+    intervalId = null;
+  }
+
+  // Wait for in-progress aggregation to complete
+  while (isAggregating) {
+    logger.info('Waiting for aggregation run to complete...');
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  isRunning = false;
+  logger.info('Interaction aggregator stopped');
+}
+
+async function runWithGuard(): Promise<void> {
+  if (isShuttingDown) return;
+
+  if (isAggregating) {
+    logger.debug('Skipping aggregation tick - previous run still in progress');
+    return;
+  }
+
+  isAggregating = true;
+  try {
+    await runAllJobs();
+  } catch (err) {
+    logger.error({ err }, 'Interaction aggregation failed');
+  } finally {
+    isAggregating = false;
+  }
+}
+
+async function runAllJobs(): Promise<void> {
+  const startTime = Date.now();
+
+  // Job 1: Daily stats rollup
+  await rollupDailyStats();
+
+  // Job 2: Epoch engagement stats
+  await computeEpochStats();
+
+  // Job 3: Retention cleanup (once per day)
+  const today = new Date().toISOString().split('T')[0];
+  if (lastRetentionDate !== today) {
+    await retentionCleanup();
+    lastRetentionDate = today;
+  }
+
+  logger.info({ durationMs: Date.now() - startTime }, 'Interaction aggregation complete');
+}
+
+// ── Job 1: Daily Stats Rollup ───────────────────────────────────
+
+async function rollupDailyStats(): Promise<void> {
+  try {
+    const result = await db.query(
+      `INSERT INTO feed_request_daily_stats (
+        date, epoch_id, unique_viewers, anonymous_requests,
+        total_requests, total_pages, avg_pages_per_session,
+        max_scroll_depth, returning_viewers
+      )
+      SELECT
+        fr.requested_at::date AS date,
+        fr.epoch_id,
+        COUNT(DISTINCT fr.viewer_did) FILTER (WHERE fr.viewer_did IS NOT NULL) AS unique_viewers,
+        COUNT(*) FILTER (WHERE fr.viewer_did IS NULL) AS anonymous_requests,
+        COUNT(*) AS total_requests,
+        COUNT(*) AS total_pages,
+        -- avg pages per session (group by snapshot_id)
+        (
+          SELECT AVG(cnt)::float FROM (
+            SELECT COUNT(*) AS cnt
+            FROM feed_requests fr2
+            WHERE fr2.requested_at::date = fr.requested_at::date
+              AND fr2.epoch_id = fr.epoch_id
+            GROUP BY fr2.snapshot_id
+          ) sub
+        ) AS avg_pages_per_session,
+        MAX(fr.page_offset + fr.posts_served) AS max_scroll_depth,
+        -- returning viewers: seen on any prior day
+        (
+          SELECT COUNT(DISTINCT fr3.viewer_did)
+          FROM feed_requests fr3
+          WHERE fr3.requested_at::date = fr.requested_at::date
+            AND fr3.epoch_id = fr.epoch_id
+            AND fr3.viewer_did IS NOT NULL
+            AND EXISTS (
+              SELECT 1 FROM feed_requests fr4
+              WHERE fr4.viewer_did = fr3.viewer_did
+                AND fr4.requested_at::date < fr3.requested_at::date
+            )
+        ) AS returning_viewers
+      FROM feed_requests fr
+      WHERE fr.requested_at::date < CURRENT_DATE
+      GROUP BY fr.requested_at::date, fr.epoch_id
+      ON CONFLICT (date, epoch_id) DO UPDATE SET
+        unique_viewers = EXCLUDED.unique_viewers,
+        anonymous_requests = EXCLUDED.anonymous_requests,
+        total_requests = EXCLUDED.total_requests,
+        total_pages = EXCLUDED.total_pages,
+        avg_pages_per_session = EXCLUDED.avg_pages_per_session,
+        max_scroll_depth = EXCLUDED.max_scroll_depth,
+        returning_viewers = EXCLUDED.returning_viewers`
+    );
+
+    const rowCount = result.rowCount ?? 0;
+    if (rowCount > 0) {
+      logger.info({ rowsUpserted: rowCount }, 'Daily stats rollup complete');
+    }
+  } catch (err) {
+    logger.error({ err }, 'Daily stats rollup failed');
+  }
+}
+
+// ── Job 2: Epoch Engagement Stats ───────────────────────────────
+
+async function computeEpochStats(): Promise<void> {
+  try {
+    // Get current epoch
+    const epochResult = await db.query(
+      `SELECT id FROM governance_epochs WHERE status = 'active' ORDER BY id DESC LIMIT 1`
+    );
+
+    if (epochResult.rows.length === 0) {
+      logger.debug('No active epoch found, skipping epoch stats');
+      return;
+    }
+
+    const epochId = epochResult.rows[0].id;
+
+    // Compute stats from raw data
+    const statsResult = await db.query(
+      `SELECT
+        COUNT(*) AS total_feed_loads,
+        COUNT(DISTINCT viewer_did) FILTER (WHERE viewer_did IS NOT NULL) AS unique_viewers,
+        AVG(page_offset + posts_served)::float AS avg_scroll_depth,
+        -- Returning viewer percentage
+        CASE
+          WHEN COUNT(DISTINCT viewer_did) FILTER (WHERE viewer_did IS NOT NULL) = 0 THEN 0
+          ELSE (
+            SELECT COUNT(DISTINCT fr2.viewer_did)::float /
+              NULLIF(COUNT(DISTINCT fr.viewer_did) FILTER (WHERE fr.viewer_did IS NOT NULL), 0) * 100
+            FROM feed_requests fr2
+            WHERE fr2.epoch_id = $1
+              AND fr2.viewer_did IS NOT NULL
+              AND EXISTS (
+                SELECT 1 FROM feed_requests fr3
+                WHERE fr3.viewer_did = fr2.viewer_did
+                  AND fr3.requested_at::date < fr2.requested_at::date
+              )
+          )
+        END AS returning_viewer_pct,
+        -- Total posts served (sum of posts_served across all requests)
+        SUM(posts_served) AS posts_served
+      FROM feed_requests fr
+      WHERE fr.epoch_id = $1`,
+      [epochId]
+    );
+
+    // Compute engagement stats
+    const engagementResult = await db.query(
+      `SELECT
+        COUNT(*) AS total_attributions,
+        COUNT(*) FILTER (WHERE engaged_at IS NOT NULL) AS engaged,
+        CASE
+          WHEN COUNT(*) = 0 THEN 0
+          ELSE COUNT(*) FILTER (WHERE engaged_at IS NOT NULL)::float / COUNT(*)
+        END AS engagement_rate,
+        AVG(position_in_feed) FILTER (WHERE engaged_at IS NOT NULL)::float AS avg_engagement_position
+      FROM engagement_attributions
+      WHERE epoch_id = $1`,
+      [epochId]
+    );
+
+    const stats = statsResult.rows[0];
+    const engagement = engagementResult.rows[0];
+
+    await db.query(
+      `INSERT INTO epoch_engagement_stats (
+        epoch_id, total_feed_loads, unique_viewers, avg_scroll_depth,
+        returning_viewer_pct, posts_served, posts_with_engagement,
+        engagement_rate, avg_engagement_position
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ON CONFLICT (epoch_id) DO UPDATE SET
+        computed_at = NOW(),
+        total_feed_loads = EXCLUDED.total_feed_loads,
+        unique_viewers = EXCLUDED.unique_viewers,
+        avg_scroll_depth = EXCLUDED.avg_scroll_depth,
+        returning_viewer_pct = EXCLUDED.returning_viewer_pct,
+        posts_served = EXCLUDED.posts_served,
+        posts_with_engagement = EXCLUDED.posts_with_engagement,
+        engagement_rate = EXCLUDED.engagement_rate,
+        avg_engagement_position = EXCLUDED.avg_engagement_position`,
+      [
+        epochId,
+        parseInt(stats.total_feed_loads) || 0,
+        parseInt(stats.unique_viewers) || 0,
+        parseFloat(stats.avg_scroll_depth) || null,
+        parseFloat(stats.returning_viewer_pct) || null,
+        parseInt(stats.posts_served) || 0,
+        parseInt(engagement.engaged) || 0,
+        parseFloat(engagement.engagement_rate) || null,
+        parseFloat(engagement.avg_engagement_position) || null,
+      ]
+    );
+
+    logger.debug({ epochId }, 'Epoch engagement stats computed');
+  } catch (err) {
+    logger.error({ err }, 'Epoch engagement stats computation failed');
+  }
+}
+
+// ── Job 3: Retention Cleanup ────────────────────────────────────
+
+async function retentionCleanup(): Promise<void> {
+  try {
+    const feedResult = await db.query(
+      `DELETE FROM feed_requests WHERE requested_at < NOW() - INTERVAL '${RETENTION_DAYS} days'`
+    );
+
+    const attrResult = await db.query(
+      `DELETE FROM engagement_attributions WHERE served_at < NOW() - INTERVAL '${RETENTION_DAYS} days'`
+    );
+
+    const feedDeleted = feedResult.rowCount ?? 0;
+    const attrDeleted = attrResult.rowCount ?? 0;
+
+    if (feedDeleted > 0 || attrDeleted > 0) {
+      logger.info(
+        { feedDeleted, attrDeleted, retentionDays: RETENTION_DAYS },
+        'Interaction retention cleanup complete'
+      );
+
+      // VACUUM ANALYZE if significant rows deleted
+      if (feedDeleted + attrDeleted > 1000) {
+        try {
+          await db.query('VACUUM (ANALYZE) feed_requests');
+          await db.query('VACUUM (ANALYZE) engagement_attributions');
+          logger.info('VACUUM ANALYZE on interaction tables complete');
+        } catch (err) {
+          logger.warn({ err }, 'VACUUM on interaction tables failed (non-fatal)');
+        }
+      }
+    }
+  } catch (err) {
+    logger.error({ err }, 'Interaction retention cleanup failed');
+  }
+}

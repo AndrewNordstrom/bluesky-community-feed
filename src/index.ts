@@ -12,6 +12,7 @@ import { initializeBot } from './bot/agent.js';
 import { startEpochScheduler, stopEpochScheduler } from './scheduler/epoch-scheduler.js';
 import { startCleanup, stopCleanup } from './maintenance/cleanup.js';
 import { startInteractionLogger, stopInteractionLogger } from './maintenance/interaction-logger.js';
+import { startInteractionAggregator, stopInteractionAggregator } from './maintenance/interaction-aggregator.js';
 
 async function main() {
   logger.info('Starting Community Feed Generator...');
@@ -124,6 +125,14 @@ async function main() {
     logger.warn({ err }, 'Interaction logger failed to start - non-fatal');
   }
 
+  // 6.9. Start interaction aggregator (hourly stats rollup + retention cleanup)
+  try {
+    await startInteractionAggregator();
+    logger.info('Interaction aggregator started');
+  } catch (err) {
+    logger.warn({ err }, 'Interaction aggregator failed to start - non-fatal');
+  }
+
   // 7. Register graceful shutdown handlers
   registerShutdownHandlers({
     server: app,
@@ -132,6 +141,7 @@ async function main() {
     stopEpochScheduler,
     stopCleanup,
     stopInteractionLogger,
+    stopInteractionAggregator,
   });
 
   // 8. Log startup complete

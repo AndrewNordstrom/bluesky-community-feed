@@ -2,7 +2,7 @@
  * Graceful Shutdown Module
  *
  * Handles clean shutdown of all system components with a timeout.
- * Order: HTTP server → Scoring → Jetstream → Epoch Scheduler → Cleanup → Interaction Logger → Database → Redis
+ * Order: HTTP server → Scoring → Jetstream → Epoch Scheduler → Cleanup → Interaction Logger → Interaction Aggregator → Database → Redis
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -20,6 +20,7 @@ export interface ShutdownDependencies {
   stopEpochScheduler?: () => void;
   stopCleanup?: () => Promise<void>;
   stopInteractionLogger?: () => Promise<void>;
+  stopInteractionAggregator?: () => Promise<void>;
 }
 
 let isShuttingDown = false;
@@ -79,6 +80,13 @@ export async function gracefulShutdown(deps: ShutdownDependencies): Promise<void
       logger.info('Stopping interaction logger...');
       await deps.stopInteractionLogger();
       logger.info('Interaction logger stopped');
+    }
+
+    // 3.8. Stop interaction aggregator
+    if (deps.stopInteractionAggregator) {
+      logger.info('Stopping interaction aggregator...');
+      await deps.stopInteractionAggregator();
+      logger.info('Interaction aggregator stopped');
     }
 
     // 4. Close database pool
