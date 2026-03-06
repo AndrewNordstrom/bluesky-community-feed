@@ -182,3 +182,24 @@ Git tag deferred until merge to main.
 
 ### Open questions
 None.
+
+## 2026-03-06 — Security Audit & Merge to Main
+**Branch:** `dev/stack-cleanup-features` → `main`
+**Commits:** `edcb9ed`, `942961c`
+**Tag:** `v1.0.0`
+**Files changed:** `package-lock.json`, `web/package-lock.json`, `web/package.json` (audit fix); 58 files in merge
+
+### What changed
+Ran comprehensive security audit (auth/access control, SQL injection/input validation, infrastructure/dependencies) across all OWASP Top 10 categories. Fixed 5 dependency vulnerabilities via npm audit fix (axios, rollup, minimatch, dompurify, ajv). Merged 41 commits from dev/stack-cleanup-features to main with --no-ff. Tagged v1.0.0.
+
+### Why
+Pre-release security gate before merging infrastructure hardening work (Phases 1-7) to main and deploying to production.
+
+### Measurements
+162 tests pass. Zero high/critical dependency vulnerabilities. Zero application-level security issues found. Backend and frontend builds clean.
+
+### Decisions & alternatives
+Remaining moderate vulns (esbuild/vite/vitest chain) are dev-only and require breaking major version bumps — deferred. Debug routes left unprotected in dev mode (protected in prod via requireAdmin) — acceptable tradeoff.
+
+### Open questions
+Re-run `npm run publish-feed` on VPS after deploy to push acceptsInteractions flag live.
