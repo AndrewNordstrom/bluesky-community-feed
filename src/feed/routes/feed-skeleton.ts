@@ -18,6 +18,7 @@ import { redis } from '../../db/redis.js';
 import { upsertSubscriberAsync } from '../../db/queries/subscribers.js';
 import { encodeCursor, decodeCursor } from '../cursor.js';
 import { verifyFeedRequesterDid } from '../jwt-verifier.js';
+import { isParticipantApproved } from '../access-control.js';
 
 // The AT-URI for this feed
 const FEED_URI = `at://${config.FEEDGEN_PUBLISHER_DID}/app.bsky.feed.generator/community-gov`;
@@ -116,6 +117,14 @@ export function registerFeedSkeleton(app: FastifyInstance): void {
           error: 'UnsupportedAlgorithm',
           message: 'Unknown feed',
         });
+      }
+
+      // Private feed mode: require approved participant
+      if (config.FEED_PRIVATE_MODE) {
+        const viewerDid = await verifyFeedRequesterDid(request.headers.authorization);
+        if (!viewerDid) return reply.send({ feed: [] });
+        const approved = await isParticipantApproved(viewerDid);
+        if (!approved) return reply.send({ feed: [] });
       }
 
       let postUris: string[];
