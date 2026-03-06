@@ -9,6 +9,8 @@ import { db } from '../../db/client.js';
 import { logger } from '../../lib/logger.js';
 import { config } from '../../config.js';
 import { getCurrentContentRules, checkContentRules, hasActiveContentRules } from '../../governance/content-filter.js';
+import { classifyPost, type TopicVector } from '../../scoring/topics/classifier.js';
+import { getTaxonomy } from '../../scoring/topics/taxonomy.js';
 
 /** AT Protocol content labels that indicate NSFW content. */
 const NSFW_LABELS = new Set(['porn', 'sexual', 'graphic-media', 'nudity']);
@@ -92,13 +94,25 @@ export async function handlePost(
     logger.warn({ err, uri }, 'Content filter check failed, inserting post anyway');
   }
 
+  // Classify post topics (fail-open: empty vector on error)
+  let topicVector: TopicVector = {};
+  try {
+    const taxonomy = getTaxonomy();
+    if (taxonomy.length > 0) {
+      const result = classifyPost(text ?? '', taxonomy);
+      topicVector = result.vector;
+    }
+  } catch (err) {
+    logger.warn({ err, uri }, 'Topic classification failed, proceeding without topics');
+  }
+
   try {
     // UPSERT post - ON CONFLICT DO NOTHING handles duplicates
     await db.query(
-      `INSERT INTO posts (uri, cid, author_did, text, reply_root, reply_parent, langs, has_media, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO posts (uri, cid, author_did, text, reply_root, reply_parent, langs, has_media, created_at, topic_vector)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (uri) DO NOTHING`,
-      [uri, cid, authorDid, text, replyRoot, replyParent, langs, hasMedia, createdAt]
+      [uri, cid, authorDid, text, replyRoot, replyParent, langs, hasMedia, createdAt, JSON.stringify(topicVector)]
     );
 
     // Initialize engagement counters - UPSERT pattern

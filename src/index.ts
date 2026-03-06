@@ -17,6 +17,7 @@ import {
   startMaintenanceWorkerSupervisor,
   stopMaintenanceWorkerSupervisor,
 } from './maintenance/worker-supervisor.js';
+import { loadTaxonomy } from './scoring/topics/taxonomy.js';
 
 async function main() {
   logger.info('Starting Community Feed Generator...');
@@ -48,6 +49,13 @@ async function main() {
   } catch (err) {
     logger.fatal({ err }, 'Failed to start HTTP server');
     process.exit(1);
+  }
+
+  // 2.5. Load topic taxonomy (before Jetstream starts consuming)
+  try {
+    await loadTaxonomy();
+  } catch (err) {
+    logger.warn({ err }, 'Failed to load topic taxonomy - posts will have empty topic vectors');
   }
 
   // 3. Start Jetstream ingestion
