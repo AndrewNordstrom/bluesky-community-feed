@@ -9,3 +9,13 @@
 - Added `npm ci`, `npm run build`, `npm run test`, and web build to CI deploy workflow
 - Created `src/db/queries/` with subscriber upsert and epoch lookup extractions as reuse pattern
 - All 162 tests pass, backend and frontend builds clean
+
+## 2026-03-06 — Phase 2: acceptsInteractions Support
+
+- Added `acceptsInteractions: true` to feed publication record in `scripts/publish-feed.ts`
+- Created migration 015 for `feed_interactions` table with indexes on time, user, post, and epoch
+- Implemented `POST /xrpc/app.bsky.feed.sendInteractions` endpoint with mandatory JWT auth, Zod validation (max 100 items), batch parameterized INSERT, and `ON CONFLICT DO NOTHING`
+- Registered route in server.ts after `registerFeedSkeleton`
+- Added configurable rate limiting (60 req/min default via `RATE_LIMIT_INTERACTIONS_MAX/WINDOW_MS`)
+- Added `GET /api/admin/interactions/feed-signals` analytics endpoint: totals by type (today/yesterday/7-day), per-epoch breakdown, top posts by requestMore/requestLess ratio
+- All 162 tests pass, build clean
