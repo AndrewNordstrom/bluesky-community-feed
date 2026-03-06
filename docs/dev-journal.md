@@ -29,3 +29,16 @@
 - `scoreAllPosts()` now creates `ScoringContext` once per run with fresh `authorCounts`
 - `storeScore()` unchanged — Golden Rule preserved
 - All 162 tests pass, build clean
+
+## 2026-03-06 — Phase 4: Private Feed Access Gating
+
+- Created migration 016 for `approved_participants` table with soft delete (`removed_at`) and partial index on active DIDs
+- Added `FEED_PRIVATE_MODE` config toggle (default false) to Zod config schema
+- Created `src/feed/access-control.ts` with Redis-cached `isParticipantApproved()` (300s TTL) and `invalidateParticipantCache()`
+- Gated feed access in `feed-skeleton.ts`: returns empty `{ feed: [] }` for unapproved users when private mode active
+- Gated governance voting in `vote.ts`: throws `Errors.FORBIDDEN()` for unapproved participants
+- Added admin participant management routes (GET/POST/DELETE `/api/admin/participants`) with Bluesky handle resolution via `@atproto/api`, audit logging, and Redis cache invalidation
+- Exposed `feedPrivateMode` in admin status response for frontend conditional rendering
+- Created `ParticipantsPanel` component with add-by-DID-or-handle form, participant table, and remove confirmation
+- Participants tab conditionally visible in admin dashboard only when private mode is active
+- All 162 tests pass, backend and frontend builds clean
