@@ -12,8 +12,9 @@ import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 
 /**
- * Build a bare Fastify instance for route testing.
- * Register specific route modules after creation.
+ * Build a Fastify instance for route testing.
+ * Mirrors production config: no-op validator so route schemas
+ * are documentation-only (Zod safeParse handles validation).
  *
  * @example
  * const app = buildTestApp();
@@ -21,5 +22,7 @@ import type { FastifyInstance } from 'fastify';
  * const res = await app.inject({ method: 'GET', url: '/...' });
  */
 export function buildTestApp(): FastifyInstance {
-  return Fastify({ logger: false });
+  const app = Fastify({ logger: false });
+  app.setValidatorCompiler(() => () => true);
+  return app;
 }

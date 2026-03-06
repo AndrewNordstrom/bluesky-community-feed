@@ -12,6 +12,7 @@
 
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 import { db } from '../../db/client.js';
 import { redis } from '../../db/redis.js';
 import { logger } from '../../lib/logger.js';
@@ -33,6 +34,11 @@ const SendInteractionsBodySchema = z.object({
     .max(MAX_INTERACTIONS_PER_REQUEST),
 });
 
+/** JSON Schema for Fastify route definition (consumed by @fastify/swagger for OpenAPI). */
+const SendInteractionsBodyJsonSchema = zodToJsonSchema(SendInteractionsBodySchema, {
+  target: 'openApi3',
+});
+
 /**
  * Register the sendInteractions endpoint.
  *
@@ -42,6 +48,11 @@ const SendInteractionsBodySchema = z.object({
 export function registerSendInteractions(app: FastifyInstance): void {
   app.post(
     '/xrpc/app.bsky.feed.sendInteractions',
+    {
+      schema: {
+        body: SendInteractionsBodyJsonSchema,
+      },
+    },
     async (request: FastifyRequest, reply) => {
       // Auth is mandatory for sendInteractions
       const requesterDid = await verifyFeedRequesterDid(

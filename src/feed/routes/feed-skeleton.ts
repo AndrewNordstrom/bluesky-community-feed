@@ -12,6 +12,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 import { config } from '../../config.js';
 import { logger } from '../../lib/logger.js';
 import { redis } from '../../db/redis.js';
@@ -72,21 +73,28 @@ interface FeedSkeletonQuery {
   limit?: string;
 }
 
-const FeedSkeletonQuerySchema = z
-  .object({
-    feed: z.string(),
-    cursor: z.string().optional(),
-    limit: z.coerce.number().int().min(1).max(100).default(50),
-  })
-  .superRefine((query, ctx) => {
-    if (query.cursor && decodeCursor(query.cursor) === null) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['cursor'],
-        message: 'Cursor must be a valid feed pagination cursor',
-      });
-    }
-  });
+/** Route-level schema for OpenAPI docs (no superRefine — Ajv can't compile Zod effects). */
+const FeedSkeletonRouteSchema = z.object({
+  feed: z.string(),
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+
+/** JSON Schema for Fastify route definition (consumed by @fastify/swagger for OpenAPI). */
+const FeedSkeletonQueryJsonSchema = zodToJsonSchema(FeedSkeletonRouteSchema, {
+  target: 'openApi3',
+});
+
+/** Full validation schema including cursor structure check (used by safeParse in handler). */
+const FeedSkeletonQuerySchema = FeedSkeletonRouteSchema.superRefine((query, ctx) => {
+  if (query.cursor && decodeCursor(query.cursor) === null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['cursor'],
+      message: 'Cursor must be a valid feed pagination cursor',
+    });
+  }
+});
 
 /**
  * Register the getFeedSkeleton endpoint.
@@ -96,6 +104,11 @@ const FeedSkeletonQuerySchema = z
 export function registerFeedSkeleton(app: FastifyInstance): void {
   app.get(
     '/xrpc/app.bsky.feed.getFeedSkeleton',
+    {
+      schema: {
+        querystring: FeedSkeletonQueryJsonSchema,
+      },
+    },
     async (request: FastifyRequest<{ Querystring: FeedSkeletonQuery }>, reply) => {
       const startTime = performance.now();
 

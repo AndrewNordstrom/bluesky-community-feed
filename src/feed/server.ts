@@ -3,6 +3,8 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -75,6 +77,26 @@ export async function createServer() {
     referrerPolicy: {
       policy: 'strict-origin-when-cross-origin',
     },
+  });
+
+  // No-op validator: route schemas are for OpenAPI documentation only.
+  // Actual request validation is handled by Zod safeParse() in each handler.
+  app.setValidatorCompiler(() => () => true);
+
+  // OpenAPI documentation via Swagger
+  await app.register(swagger, {
+    openapi: {
+      info: {
+        title: 'Community Feed API',
+        description: 'Community-governed Bluesky feed generator API',
+        version: '1.0.0',
+      },
+      servers: [{ url: `https://${config.FEEDGEN_HOSTNAME}` }],
+    },
+  });
+
+  await app.register(swaggerUi, {
+    routePrefix: '/docs',
   });
 
   if (config.RATE_LIMIT_ENABLED) {
@@ -181,6 +203,11 @@ export async function createServer() {
       return reply.status(200).send({ status: 'ready' });
     }
     return reply.status(503).send({ status: 'not ready' });
+  });
+
+  // OpenAPI JSON endpoint
+  app.get('/api/openapi.json', { schema: { hide: true } }, async () => {
+    return app.swagger();
   });
 
   // Standardized error handler with correlation ID
