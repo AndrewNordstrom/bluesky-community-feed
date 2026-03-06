@@ -12,7 +12,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { db } from '../../db/client.js';
 import { logger } from '../../lib/logger.js';
-import type { PostExplanation } from '../transparency.types.js';
+import type { PostExplanation, TopicBreakdownEntry } from '../transparency.types.js';
 
 interface CurrentScoringRunValue {
   run_id?: unknown;
@@ -194,6 +194,37 @@ export function registerPostExplainRoute(app: FastifyInstance): void {
           scored_at: s.scored_at,
           component_details: s.component_details,
         };
+
+        // Enrich relevance component with per-topic breakdown
+        try {
+          const topicResult = await db.query<{ topic_vector: Record<string, number> | null }>(
+            'SELECT topic_vector FROM posts WHERE uri = $1',
+            [decodedUri]
+          );
+          const epochWeightsResult = await db.query<{ topic_weights: Record<string, number> | null }>(
+            'SELECT topic_weights FROM governance_epochs WHERE id = $1',
+            [epochId]
+          );
+
+          const topicVector = (topicResult.rows[0]?.topic_vector as Record<string, number>) ?? {};
+          const topicWeights = (epochWeightsResult.rows[0]?.topic_weights as Record<string, number>) ?? {};
+
+          if (Object.keys(topicVector).length > 0 && Object.keys(topicWeights).length > 0) {
+            const breakdown: Record<string, TopicBreakdownEntry> = {};
+            for (const [topic, postScore] of Object.entries(topicVector)) {
+              const communityWeight = topicWeights[topic] ?? 0.5;
+              breakdown[topic] = {
+                postScore: postScore as number,
+                communityWeight,
+                contribution: (postScore as number) * communityWeight,
+              };
+            }
+            explanation.components.relevance.topicBreakdown = breakdown;
+          }
+        } catch (topicErr) {
+          // Non-fatal: topic breakdown is supplementary
+          logger.warn({ err: topicErr, uri: decodedUri }, 'Failed to fetch topic breakdown');
+        }
 
         return reply.send(explanation);
       } catch (err) {

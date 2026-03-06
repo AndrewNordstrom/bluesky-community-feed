@@ -14,6 +14,19 @@ export interface ScoreComponent {
 }
 
 /**
+ * Per-topic breakdown entry for the relevance component.
+ * Shows how each topic in a post's topic vector contributed to its relevance score.
+ */
+export interface TopicBreakdownEntry {
+  /** The post's classifier confidence for this topic (0.0–1.0). */
+  postScore: number;
+  /** The community-voted weight for this topic (0.0–1.0, default 0.5). */
+  communityWeight: number;
+  /** postScore × communityWeight — this topic's contribution to the weighted sum. */
+  contribution: number;
+}
+
+/**
  * Full explanation of why a post is ranked where it is.
  */
 export interface PostExplanation {
@@ -27,7 +40,10 @@ export interface PostExplanation {
     engagement: ScoreComponent;
     bridging: ScoreComponent;
     source_diversity: ScoreComponent;
-    relevance: ScoreComponent;
+    relevance: ScoreComponent & {
+      /** Per-topic breakdown when topic data is available. */
+      topicBreakdown?: Record<string, TopicBreakdownEntry>;
+    };
   };
   governance_weights: {
     recency: number;
