@@ -15,7 +15,7 @@ import { z } from 'zod';
 import { config } from '../../config.js';
 import { logger } from '../../lib/logger.js';
 import { redis } from '../../db/redis.js';
-import { db } from '../../db/client.js';
+import { upsertSubscriberAsync } from '../../db/queries/subscribers.js';
 import { encodeCursor, decodeCursor } from '../cursor.js';
 import { verifyFeedRequesterDid } from '../jwt-verifier.js';
 
@@ -23,22 +23,6 @@ import { verifyFeedRequesterDid } from '../jwt-verifier.js';
 const FEED_URI = `at://${config.FEEDGEN_PUBLISHER_DID}/app.bsky.feed.generator/community-gov`;
 const MIN_CURSOR_OFFSET = 0;
 const MAX_CURSOR_OFFSET = 10000;
-
-/**
- * Fire-and-forget subscriber UPSERT.
- * Inserts new subscribers or updates last_seen for existing ones.
- * Non-blocking — errors are logged but never propagated.
- */
-function upsertSubscriberAsync(did: string): void {
-  setImmediate(() => {
-    db.query(
-      `INSERT INTO subscribers (did, first_seen, last_seen, is_active)
-       VALUES ($1, NOW(), NOW(), TRUE)
-       ON CONFLICT (did) DO UPDATE SET last_seen = NOW(), is_active = TRUE`,
-      [did]
-    ).catch((err) => logger.warn({ err, did }, 'Subscriber upsert failed'));
-  });
-}
 
 interface FeedRequestTrackingContext {
   authHeader: string | undefined;

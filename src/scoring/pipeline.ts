@@ -15,6 +15,7 @@ import { db } from '../db/client.js';
 import { redis } from '../db/redis.js';
 import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
+import { getActiveEpoch } from '../db/queries/epochs.js';
 import { randomUUID } from 'crypto';
 import { scoreRecency } from './components/recency.js';
 import { scoreEngagement } from './components/engagement.js';
@@ -25,7 +26,6 @@ import {
   GovernanceEpoch,
   PostForScoring,
   ScoredPost,
-  toGovernanceEpoch,
   toPostForScoring,
 } from './score.types.js';
 import {
@@ -218,21 +218,6 @@ async function updateCurrentRunScope(
       }),
     ]
   );
-}
-
-/**
- * Get the currently active governance epoch.
- */
-async function getActiveEpoch(): Promise<GovernanceEpoch | null> {
-  const result = await db.query(
-    `SELECT * FROM governance_epochs WHERE status = 'active' ORDER BY id DESC LIMIT 1`
-  );
-
-  if (result.rows.length === 0) {
-    return null;
-  }
-
-  return toGovernanceEpoch(result.rows[0]);
 }
 
 /**
