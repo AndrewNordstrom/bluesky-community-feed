@@ -52,6 +52,13 @@ const VoteSchema = z
       .array(z.string().max(50, 'Keywords must be 50 characters or less'))
       .max(20, 'Maximum 20 exclude keywords')
       .optional(),
+    // Topic weight fields (optional for weight/keyword-only votes)
+    topic_weights: z
+      .record(
+        z.string(),
+        z.number().min(0).max(1)
+      )
+      .optional(),
   })
   .refine(
     (data) => {
@@ -72,14 +79,15 @@ const VoteSchema = z
   )
   .refine(
     (data) => {
-      // At least one of weights or keywords must be provided
+      // At least one of weights, keywords, or topic weights must be provided
       const hasWeights = GOVERNANCE_WEIGHT_VOTE_FIELDS.some((field) => data[field] !== undefined);
       const hasKeywords =
         (data.include_keywords?.length ?? 0) > 0 ||
         (data.exclude_keywords?.length ?? 0) > 0;
-      return hasWeights || hasKeywords;
+      const hasTopicWeights = Object.keys(data.topic_weights ?? {}).length > 0;
+      return hasWeights || hasKeywords || hasTopicWeights;
     },
-    { message: 'Must provide either weights or keywords (or both)' }
+    { message: 'Must provide either weights, keywords, or topic weights (or any combination)' }
   );
 
 export function registerVoteRoute(app: FastifyInstance): void {
@@ -140,6 +148,21 @@ export function registerVoteRoute(app: FastifyInstance): void {
 
     const vote = parseResult.data;
 
+    // 3b. Validate topic weight slugs against active topics
+    if (vote.topic_weights && Object.keys(vote.topic_weights).length > 0) {
+      const slugResult = await db.query(
+        'SELECT slug FROM topic_catalog WHERE is_active = TRUE'
+      );
+      const validSlugs = new Set(slugResult.rows.map((r: Record<string, unknown>) => r.slug as string));
+      const invalidSlugs = Object.keys(vote.topic_weights).filter((s) => !validSlugs.has(s));
+      if (invalidSlugs.length > 0) {
+        return reply.code(400).send({
+          error: 'InvalidTopicSlug',
+          message: `Invalid topic slugs: ${invalidSlugs.join(', ')}`,
+        });
+      }
+    }
+
     // 4. Normalize weights (if provided) and keywords
     const hasWeights = GOVERNANCE_WEIGHT_VOTE_FIELDS.some((field) => vote[field] !== undefined);
     let normalized = null;
@@ -185,16 +208,22 @@ export function registerVoteRoute(app: FastifyInstance): void {
     }
 
     try {
-      // 6. UPSERT vote with weights and/or keywords
+      // 6. UPSERT vote with weights, keywords, and/or topic weights
       // Use xmax = 0 to detect if this was an INSERT (new) or UPDATE (existing)
       // Use COALESCE to preserve existing values when only updating one aspect
+      const topicWeightsJson =
+        vote.topic_weights && Object.keys(vote.topic_weights).length > 0
+          ? JSON.stringify(vote.topic_weights)
+          : null;
+
       const voteResult = await db.query(
         `INSERT INTO governance_votes (
           voter_did, epoch_id,
           recency_weight, engagement_weight, bridging_weight,
           source_diversity_weight, relevance_weight,
-          include_keywords, exclude_keywords
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          include_keywords, exclude_keywords,
+          topic_weight_votes
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         ON CONFLICT (voter_did, epoch_id) DO UPDATE SET
           recency_weight = COALESCE($3, governance_votes.recency_weight),
           engagement_weight = COALESCE($4, governance_votes.engagement_weight),
@@ -203,6 +232,7 @@ export function registerVoteRoute(app: FastifyInstance): void {
           relevance_weight = COALESCE($7, governance_votes.relevance_weight),
           include_keywords = COALESCE($8, governance_votes.include_keywords),
           exclude_keywords = COALESCE($9, governance_votes.exclude_keywords),
+          topic_weight_votes = COALESCE($10, governance_votes.topic_weight_votes),
           voted_at = NOW()
         RETURNING id, (xmax = 0) as is_new_vote`,
         [
@@ -211,6 +241,7 @@ export function registerVoteRoute(app: FastifyInstance): void {
           ...GOVERNANCE_WEIGHT_VOTE_FIELDS.map((field) => normalizedPayload?.[field] ?? null),
           includeKeywords.length > 0 ? includeKeywords : null,
           excludeKeywords.length > 0 ? excludeKeywords : null,
+          topicWeightsJson,
         ]
       );
 
@@ -231,6 +262,7 @@ export function registerVoteRoute(app: FastifyInstance): void {
               include_keywords: includeKeywords,
               exclude_keywords: excludeKeywords,
             },
+            topic_weights: vote.topic_weights ?? null,
             original_weights: hasWeights
               ? Object.fromEntries(
                   GOVERNANCE_WEIGHT_VOTE_FIELDS.map((field) => [field, vote[field]])
@@ -264,6 +296,7 @@ export function registerVoteRoute(app: FastifyInstance): void {
           includeKeywords,
           excludeKeywords,
         },
+        topicWeights: vote.topic_weights ?? null,
         is_update: !isNewVote,
         message,
       });
@@ -313,11 +346,12 @@ export function registerVoteRoute(app: FastifyInstance): void {
 
     const epochId = epoch.rows[0].id;
 
-    // Get user's vote for this epoch (including keywords)
+    // Get user's vote for this epoch (including keywords and topic weights)
     const vote = await db.query(
       `SELECT recency_weight, engagement_weight, bridging_weight,
               source_diversity_weight, relevance_weight,
-              include_keywords, exclude_keywords, voted_at
+              include_keywords, exclude_keywords, topic_weight_votes,
+              voted_at
        FROM governance_votes
        WHERE voter_did = $1 AND epoch_id = $2`,
       [voterDid, epochId]
@@ -327,6 +361,7 @@ export function registerVoteRoute(app: FastifyInstance): void {
       return reply.send({
         vote: null,
         contentVote: null,
+        topicWeights: null,
         voted_at: null,
         epoch_id: epochId,
       });
@@ -345,6 +380,7 @@ export function registerVoteRoute(app: FastifyInstance): void {
         includeKeywords: v.include_keywords ?? [],
         excludeKeywords: v.exclude_keywords ?? [],
       },
+      topicWeights: v.topic_weight_votes ?? {},
       voted_at: v.voted_at,
       epoch_id: epochId,
     });

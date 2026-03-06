@@ -7,6 +7,7 @@
 
 import { FastifyInstance } from 'fastify';
 import { registerVoteRoute } from './routes/vote.js';
+import { registerTopicRoutes } from './routes/topics.js';
 import { registerWeightsRoute } from './routes/weights.js';
 import { registerEpochsRoute } from './routes/epochs.js';
 import { registerAuthRoute } from './routes/auth.js';
@@ -22,8 +23,9 @@ import { logger } from '../lib/logger.js';
  * - POST /api/governance/auth/login - Authenticate with Bluesky
  * - GET /api/governance/auth/session - Get current session
  * - POST /api/governance/auth/logout - Logout
- * - POST /api/governance/vote - Submit vote
+ * - POST /api/governance/vote - Submit vote (weights, keywords, topic weights)
  * - GET /api/governance/vote - Get current vote
+ * - GET /api/governance/topics - Get active topic catalog (public)
  * - GET /api/governance/weights - Get current weights
  * - GET /api/governance/weights/history - Get weight history
  * - GET /api/governance/weights/compare - Compare epochs
@@ -41,6 +43,9 @@ export function registerGovernanceRoutes(app: FastifyInstance): void {
 
   // Vote routes
   registerVoteRoute(app);
+
+  // Topic catalog routes (public)
+  registerTopicRoutes(app);
 
   // Weights routes
   registerWeightsRoute(app);
