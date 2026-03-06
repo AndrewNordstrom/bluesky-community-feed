@@ -21,6 +21,7 @@ import { engagementComponent } from './components/engagement.js';
 import { bridgingComponent } from './components/bridging.js';
 import { sourceDiversityComponent } from './components/source-diversity.js';
 import { relevanceComponent } from './components/relevance.js';
+// GENERATOR_IMPORT_ANCHOR — do not remove
 
 /** All registered scoring components in evaluation order. */
 export const DEFAULT_COMPONENTS: readonly ScoringComponent[] = [
@@ -29,6 +30,7 @@ export const DEFAULT_COMPONENTS: readonly ScoringComponent[] = [
   bridgingComponent,
   sourceDiversityComponent,
   relevanceComponent,
+  // GENERATOR_COMPONENT_ANCHOR — do not remove
 ];
 
 /**

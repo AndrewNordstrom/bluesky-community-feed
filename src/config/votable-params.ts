@@ -61,6 +61,7 @@ export const VOTABLE_WEIGHT_PARAMS: readonly VotableWeightParam[] = [
     max: 1,
     defaultValue: 0.2,
   },
+  // GENERATOR_PARAM_ANCHOR — do not remove
 ] as const;
 
 export type GovernanceWeightVoteField = (typeof VOTABLE_WEIGHT_PARAMS)[number]['voteField'];
