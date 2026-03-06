@@ -82,8 +82,17 @@ export interface RoundDetails {
   }>;
 }
 
+export interface Participant {
+  did: string;
+  handle: string | null;
+  added_by: string;
+  notes: string | null;
+  added_at: string;
+}
+
 export interface AdminStatus {
   isAdmin: boolean;
+  feedPrivateMode: boolean;
   system: {
     currentEpoch: {
       id: number;
@@ -546,6 +555,26 @@ export const adminApi = {
 
   async getKeywordPerformance(): Promise<KeywordPerformanceData> {
     const response = await api.get('/api/admin/interactions/keyword-performance');
+    return response.data;
+  },
+
+  // Participant management
+  async getParticipants(): Promise<{ participants: Participant[]; total: number }> {
+    const response = await api.get('/api/admin/participants');
+    return response.data;
+  },
+
+  async addParticipant(data: {
+    did?: string;
+    handle?: string;
+    notes?: string;
+  }): Promise<{ success: boolean; participant: { did: string; handle: string | null; notes: string | null } }> {
+    const response = await api.post('/api/admin/participants', data);
+    return response.data;
+  },
+
+  async removeParticipant(did: string): Promise<{ success: boolean }> {
+    const response = await api.delete(`/api/admin/participants/${encodeURIComponent(did)}`);
     return response.data;
   },
 };
