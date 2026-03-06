@@ -1,59 +1,69 @@
 /**
  * Relevance Scoring Component
  *
- * MVP: Returns 0.5 for all posts (neutral).
- * This means the relevance weight effectively gets distributed evenly.
+ * Computes topic-weighted relevance using the community's governance preferences.
  *
- * Upgrade path:
- * 1. MVP: Return 0.5 for all posts (implemented here)
- * 2. V2: Keyword/topic matching based on subscriber interests
- * 3. V3: Sentence transformer embeddings + cosine similarity
- * 4. V4: Fine-tuned classifier
+ * Formula: relevance = Σ(post_topic_score[t] × community_weight[t]) / Σ(post_topic_score[t])
  *
- * The interface is designed to support future implementations that take
- * post content and subscriber context into account.
+ * This is a weighted average where the post's topic scores are weights and the
+ * community preferences are values. If a post matches "software-development" at 0.8
+ * and the community boosted it to 0.9, that contributes heavily. If it also matches
+ * "politics" at 0.2 and the community penalized it to 0.1, that contributes little.
+ *
+ * Backward compatibility:
+ * - Posts without topic vectors → 0.5 (neutral)
+ * - Epochs without topic weights → 0.5 (neutral)
+ * - Topics in post but not in community weights → default 0.5
  */
 
 import type { PostForScoring } from '../score.types.js';
-import type { ScoringComponent } from '../component.interface.js';
+import type { ScoringComponent, ScoringContext } from '../component.interface.js';
 
-/** Default relevance score for MVP (neutral) */
+/** Default relevance score when no topic data is available. */
 const DEFAULT_RELEVANCE_SCORE = 0.5;
 
 /**
- * Calculate relevance score for a post.
+ * Calculate topic-weighted relevance score.
  *
- * @param _post - The post to score (unused in MVP)
- * @returns Score between 0.0 and 1.0 (higher = more relevant)
+ * @param post - Post with optional topicVector
+ * @param context - Scoring context with epoch containing optional topicWeights
+ * @returns Score between 0.0 and 1.0 (higher = more relevant to community preferences)
  */
-export function scoreRelevance(_post: PostForScoring): number {
-  // MVP: All posts equally relevant
-  // Future: Implement content-based relevance scoring
-  return DEFAULT_RELEVANCE_SCORE;
-}
+export function scoreRelevance(post: PostForScoring, context: ScoringContext): number {
+  const topicVector = post.topicVector;
+  const topicWeights = context.epoch.topicWeights;
 
-/**
- * Future interface for personalized relevance scoring.
- * This will be implemented when we add subscriber interest tracking.
- *
- * @param _post - The post to score
- * @param _subscriberDid - The subscriber requesting the feed
- * @returns Score between 0.0 and 1.0 (higher = more relevant to this subscriber)
- */
-export async function scorePersonalizedRelevance(
-  _post: PostForScoring,
-  _subscriberDid: string
-): Promise<number> {
-  // Placeholder for future implementation
-  // Will use subscriber interests, followed topics, etc.
-  return DEFAULT_RELEVANCE_SCORE;
+  // No topic data on post = neutral
+  if (!topicVector || Object.keys(topicVector).length === 0) {
+    return DEFAULT_RELEVANCE_SCORE;
+  }
+
+  // No community preferences set = neutral
+  if (!topicWeights || Object.keys(topicWeights).length === 0) {
+    return DEFAULT_RELEVANCE_SCORE;
+  }
+
+  // Weighted dot product: Σ(post_topic × community_weight) / Σ(post_topic)
+  let weightedSum = 0;
+  let scoreSum = 0;
+
+  for (const [topic, postScore] of Object.entries(topicVector)) {
+    const communityWeight = topicWeights[topic] ?? DEFAULT_RELEVANCE_SCORE; // Unvoted = neutral
+    weightedSum += postScore * communityWeight;
+    scoreSum += postScore;
+  }
+
+  if (scoreSum === 0) return DEFAULT_RELEVANCE_SCORE;
+
+  // Clamp to 0.0-1.0
+  return Math.max(0, Math.min(1, weightedSum / scoreSum));
 }
 
 /** ScoringComponent wrapper for the relevance scorer. */
 export const relevanceComponent: ScoringComponent = {
   key: 'relevance',
-  name: 'Relevance',
-  async score(post) {
-    return scoreRelevance(post);
+  name: 'Topic Relevance',
+  async score(post, context) {
+    return scoreRelevance(post, context);
   },
 };

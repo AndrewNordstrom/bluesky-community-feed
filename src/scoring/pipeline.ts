@@ -327,7 +327,7 @@ async function getPostsForScoring(contentRules: ContentRules): Promise<PostForSc
 
   const result = await db.query(
     `SELECT p.uri, p.cid, p.author_did, p.text, p.reply_root, p.reply_parent,
-            p.langs, p.has_media, p.created_at,
+            p.langs, p.has_media, p.created_at, p.topic_vector,
             COALESCE(pe.like_count, 0) as like_count,
             COALESCE(pe.repost_count, 0) as repost_count,
             COALESCE(pe.reply_count, 0) as reply_count
@@ -414,7 +414,7 @@ async function getPostsForIncrementalScoring(
   const result = await db.query(
     `(
       SELECT p.uri, p.cid, p.author_did, p.text, p.reply_root, p.reply_parent,
-             p.langs, p.has_media, p.created_at,
+             p.langs, p.has_media, p.created_at, p.topic_vector,
              COALESCE(pe.like_count, 0) as like_count,
              COALESCE(pe.repost_count, 0) as repost_count,
              COALESCE(pe.reply_count, 0) as reply_count
@@ -431,7 +431,7 @@ async function getPostsForIncrementalScoring(
     UNION ALL
     (
       SELECT p.uri, p.cid, p.author_did, p.text, p.reply_root, p.reply_parent,
-             p.langs, p.has_media, p.created_at,
+             p.langs, p.has_media, p.created_at, p.topic_vector,
              COALESCE(pe.like_count, 0) as like_count,
              COALESCE(pe.repost_count, 0) as repost_count,
              COALESCE(pe.reply_count, 0) as reply_count
