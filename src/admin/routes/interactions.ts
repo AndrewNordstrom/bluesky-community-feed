@@ -138,13 +138,7 @@ export function registerInteractionRoutes(app: FastifyInstance): void {
             WHEN max_depth <= 250 THEN '4-5 pages'
             ELSE '6+ pages'
           END
-        ORDER BY
-          CASE
-            WHEN max_depth <= 50 THEN 1
-            WHEN max_depth <= 150 THEN 2
-            WHEN max_depth <= 250 THEN 3
-            ELSE 4
-          END
+        ORDER BY MIN(max_depth)
       `);
 
       return reply.send({
@@ -204,13 +198,7 @@ export function registerInteractionRoutes(app: FastifyInstance): void {
             WHEN position_in_feed < 50 THEN '26-50'
             ELSE '50+'
           END
-        ORDER BY
-          CASE
-            WHEN position_in_feed < 10 THEN 1
-            WHEN position_in_feed < 25 THEN 2
-            WHEN position_in_feed < 50 THEN 3
-            ELSE 4
-          END
+        ORDER BY MIN(position_in_feed)
       `);
 
       const overall = overallResult.rows[0];
@@ -301,14 +289,14 @@ export function registerInteractionRoutes(app: FastifyInstance): void {
 
       // Also get current keyword rules for context
       const rulesResult = await db.query(`
-        SELECT include_keywords, exclude_keywords
+        SELECT content_rules
         FROM governance_epochs
         WHERE status = 'active'
         ORDER BY id DESC
         LIMIT 1
       `);
 
-      const rules = rulesResult.rows[0] ?? { include_keywords: [], exclude_keywords: [] };
+      const contentRules = rulesResult.rows[0]?.content_rules ?? { include_keywords: [], exclude_keywords: [] };
 
       return reply.send({
         keywords: Object.entries(keywordStats).map(([keyword, stats]) => {
@@ -321,8 +309,8 @@ export function registerInteractionRoutes(app: FastifyInstance): void {
           };
         }),
         currentRules: {
-          includeKeywords: rules.include_keywords ?? [],
-          excludeKeywords: rules.exclude_keywords ?? [],
+          includeKeywords: contentRules.include_keywords ?? [],
+          excludeKeywords: contentRules.exclude_keywords ?? [],
         },
       });
     } catch (err) {
