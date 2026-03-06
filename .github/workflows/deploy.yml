@@ -21,6 +21,7 @@ jobs:
             cd /opt/bluesky-feed
             git pull origin main
             npm ci --ignore-scripts
+            npm audit --audit-level=high
             npm run build
             npm run test -- --reporter=verbose --run
             cd web && npm ci && npm run build
