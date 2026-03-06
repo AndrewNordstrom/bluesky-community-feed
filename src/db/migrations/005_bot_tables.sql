@@ -2,7 +2,7 @@
 -- Bot Announcements Table
 --
 -- Stores all announcements posted by the bot for audit trail.
--- Follows soft-delete pattern per CLAUDE.md rule 10.
+-- Follows soft-delete pattern (never hard delete).
 
 CREATE TABLE IF NOT EXISTS bot_announcements (
     id              SERIAL PRIMARY KEY,
@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS bot_announcements (
     epoch_id        INTEGER REFERENCES governance_epochs(id),
     content         TEXT NOT NULL,                  -- Post text
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    deleted         BOOLEAN NOT NULL DEFAULT FALSE, -- Soft delete (CLAUDE.md rule 10)
+    deleted         BOOLEAN NOT NULL DEFAULT FALSE, -- Soft delete (never hard delete)
 
     CONSTRAINT valid_announcement_type CHECK (type IN ('voting_opened', 'epoch_transition', 'manual'))
 );

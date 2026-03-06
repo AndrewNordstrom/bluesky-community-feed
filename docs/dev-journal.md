@@ -237,7 +237,7 @@ Admin operations required direct HTTP requests. Researchers need anonymized data
 Added an MCP (Model Context Protocol) Streamable HTTP endpoint at `/mcp` with 23 admin tools across 5 categories: governance (10), feed/scoring (5), participants (3), export (3), and announcements (2). All tools delegate to existing admin API endpoints via `app.inject()` — zero business logic duplication.
 
 ### Why
-Enable LLM agents (Claude Desktop, etc.) to manage feed operations through tool calling with full auth, validation, and audit logging preserved.
+Enable programmatic management of feed operations through MCP tool calling with full auth, validation, and audit logging preserved.
 
 ### Measurements
 185 tests pass (7 new MCP tests). Build clean. All 23 tools verified via tool listing test.

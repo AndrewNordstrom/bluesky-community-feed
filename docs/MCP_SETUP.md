@@ -1,6 +1,6 @@
 # MCP Server Setup
 
-The feed exposes a [Model Context Protocol](https://modelcontextprotocol.io/) endpoint at `/mcp` that lets LLM agents manage all admin operations through tool calling.
+The feed exposes a [Model Context Protocol](https://modelcontextprotocol.io/) endpoint at `/mcp` for programmatic management of all admin operations through tool calling.
 
 ## Authentication
 
@@ -76,9 +76,9 @@ Accept: application/json, text/event-stream
 | `list_announcements` | List all announcements |
 | `send_announcement` | Post an announcement (max 280 chars) |
 
-## Claude Desktop Configuration
+## Client Configuration
 
-Add to `~/.claude/claude_desktop_config.json`:
+Add to your MCP client configuration file:
 
 ```json
 {
