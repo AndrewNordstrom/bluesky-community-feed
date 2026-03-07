@@ -19,6 +19,7 @@ import { registerGovernanceRoutes } from './governance.js';
 import { registerInteractionRoutes } from './interactions.js';
 import { registerParticipantRoutes } from './participants.js';
 import { registerExportRoutes } from './export.js';
+import { registerTopicRoutes } from './topics.js';
 import { logger } from '../../lib/logger.js';
 
 export function registerAdminRoutes(app: FastifyInstance): void {
@@ -40,6 +41,7 @@ export function registerAdminRoutes(app: FastifyInstance): void {
       registerInteractionRoutes(adminApp);
       registerParticipantRoutes(adminApp);
       registerExportRoutes(adminApp);
+      registerTopicRoutes(adminApp);
 
       logger.info('Admin routes registered');
     },
