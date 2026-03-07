@@ -40,6 +40,26 @@ export async function apiPost<T>(
 }
 
 /**
+ * Make a PATCH request to the feed server API.
+ */
+export async function apiPatch<T>(
+  path: string,
+  body: unknown,
+  config: CliConfig
+): Promise<T> {
+  const cookie = getSessionCookie(config);
+  const res = await fetch(`${config.serverUrl}${path}`, {
+    method: 'PATCH',
+    headers: {
+      ...buildHeaders(cookie),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  return handleResponse<T>(res);
+}
+
+/**
  * Make a DELETE request to the feed server API.
  */
 export async function apiDelete<T>(
