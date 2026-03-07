@@ -20,6 +20,7 @@ import { registerParticipantCommands } from './commands/participants.js';
 import { registerFeedCommands } from './commands/feed.js';
 import { registerAnnounceCommands } from './commands/announce.js';
 import { registerExportCommands } from './commands/export.js';
+import { registerTopicCommands } from './commands/topics.js';
 
 const program = new Command()
   .name('feed-cli')
@@ -75,6 +76,7 @@ registerParticipantCommands(program);
 registerFeedCommands(program);
 registerAnnounceCommands(program);
 registerExportCommands(program);
+registerTopicCommands(program);
 
 // ── Parse ──
 program.parseAsync().catch((err: Error) => {

@@ -4,11 +4,12 @@ import { useAuth } from '../contexts/useAuth';
 import { useAdminStatus } from '../hooks/useAdminStatus';
 import { WeightSliders } from '../components/WeightSliders';
 import { KeywordInput } from '../components/KeywordInput';
+import { TopicSliders } from '../components/TopicSliders';
 import { TabPanel } from '../components/TabPanel';
 import { VoteSkeleton } from '../components/Skeleton';
 import type { GovernanceWeights } from '../components/WeightSliders';
 import { voteApi, weightsApi } from '../api/client';
-import type { EpochResponse, ContentVote, ContentRulesResponse } from '../api/client';
+import type { EpochResponse, ContentVote, ContentRulesResponse, TopicCatalogEntry } from '../api/client';
 
 function extractErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === 'object') {
@@ -37,12 +38,17 @@ export function Vote() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Content rules state
-  const [activeTab, setActiveTab] = useState<'weights' | 'content'>('weights');
+  const [activeTab, setActiveTab] = useState<'weights' | 'content' | 'topics'>('weights');
   const [contentVote, setContentVote] = useState<ContentVote>({
     includeKeywords: [],
     excludeKeywords: [],
   });
   const [currentContentRules, setCurrentContentRules] = useState<ContentRulesResponse | null>(null);
+
+  // Topic voting state
+  const [topicCatalog, setTopicCatalog] = useState<TopicCatalogEntry[] | null>(null);
+  const [topicValues, setTopicValues] = useState<Record<string, number>>({});
+  const [touchedTopics, setTouchedTopics] = useState<Set<string>>(new Set());
 
   const currentPhase =
     currentEpoch?.phase ?? (currentEpoch?.status === 'voting' ? 'voting' : 'running');
@@ -123,6 +129,27 @@ export function Vote() {
       } catch {
         // Content rules endpoint might not exist yet
       }
+
+      // Load topic catalog (graceful degradation: hide topics tab if unavailable)
+      try {
+        const catalog = await voteApi.getTopicCatalog();
+        setTopicCatalog(catalog.topics);
+        // If user has existing topic votes, populate them
+        if (isAuthenticated) {
+          try {
+            const voteData = await voteApi.getVote();
+            if (voteData.topicWeights && Object.keys(voteData.topicWeights).length > 0) {
+              setTopicValues(voteData.topicWeights);
+              setTouchedTopics(new Set(Object.keys(voteData.topicWeights)));
+            }
+          } catch {
+            // No existing topic votes
+          }
+        }
+      } catch {
+        // Topic catalog unavailable — hide topics tab
+        setTopicCatalog(null);
+      }
     } catch (err: unknown) {
       setError(extractErrorMessage(err, 'Failed to load data'));
     } finally {
@@ -164,6 +191,18 @@ export function Vote() {
     setSuccessMessage(null);
   }, []);
 
+  const handleTopicChange = useCallback((slug: string, value: number) => {
+    setTopicValues((prev) => ({ ...prev, [slug]: value }));
+    setTouchedTopics((prev) => new Set(prev).add(slug));
+    setSuccessMessage(null);
+  }, []);
+
+  const handleTopicReset = useCallback(() => {
+    setTopicValues({});
+    setTouchedTopics(new Set());
+    setSuccessMessage(null);
+  }, []);
+
   const handleSubmit = async () => {
     if (!isVotingOpen) {
       setError('Voting is currently closed. Please wait for the next voting period.');
@@ -187,7 +226,7 @@ export function Vote() {
             ? 'Your weight vote has been updated!'
             : 'Your weight vote has been recorded! Thank you for participating.'
         );
-      } else {
+      } else if (activeTab === 'content') {
         // Submit content vote
         const hasKeywords =
           contentVote.includeKeywords.length > 0 ||
@@ -208,6 +247,37 @@ export function Vote() {
         // Refresh content rules
         const updatedRules = await voteApi.getContentRules();
         setCurrentContentRules(updatedRules);
+      } else if (activeTab === 'topics') {
+        // Submit topic weight vote
+        if (touchedTopics.size === 0) {
+          setError('Please adjust at least one topic preference.');
+          setIsSubmitting(false);
+          return;
+        }
+        // Only send touched topics
+        const touchedValues: Record<string, number> = {};
+        for (const slug of touchedTopics) {
+          touchedValues[slug] = topicValues[slug] ?? 0.5;
+        }
+        const result = await voteApi.submitVote(null, undefined, touchedValues);
+        setHasVoted(true);
+        setLastVoteTime(new Date().toISOString());
+
+        // Build confirmation message listing boosted/reduced topics
+        const boosted: string[] = [];
+        const reduced: string[] = [];
+        for (const [slug, value] of Object.entries(touchedValues)) {
+          const topic = topicCatalog?.find((t) => t.slug === slug);
+          const name = topic?.name ?? slug;
+          if (value > 0.6) boosted.push(name);
+          else if (value < 0.4) reduced.push(name);
+        }
+        let confirmMsg = result.is_update
+          ? 'Your topic preferences have been updated!'
+          : 'Your topic preferences have been recorded!';
+        if (boosted.length > 0) confirmMsg += ` Boosted: ${boosted.join(', ')}.`;
+        if (reduced.length > 0) confirmMsg += ` Reduced: ${reduced.join(', ')}.`;
+        setSuccessMessage(confirmMsg);
       }
     } catch (err: unknown) {
       setError(extractErrorMessage(err, 'Failed to submit vote'));
@@ -304,6 +374,14 @@ export function Vote() {
           >
             Content Rules
           </button>
+          {topicCatalog && topicCatalog.length > 0 && (
+            <button
+              className={`vote-tab ${activeTab === 'topics' ? 'active' : ''}`}
+              onClick={() => setActiveTab('topics')}
+            >
+              Topics
+            </button>
+          )}
         </div>
 
         {error && <div className="error-message">{error}</div>}
@@ -468,6 +546,52 @@ export function Vote() {
               )}
             </section>
           </TabPanel>
+
+          {/* Topics tab */}
+          {topicCatalog && topicCatalog.length > 0 && (
+            <TabPanel isActive={activeTab === 'topics'} tabKey="topics">
+              <section className="voting-section">
+                <h2>Topic preferences</h2>
+                <p className="vote-description">
+                  Which topics should the feed prioritize? Move sliders to boost
+                  topics you want more of, or reduce topics you want less of.
+                </p>
+
+                <TopicSliders
+                  topics={topicCatalog}
+                  values={topicValues}
+                  onChange={handleTopicChange}
+                  onReset={handleTopicReset}
+                  touchedSlugs={touchedTopics}
+                  disabled={isSubmitting}
+                />
+
+                <div className="vote-actions">
+                  <button
+                    onClick={handleSubmit}
+                    disabled={isSubmitting || touchedTopics.size === 0 || !isVotingOpen}
+                    className="submit-button"
+                  >
+                    {isSubmitting
+                      ? 'Submitting...'
+                      : hasVoted
+                      ? 'Update topic vote'
+                      : 'Submit topic vote'}
+                  </button>
+                  {hasVoted && lastVoteTime && (
+                    <span className="voted-indicator">
+                      Last voted {new Date(lastVoteTime).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  )}
+                </div>
+              </section>
+            </TabPanel>
+          )}
         </div>
 
         <section className="current-weights-section">

@@ -58,6 +58,8 @@ export interface GovernanceEpoch {
   createdAt: Date;
   closedAt: Date | null;
   description: string | null;
+  /** Community-voted topic weights from governance. Slug → weight (0.0-1.0). */
+  topicWeights?: Record<string, number>;
 }
 
 /**
@@ -77,6 +79,8 @@ export interface PostForScoring {
   likeCount: number;
   repostCount: number;
   replyCount: number;
+  /** Topic classification vector from ingestion. Slug → confidence (0.0-1.0). */
+  topicVector?: Record<string, number>;
 }
 
 /**
@@ -95,6 +99,7 @@ export function toGovernanceEpoch(row: Record<string, unknown>): GovernanceEpoch
     createdAt: new Date(row.created_at as string),
     closedAt: row.closed_at ? new Date(row.closed_at as string) : null,
     description: row.description as string | null,
+    topicWeights: (row.topic_weights as Record<string, number>) ?? {},
   };
 }
 
@@ -115,5 +120,6 @@ export function toPostForScoring(row: Record<string, unknown>): PostForScoring {
     likeCount: (row.like_count as number) ?? 0,
     repostCount: (row.repost_count as number) ?? 0,
     replyCount: (row.reply_count as number) ?? 0,
+    topicVector: (row.topic_vector as Record<string, number>) ?? {},
   };
 }

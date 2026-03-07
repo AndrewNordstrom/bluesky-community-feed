@@ -48,6 +48,21 @@ export const authApi = {
   },
 };
 
+// Topic catalog types
+export interface TopicCatalogEntry {
+  slug: string;
+  name: string;
+  description: string | null;
+  parentSlug: string | null;
+  currentWeight: number;
+}
+
+export interface TopicCatalogResponse {
+  topics: TopicCatalogEntry[];
+  epochId: number | null;
+  voteCount: number;
+}
+
 // Vote types
 export interface VotePayload {
   recency_weight: number;
@@ -86,6 +101,7 @@ export interface GetVoteResponse {
     relevance: number;
   } | null;
   contentVote: ContentVote | null;
+  topicWeights: Record<string, number> | null;
   voted_at: string | null;
   epoch_id: number | null;
 }
@@ -104,13 +120,15 @@ export interface ContentRulesResponse {
 // Vote API
 export const voteApi = {
   /**
-   * Submit a vote with weights and/or content rules.
-   * @param weights - Algorithm weights (optional if submitting content vote only)
-   * @param contentVote - Content keywords (optional if submitting weights only)
+   * Submit a vote with weights, content rules, and/or topic preferences.
+   * @param weights - Algorithm weights (optional)
+   * @param contentVote - Content keywords (optional)
+   * @param topicWeights - Per-topic weight preferences (optional)
    */
   submitVote: async (
     weights: GovernanceWeights | null,
-    contentVote?: ContentVote
+    contentVote?: ContentVote,
+    topicWeights?: Record<string, number> | null
   ): Promise<VoteResponse> => {
     const payload: Record<string, unknown> = {};
 
@@ -129,6 +147,11 @@ export const voteApi = {
       payload.exclude_keywords = contentVote.excludeKeywords;
     }
 
+    // Add topic weights if provided
+    if (topicWeights && Object.keys(topicWeights).length > 0) {
+      payload.topic_weights = topicWeights;
+    }
+
     const response = await api.post<VoteResponse>('/api/governance/vote', payload);
     return response.data;
   },
@@ -141,6 +164,12 @@ export const voteApi = {
   /** Get current community content rules and vote statistics */
   getContentRules: async (): Promise<ContentRulesResponse> => {
     const response = await api.get<ContentRulesResponse>('/api/governance/content-rules');
+    return response.data;
+  },
+
+  /** Get topic catalog with current community weights (public, no auth required) */
+  getTopicCatalog: async (): Promise<TopicCatalogResponse> => {
+    const response = await api.get<TopicCatalogResponse>('/api/governance/topics');
     return response.data;
   },
 };
@@ -270,6 +299,12 @@ export interface ScoreComponent {
   weighted: number;
 }
 
+export interface TopicBreakdownEntry {
+  postScore: number;
+  communityWeight: number;
+  contribution: number;
+}
+
 export interface PostExplanationResponse {
   post_uri: string;
   epoch_id: number;
@@ -281,7 +316,9 @@ export interface PostExplanationResponse {
     engagement: ScoreComponent;
     bridging: ScoreComponent;
     source_diversity: ScoreComponent;
-    relevance: ScoreComponent;
+    relevance: ScoreComponent & {
+      topicBreakdown?: Record<string, TopicBreakdownEntry>;
+    };
   };
   governance_weights: {
     recency: number;

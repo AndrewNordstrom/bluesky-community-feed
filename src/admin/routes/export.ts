@@ -76,7 +76,7 @@ const VOTE_COLUMNS = [
   'anon_voter_id', 'epoch_id',
   'recency_weight', 'engagement_weight', 'bridging_weight',
   'source_diversity_weight', 'relevance_weight',
-  'include_keywords', 'exclude_keywords', 'voted_at',
+  'include_keywords', 'exclude_keywords', 'topic_weight_votes', 'voted_at',
 ];
 
 const SCORE_COLUMNS = [
@@ -87,7 +87,7 @@ const SCORE_COLUMNS = [
   'source_diversity_weight', 'relevance_weight',
   'recency_weighted', 'engagement_weighted', 'bridging_weighted',
   'source_diversity_weighted', 'relevance_weighted',
-  'total_score', 'scored_at',
+  'total_score', 'topic_vector', 'scored_at',
 ];
 
 const ENGAGEMENT_COLUMNS = [
@@ -99,7 +99,7 @@ const EPOCH_COLUMNS = [
   'id', 'status', 'phase',
   'recency_weight', 'engagement_weight', 'bridging_weight',
   'source_diversity_weight', 'relevance_weight',
-  'vote_count', 'content_rules', 'created_at', 'closed_at',
+  'vote_count', 'content_rules', 'topic_weights', 'created_at', 'closed_at',
   'voting_started_at', 'voting_closed_at',
 ];
 
@@ -125,6 +125,7 @@ function mapVoteRow(row: Record<string, unknown>): ExportVoteRecord {
     relevance_weight: row.relevance_weight as number | null,
     include_keywords: (row.include_keywords as string[]) ?? [],
     exclude_keywords: (row.exclude_keywords as string[]) ?? [],
+    topic_weight_votes: (row.topic_weight_votes as Record<string, number>) ?? null,
     voted_at: (row.voted_at as Date).toISOString(),
   };
 }
@@ -150,6 +151,7 @@ function mapScoreRow(row: Record<string, unknown>): ExportScoreRecord {
     source_diversity_weighted: row.source_diversity_weighted as number,
     relevance_weighted: row.relevance_weighted as number,
     total_score: row.total_score as number,
+    topic_vector: (row.topic_vector as Record<string, number>) ?? null,
     scored_at: (row.scored_at as Date).toISOString(),
   };
 }
@@ -180,6 +182,7 @@ function mapEpochRow(row: Record<string, unknown>): ExportEpochRecord {
     relevance_weight: row.relevance_weight as number,
     vote_count: row.vote_count as number,
     content_rules: (row.content_rules as Record<string, unknown>) ?? null,
+    topic_weights: (row.topic_weights as Record<string, number>) ?? null,
     created_at: (row.created_at as Date).toISOString(),
     closed_at: row.closed_at ? (row.closed_at as Date).toISOString() : null,
     voting_started_at: row.voting_started_at
@@ -233,7 +236,7 @@ export function registerExportRoutes(app: FastifyInstance): void {
     const result = await db.query(
       `SELECT voter_did, epoch_id, recency_weight, engagement_weight,
               bridging_weight, source_diversity_weight, relevance_weight,
-              include_keywords, exclude_keywords, voted_at
+              include_keywords, exclude_keywords, topic_weight_votes, voted_at
        FROM governance_votes
        WHERE epoch_id = $1
        ORDER BY voted_at`,
@@ -263,17 +266,18 @@ export function registerExportRoutes(app: FastifyInstance): void {
     const { epoch_id, format, limit, offset } = parsed.data;
 
     const result = await db.query(
-      `SELECT post_uri, epoch_id,
-              recency_score, engagement_score, bridging_score,
-              source_diversity_score, relevance_score,
-              recency_weight, engagement_weight, bridging_weight,
-              source_diversity_weight, relevance_weight,
-              recency_weighted, engagement_weighted, bridging_weighted,
-              source_diversity_weighted, relevance_weighted,
-              total_score, scored_at
-       FROM post_scores
-       WHERE epoch_id = $1
-       ORDER BY total_score DESC
+      `SELECT ps.post_uri, ps.epoch_id,
+              ps.recency_score, ps.engagement_score, ps.bridging_score,
+              ps.source_diversity_score, ps.relevance_score,
+              ps.recency_weight, ps.engagement_weight, ps.bridging_weight,
+              ps.source_diversity_weight, ps.relevance_weight,
+              ps.recency_weighted, ps.engagement_weighted, ps.bridging_weighted,
+              ps.source_diversity_weighted, ps.relevance_weighted,
+              ps.total_score, p.topic_vector, ps.scored_at
+       FROM post_scores ps
+       LEFT JOIN posts p ON ps.post_uri = p.uri
+       WHERE ps.epoch_id = $1
+       ORDER BY ps.total_score DESC
        LIMIT $2 OFFSET $3`,
       [epoch_id, limit, offset]
     );
@@ -335,7 +339,7 @@ export function registerExportRoutes(app: FastifyInstance): void {
       `SELECT id, status, phase,
               recency_weight, engagement_weight, bridging_weight,
               source_diversity_weight, relevance_weight,
-              vote_count, content_rules, created_at, closed_at,
+              vote_count, content_rules, topic_weights, created_at, closed_at,
               voting_started_at, voting_closed_at
        FROM governance_epochs
        ORDER BY id DESC`
@@ -428,7 +432,7 @@ export function registerExportRoutes(app: FastifyInstance): void {
     const votes = await db.query(
       `SELECT voter_did, epoch_id, recency_weight, engagement_weight,
               bridging_weight, source_diversity_weight, relevance_weight,
-              include_keywords, exclude_keywords, voted_at
+              include_keywords, exclude_keywords, topic_weight_votes, voted_at
        FROM governance_votes WHERE epoch_id = $1 ORDER BY voted_at`,
       [epoch_id]
     );
@@ -441,15 +445,17 @@ export function registerExportRoutes(app: FastifyInstance): void {
 
     // 2. Scores CSV (all rows for this epoch, chunked if needed)
     const scores = await db.query(
-      `SELECT post_uri, epoch_id,
-              recency_score, engagement_score, bridging_score,
-              source_diversity_score, relevance_score,
-              recency_weight, engagement_weight, bridging_weight,
-              source_diversity_weight, relevance_weight,
-              recency_weighted, engagement_weighted, bridging_weighted,
-              source_diversity_weighted, relevance_weighted,
-              total_score, scored_at
-       FROM post_scores WHERE epoch_id = $1 ORDER BY total_score DESC`,
+      `SELECT ps.post_uri, ps.epoch_id,
+              ps.recency_score, ps.engagement_score, ps.bridging_score,
+              ps.source_diversity_score, ps.relevance_score,
+              ps.recency_weight, ps.engagement_weight, ps.bridging_weight,
+              ps.source_diversity_weight, ps.relevance_weight,
+              ps.recency_weighted, ps.engagement_weighted, ps.bridging_weighted,
+              ps.source_diversity_weighted, ps.relevance_weighted,
+              ps.total_score, p.topic_vector, ps.scored_at
+       FROM post_scores ps
+       LEFT JOIN posts p ON ps.post_uri = p.uri
+       WHERE ps.epoch_id = $1 ORDER BY ps.total_score DESC`,
       [epoch_id]
     );
     const scoresCsv = buildCsvString(
@@ -478,13 +484,45 @@ export function registerExportRoutes(app: FastifyInstance): void {
       `SELECT id, status, phase,
               recency_weight, engagement_weight, bridging_weight,
               source_diversity_weight, relevance_weight,
-              vote_count, content_rules, created_at, closed_at,
+              vote_count, content_rules, topic_weights, created_at, closed_at,
               voting_started_at, voting_closed_at
        FROM governance_epochs WHERE id = $1`,
       [epoch_id]
     );
     const epochData = epoch.rows.length > 0 ? mapEpochRow(epoch.rows[0]) : null;
     archive.append(JSON.stringify(epochData, null, 2), { name: 'epoch_metadata.json' });
+
+    // 5. Topic catalog JSON
+    const topicCatalog = await db.query(
+      `SELECT slug, name, description, parent_slug, terms, context_terms,
+              anti_terms, is_active, created_at
+       FROM topic_catalog ORDER BY slug`
+    );
+    const topicRecords = topicCatalog.rows.map((row: Record<string, unknown>) => ({
+      slug: row.slug,
+      name: row.name,
+      description: row.description ?? null,
+      parent_slug: row.parent_slug ?? null,
+      terms: row.terms ?? [],
+      context_terms: row.context_terms ?? [],
+      anti_terms: row.anti_terms ?? [],
+      is_active: row.is_active,
+      created_at: row.created_at instanceof Date
+        ? row.created_at.toISOString()
+        : row.created_at,
+    }));
+    archive.append(JSON.stringify(topicRecords, null, 2), { name: 'topics/catalog.json' });
+
+    // 6. Topic community weights per epoch
+    const topicWeights = await db.query(
+      `SELECT id, topic_weights FROM governance_epochs
+       WHERE topic_weights IS NOT NULL ORDER BY id`
+    );
+    const weightHistory = topicWeights.rows.map((row: Record<string, unknown>) => ({
+      epoch_id: row.id,
+      topic_weights: row.topic_weights,
+    }));
+    archive.append(JSON.stringify(weightHistory, null, 2), { name: 'topics/community-weights.json' });
 
     await archive.finalize();
   });

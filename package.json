@@ -17,6 +17,8 @@
     "generate:route": "tsx scripts/generate-route.ts",
     "cli": "cd cli && npx tsx src/index.ts",
     "cli:build": "cd cli && tsc",
+    "seed-topics": "tsx scripts/seed-topics.ts",
+    "backfill-topics": "tsx scripts/backfill-topics.ts",
     "prepare": "husky"
   },
   "dependencies": {
@@ -38,6 +40,8 @@
     "node-cron": "^4.2.1",
     "pg": "^8.13.0",
     "pino": "^9.5.0",
+    "wink-eng-lite-web-model": "^1.8.1",
+    "wink-nlp": "^2.4.0",
     "ws": "^8.18.0",
     "zod": "^3.24.0",
     "zod-to-json-schema": "^3.25.1"
