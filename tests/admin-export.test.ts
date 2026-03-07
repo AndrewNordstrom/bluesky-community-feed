@@ -363,12 +363,14 @@ describe('export routes', () => {
 
   describe('GET /export/full-dataset', () => {
     it('returns ZIP content type', async () => {
-      // Mock all 4 queries
+      // Mock all 6 queries
       dbQueryMock
         .mockResolvedValueOnce({ rows: [] }) // votes
         .mockResolvedValueOnce({ rows: [] }) // scores
         .mockResolvedValueOnce({ rows: [] }) // engagement
-        .mockResolvedValueOnce({ rows: [] }); // epoch
+        .mockResolvedValueOnce({ rows: [] }) // epoch
+        .mockResolvedValueOnce({ rows: [] }) // topic catalog
+        .mockResolvedValueOnce({ rows: [] }); // topic weights
 
       const app = Fastify();
       registerExportRoutes(app);

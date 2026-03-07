@@ -16,6 +16,7 @@ export interface ExportVoteRecord {
   relevance_weight: number | null;
   include_keywords: string[];
   exclude_keywords: string[];
+  topic_weight_votes: Record<string, number> | null;
   voted_at: string;
 }
 
@@ -39,6 +40,7 @@ export interface ExportScoreRecord {
   source_diversity_weighted: number;
   relevance_weighted: number;
   total_score: number;
+  topic_vector: Record<string, number> | null;
   scored_at: string;
 }
 
@@ -65,10 +67,25 @@ export interface ExportEpochRecord {
   relevance_weight: number;
   vote_count: number;
   content_rules: Record<string, unknown> | null;
+  topic_weights: Record<string, number> | null;
   created_at: string;
   closed_at: string | null;
   voting_started_at: string | null;
   voting_closed_at: string | null;
+}
+
+/** Topic catalog record for research export. */
+export interface ExportTopicRecord {
+  slug: string;
+  name: string;
+  description: string | null;
+  parent_slug: string | null;
+  terms: string[];
+  context_terms: string[];
+  anti_terms: string[];
+  is_active: boolean;
+  post_count: number;
+  created_at: string;
 }
 
 /** Audit log entry for research export. */
