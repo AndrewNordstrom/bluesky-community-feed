@@ -194,8 +194,34 @@ function mapEpochRow(row: Record<string, unknown>): ExportEpochRecord {
   };
 }
 
+/**
+ * Recursively walk a JSONB object and anonymize any string value
+ * that looks like a DID (starts with "did:"). This prevents raw
+ * participant identities from leaking in audit log export details.
+ */
+function scrubDidsFromDetails(
+  obj: unknown,
+  anonSalt: string
+): unknown {
+  if (typeof obj === 'string') {
+    return obj.startsWith('did:') ? anonymizeDid(obj, anonSalt) : obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map((item) => scrubDidsFromDetails(item, anonSalt));
+  }
+  if (obj !== null && typeof obj === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      result[key] = scrubDidsFromDetails(value, anonSalt);
+    }
+    return result;
+  }
+  return obj;
+}
+
 /** Map an audit DB row to an export record. */
 function mapAuditRow(row: Record<string, unknown>): ExportAuditRecord {
+  const rawDetails = (row.details as Record<string, unknown>) ?? {};
   return {
     id: row.id as number,
     action: row.action as string,
@@ -203,7 +229,7 @@ function mapAuditRow(row: Record<string, unknown>): ExportAuditRecord {
       ? anonymizeDid(row.actor_did as string, salt)
       : null,
     epoch_id: (row.epoch_id as number) ?? null,
-    details: (row.details as Record<string, unknown>) ?? {},
+    details: scrubDidsFromDetails(rawDetails, salt) as Record<string, unknown>,
     created_at: (row.created_at as Date).toISOString(),
   };
 }
