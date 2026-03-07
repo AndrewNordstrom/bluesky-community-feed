@@ -612,6 +612,8 @@ async function storeScore(
     ON CONFLICT (post_uri, epoch_id) DO UPDATE SET
       recency_score = $3, engagement_score = $4, bridging_score = $5,
       source_diversity_score = $6, relevance_score = $7,
+      recency_weight = $8, engagement_weight = $9, bridging_weight = $10,
+      source_diversity_weight = $11, relevance_weight = $12,
       recency_weighted = $13, engagement_weighted = $14, bridging_weighted = $15,
       source_diversity_weighted = $16, relevance_weighted = $17,
       total_score = $18, component_details = $19, classification_method = $20,
