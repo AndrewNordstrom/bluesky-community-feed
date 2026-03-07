@@ -47,6 +47,9 @@ let lastSuccessfulRunAt: Date | null = null;
 // Track last scored epoch to detect epoch transitions (triggers full rescore)
 let lastScoredEpochId: number | null = null;
 
+// Count incremental runs since last full rescore (triggers periodic full rescore for recency decay)
+let incrementalRunCount = 0;
+
 /**
  * Get the timestamp of the last successful scoring run.
  */
@@ -60,6 +63,7 @@ export function getLastScoringRunAt(): Date | null {
 export function __resetPipelineState(): void {
   lastSuccessfulRunAt = null;
   lastScoredEpochId = null;
+  incrementalRunCount = 0;
 }
 
 /**
@@ -101,7 +105,18 @@ async function runScoringPipelineInternal(): Promise<void> {
     // 2. Load content rules and determine scoring mode (full vs incremental).
     const contentRules = await getCurrentContentRules();
     const epochChanged = lastScoredEpochId !== null && lastScoredEpochId !== epoch.id;
-    const useIncremental = lastSuccessfulRunAt !== null && !epochChanged;
+    const isFirstRun = lastSuccessfulRunAt === null;
+
+    // Force a full rescore periodically to catch recency decay
+    const fullRescoreDue = incrementalRunCount >= config.SCORING_FULL_RESCORE_INTERVAL;
+    const useIncremental = !isFirstRun && !epochChanged && !fullRescoreDue;
+
+    if (fullRescoreDue && !isFirstRun && !epochChanged) {
+      logger.info(
+        { incrementalRunCount, interval: config.SCORING_FULL_RESCORE_INTERVAL },
+        'Periodic full rescore triggered to refresh recency decay'
+      );
+    }
 
     let allPosts: PostForScoring[];
     if (useIncremental) {
@@ -123,7 +138,7 @@ async function runScoringPipelineInternal(): Promise<void> {
           mode: 'full',
           postCount: allPosts.length,
           epochId: epoch.id,
-          reason: epochChanged ? 'epoch_changed' : 'first_run',
+          reason: epochChanged ? 'epoch_changed' : fullRescoreDue ? 'periodic_full_rescore' : 'first_run',
           includeKeywords: contentRules.includeKeywords.length,
           excludeKeywords: contentRules.excludeKeywords.length,
         },
@@ -181,6 +196,13 @@ async function runScoringPipelineInternal(): Promise<void> {
     // Track successful run for health checks
     lastSuccessfulRunAt = new Date();
     lastScoredEpochId = epoch.id;
+
+    // Track incremental run count for periodic full rescore
+    if (useIncremental) {
+      incrementalRunCount++;
+    } else {
+      incrementalRunCount = 0;
+    }
 
     // Update scoring status for admin dashboard
     await updateScoringStatus({

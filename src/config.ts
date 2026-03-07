@@ -35,6 +35,7 @@ const ConfigSchema = z.object({
   SCORING_INTERVAL_CRON: z.string().default('*/5 * * * *'),
   SCORING_INTERVAL_MS: z.coerce.number().default(300_000), // 5 minutes in milliseconds
   SCORING_WINDOW_HOURS: z.coerce.number().default(72),
+  SCORING_FULL_RESCORE_INTERVAL: z.coerce.number().int().min(1).default(6),
   FEED_MAX_POSTS: z.coerce.number().default(1000),
 
   // Governance
