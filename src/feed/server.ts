@@ -356,6 +356,15 @@ export function buildRouteRateLimitConfig(
     };
   }
 
+  // MCP transport is admin-only and can invoke expensive backend actions.
+  // Use critical admin limits instead of relying on the looser global cap.
+  if (url === '/mcp') {
+    return {
+      max: config.RATE_LIMIT_ADMIN_CRITICAL_MAX,
+      timeWindow: config.RATE_LIMIT_ADMIN_CRITICAL_WINDOW_MS,
+    };
+  }
+
   if (url.startsWith('/api/governance/auth/login')) {
     return {
       max: config.RATE_LIMIT_LOGIN_MAX,
