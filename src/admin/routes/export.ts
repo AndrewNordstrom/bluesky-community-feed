@@ -234,12 +234,14 @@ export function registerExportRoutes(app: FastifyInstance): void {
     const { epoch_id, format } = parsed.data;
 
     const result = await db.query(
-      `SELECT voter_did, epoch_id, recency_weight, engagement_weight,
+      `SELECT gv.voter_did, gv.epoch_id, gv.recency_weight, gv.engagement_weight,
               bridging_weight, source_diversity_weight, relevance_weight,
               include_keywords, exclude_keywords, topic_weight_votes, voted_at
-       FROM governance_votes
-       WHERE epoch_id = $1
-       ORDER BY voted_at`,
+       FROM governance_votes gv
+       JOIN subscribers s ON s.did = gv.voter_did
+       WHERE gv.epoch_id = $1
+         AND s.research_consent IS TRUE
+       ORDER BY gv.voted_at`,
       [epoch_id]
     );
 
@@ -305,11 +307,13 @@ export function registerExportRoutes(app: FastifyInstance): void {
     const { epoch_id, format } = parsed.data;
 
     const result = await db.query(
-      `SELECT post_uri, viewer_did, epoch_id, engagement_type,
+      `SELECT ea.post_uri, ea.viewer_did, ea.epoch_id, ea.engagement_type,
               position_in_feed, served_at, engaged_at
-       FROM engagement_attributions
-       WHERE epoch_id = $1
-       ORDER BY served_at`,
+       FROM engagement_attributions ea
+       JOIN subscribers s ON s.did = ea.viewer_did
+       WHERE ea.epoch_id = $1
+         AND s.research_consent IS TRUE
+       ORDER BY ea.served_at`,
       [epoch_id]
     );
 
@@ -430,10 +434,14 @@ export function registerExportRoutes(app: FastifyInstance): void {
 
     // 1. Votes CSV
     const votes = await db.query(
-      `SELECT voter_did, epoch_id, recency_weight, engagement_weight,
+      `SELECT gv.voter_did, gv.epoch_id, gv.recency_weight, gv.engagement_weight,
               bridging_weight, source_diversity_weight, relevance_weight,
               include_keywords, exclude_keywords, topic_weight_votes, voted_at
-       FROM governance_votes WHERE epoch_id = $1 ORDER BY voted_at`,
+       FROM governance_votes gv
+       JOIN subscribers s ON s.did = gv.voter_did
+       WHERE gv.epoch_id = $1
+         AND s.research_consent IS TRUE
+       ORDER BY gv.voted_at`,
       [epoch_id]
     );
     const votesCsv = buildCsvString(
@@ -467,9 +475,13 @@ export function registerExportRoutes(app: FastifyInstance): void {
 
     // 3. Engagement CSV
     const engagement = await db.query(
-      `SELECT post_uri, viewer_did, epoch_id, engagement_type,
+      `SELECT ea.post_uri, ea.viewer_did, ea.epoch_id, ea.engagement_type,
               position_in_feed, served_at, engaged_at
-       FROM engagement_attributions WHERE epoch_id = $1 ORDER BY served_at`,
+       FROM engagement_attributions ea
+       JOIN subscribers s ON s.did = ea.viewer_did
+       WHERE ea.epoch_id = $1
+         AND s.research_consent IS TRUE
+       ORDER BY ea.served_at`,
       [epoch_id]
     );
     const engagementCsv = buildCsvString(
