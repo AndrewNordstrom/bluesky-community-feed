@@ -40,7 +40,7 @@
       justify-content: space-between;
       position: sticky;
       top: 0;
-      z-index: 100;
+      z-index: 200;
     }
 
     .top-bar a {
@@ -117,6 +117,21 @@
   </nav>
 
   <div id="redoc-container"></div>
+
+  <script>
+    // Prevent Redoc from intercepting clicks on our navigation links
+    document.querySelector('.top-bar').addEventListener('click', function(e) {
+      var link = e.target.closest('a');
+      if (link && link.href) {
+        e.stopPropagation();
+        if (link.target === '_blank') {
+          window.open(link.href, '_blank', 'noopener');
+        } else {
+          window.location.href = link.href;
+        }
+      }
+    }, true);
+  </script>
 
   <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
   <script>
