@@ -36,6 +36,8 @@ const ConfigSchema = z.object({
   SCORING_INTERVAL_MS: z.coerce.number().default(300_000), // 5 minutes in milliseconds
   SCORING_WINDOW_HOURS: z.coerce.number().default(72),
   SCORING_FULL_RESCORE_INTERVAL: z.coerce.number().int().min(1).default(6),
+  SCORING_CANDIDATE_LIMIT: z.coerce.number().min(100).default(5_000),
+  SCORING_TIMEOUT_MS: z.coerce.number().min(30_000).default(240_000),
   FEED_MAX_POSTS: z.coerce.number().default(1000),
 
   // Topic embedding classifier
