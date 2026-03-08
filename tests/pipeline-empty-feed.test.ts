@@ -187,6 +187,7 @@ describe('scoring pipeline empty-feed Redis updates', () => {
     expect(queryText).toContain('p.text ~* $');
     expect(queryText).toContain('NOT (');
     expect(queryText).toContain('LIMIT $');
-    expect(queryParams.at(-1)).toBe(10000);
+    expect(queryParams.at(-1)).toBe(5000);
   });
 });
+
