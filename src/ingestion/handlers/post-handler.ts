@@ -77,6 +77,13 @@ export async function handlePost(
     }
   }
 
+  // Media-without-text gate: skip media posts with insufficient text.
+  // Images/videos without meaningful text are usually not on-topic content.
+  if (config.INGESTION_MIN_TEXT_FOR_MEDIA > 0 && hasMedia && (!text || text.trim().length < config.INGESTION_MIN_TEXT_FOR_MEDIA)) {
+    logger.debug({ uri, authorDid }, 'Post skipped: media with insufficient text');
+    return;
+  }
+
   // Pre-ingestion content filtering: skip posts that don't match include keywords.
   // Fail-open: if the filter check fails, insert anyway (cleanup handles it later).
   try {
