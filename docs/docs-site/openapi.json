@@ -1,0 +1,3890 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Community Feed API",
+    "description": "Community-governed Bluesky feed generator where subscribers democratically vote on ranking algorithm weights. Built on AT Protocol.\n\n## Authentication\n- **Governance endpoints** require a session cookie or bearer token from `POST /api/governance/auth/login`.\n- **Admin endpoints** additionally require the caller's DID to be in the `BOT_ADMIN_DIDS` allowlist.\n- **Feed endpoints** are public (called by the Bluesky app). Auth is optional for subscriber tracking.\n- **Transparency endpoints** are public and unauthenticated.",
+    "version": "1.1.0",
+    "contact": {
+      "name": "Community Feed",
+      "url": "https://github.com/AndrewNordstrom/bluesky-community-feed"
+    },
+    "license": {
+      "name": "MIT"
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "governance_session",
+        "description": "Session cookie from POST /api/governance/auth/login"
+      },
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Bearer token from POST /api/governance/auth/login (for CLI/MCP)"
+      }
+    },
+    "schemas": {}
+  },
+  "paths": {
+    "/xrpc/app.bsky.feed.describeFeedGenerator": {
+      "get": {
+        "summary": "Describe feed generator",
+        "tags": [
+          "Feed"
+        ],
+        "description": "Returns the DID and feed URIs for this generator. Called by Bluesky for feed discovery.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "did": {
+                      "type": "string",
+                      "description": "Service DID for this feed generator",
+                      "example": "did:web:feed.corgi.network"
+                    },
+                    "feeds": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "uri": {
+                            "type": "string",
+                            "description": "AT-URI of the feed",
+                            "example": "at://did:plc:example/app.bsky.feed.generator/community-gov"
+                          }
+                        },
+                        "required": [
+                          "uri"
+                        ]
+                      },
+                      "description": "List of feeds served by this generator"
+                    }
+                  },
+                  "required": [
+                    "did",
+                    "feeds"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/did.json": {
+      "get": {
+        "summary": "DID document",
+        "tags": [
+          "Feed"
+        ],
+        "description": "Returns the DID document for did:web resolution. Used as a fallback — production uses did:plc.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "@context": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "id": {
+                      "type": "string",
+                      "description": "DID identifier",
+                      "example": "did:web:feed.corgi.network"
+                    },
+                    "service": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "example": "#bsky_fg"
+                          },
+                          "type": {
+                            "type": "string",
+                            "example": "BskyFeedGenerator"
+                          },
+                          "serviceEndpoint": {
+                            "type": "string",
+                            "example": "https://feed.corgi.network"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "serviceEndpoint"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "@context",
+                    "id",
+                    "service"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/xrpc/app.bsky.feed.getFeedSkeleton": {
+      "get": {
+        "summary": "Get feed skeleton",
+        "tags": [
+          "Feed"
+        ],
+        "description": "Returns a list of post URIs for the community-governed feed. Called by the Bluesky app. Uses snapshot-based cursors for stable pagination (5-minute TTL).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "feed",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "cursor",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "feed": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "post": {
+                            "type": "string",
+                            "description": "AT-URI of the post",
+                            "example": "at://did:plc:example/app.bsky.feed.post/abc123"
+                          }
+                        },
+                        "required": [
+                          "post"
+                        ]
+                      },
+                      "description": "Ordered list of post references"
+                    },
+                    "cursor": {
+                      "type": "string",
+                      "description": "Pagination cursor for the next page (absent on last page)"
+                    }
+                  },
+                  "required": [
+                    "feed"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/xrpc/app.bsky.feed.sendInteractions": {
+      "post": {
+        "summary": "Send interaction signals",
+        "tags": [
+          "Feed"
+        ],
+        "description": "Receives user interaction signals (requestMore, requestLess, etc.) from Bluesky clients. Requires a valid JWT in the Authorization header. Stored for analytics and scoring feedback.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "interactions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "item": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 512,
+                          "pattern": "^at\\:\\/\\/"
+                        },
+                        "event": {
+                          "type": "string",
+                          "pattern": "^app\\.bsky\\.feed\\.defs#[a-zA-Z][a-zA-Z0-9]{1,63}$"
+                        },
+                        "feedContext": {
+                          "type": "string",
+                          "maxLength": 512
+                        }
+                      },
+                      "required": [
+                        "item",
+                        "event"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 100
+                  }
+                },
+                "required": [
+                  "interactions"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Empty object on success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Empty object on success"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "TooManyRequests"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "type": "integer",
+                      "description": "Seconds to wait before retrying"
+                    },
+                    "correlationId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/governance/auth/login": {
+      "post": {
+        "summary": "Login with Bluesky credentials",
+        "tags": [
+          "Auth"
+        ],
+        "description": "Authenticate using a Bluesky handle and app password. Returns a session cookie (HttpOnly) and bearer token. Use the cookie for browser-based governance actions, or the bearer token for CLI/MCP clients.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "handle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "appPassword": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "handle",
+                  "appPassword"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "did": {
+                      "type": "string",
+                      "description": "Authenticated user DID",
+                      "example": "did:plc:abc123"
+                    },
+                    "handle": {
+                      "type": "string",
+                      "description": "Bluesky handle",
+                      "example": "alice.bsky.social"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Session expiration timestamp"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "did",
+                    "handle",
+                    "expiresAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "TooManyRequests"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "type": "integer",
+                      "description": "Seconds to wait before retrying"
+                    },
+                    "correlationId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/governance/auth/session": {
+      "get": {
+        "summary": "Get current session",
+        "tags": [
+          "Auth"
+        ],
+        "description": "Returns the authenticated user's session info. Requires a valid session cookie or bearer token.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "authenticated": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "did": {
+                      "type": "string",
+                      "description": "Authenticated user DID",
+                      "example": "did:plc:abc123"
+                    },
+                    "handle": {
+                      "type": "string",
+                      "description": "Bluesky handle",
+                      "example": "alice.bsky.social"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Session expiration timestamp"
+                    }
+                  },
+                  "required": [
+                    "authenticated",
+                    "did",
+                    "handle",
+                    "expiresAt"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/governance/auth/logout": {
+      "post": {
+        "summary": "Logout and invalidate session",
+        "tags": [
+          "Auth"
+        ],
+        "description": "Invalidates the current session and clears the session cookie.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Session invalidated"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/governance/vote": {
+      "post": {
+        "summary": "Submit or update a vote",
+        "tags": [
+          "Governance"
+        ],
+        "description": "Cast or update your vote for the current epoch. You can vote on algorithm weights, content keywords, topic weights, or any combination. Weights must sum to 1.0. Requires authentication and active subscription.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "recency": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Weight for recency component"
+                  },
+                  "engagement": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Weight for engagement component"
+                  },
+                  "bridging": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Weight for bridging component"
+                  },
+                  "source_diversity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Weight for source diversity component"
+                  },
+                  "relevance": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Weight for relevance component"
+                  },
+                  "include_keywords": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 50
+                    },
+                    "maxItems": 20,
+                    "description": "Keywords to boost in feed"
+                  },
+                  "exclude_keywords": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 50
+                    },
+                    "maxItems": 20,
+                    "description": "Keywords to filter from feed"
+                  },
+                  "topic_weights": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "description": "Topic slug → weight mapping"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "epoch_id": {
+                      "type": "integer",
+                      "description": "Epoch the vote was recorded for"
+                    },
+                    "weights": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "recency": {
+                          "type": "number"
+                        },
+                        "engagement": {
+                          "type": "number"
+                        },
+                        "bridging": {
+                          "type": "number"
+                        },
+                        "sourceDiversity": {
+                          "type": "number"
+                        },
+                        "relevance": {
+                          "type": "number"
+                        }
+                      },
+                      "description": "Normalized weights (null if keyword-only vote)"
+                    },
+                    "content_vote": {
+                      "type": "object",
+                      "properties": {
+                        "includeKeywords": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "excludeKeywords": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "topicWeights": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "type": "number"
+                      }
+                    },
+                    "is_update": {
+                      "type": "boolean",
+                      "description": "True if this updated an existing vote"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "epoch_id",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "TooManyRequests"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "type": "integer",
+                      "description": "Seconds to wait before retrying"
+                    },
+                    "correlationId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Get your current vote",
+        "tags": [
+          "Governance"
+        ],
+        "description": "Returns the authenticated user's vote for the current active epoch, including weights, keywords, and topic weights.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "vote": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "recency": {
+                          "type": "number"
+                        },
+                        "engagement": {
+                          "type": "number"
+                        },
+                        "bridging": {
+                          "type": "number"
+                        },
+                        "sourceDiversity": {
+                          "type": "number"
+                        },
+                        "relevance": {
+                          "type": "number"
+                        }
+                      },
+                      "description": "Current weight votes (null if no vote cast)"
+                    },
+                    "contentVote": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "includeKeywords": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "excludeKeywords": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "description": "Current keyword votes"
+                    },
+                    "topicWeights": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "type": "number"
+                      },
+                      "description": "Current topic weight votes"
+                    },
+                    "voted_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "nullable": true,
+                      "description": "When the vote was last cast or updated"
+                    },
+                    "epoch_id": {
+                      "type": "integer",
+                      "nullable": true,
+                      "description": "Active epoch ID"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/governance/topics": {
+      "get": {
+        "summary": "List active topics",
+        "tags": [
+          "Topics"
+        ],
+        "description": "Returns all active topics from the topic catalog with their current community-voted weights. Public endpoint — no authentication required.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "topics": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "slug": {
+                            "type": "string",
+                            "description": "Unique topic identifier"
+                          },
+                          "name": {
+                            "type": "string",
+                            "description": "Display name"
+                          },
+                          "description": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "parentSlug": {
+                            "type": "string",
+                            "nullable": true,
+                            "description": "Parent topic slug for hierarchy"
+                          },
+                          "currentWeight": {
+                            "type": "number",
+                            "description": "Community-voted weight (0.0-1.0, default 0.5)"
+                          }
+                        }
+                      }
+                    },
+                    "epochId": {
+                      "type": "integer",
+                      "nullable": true,
+                      "description": "Active epoch ID"
+                    },
+                    "voteCount": {
+                      "type": "integer",
+                      "description": "Number of topic weight voters this epoch"
+                    }
+                  },
+                  "required": [
+                    "topics",
+                    "voteCount"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/governance/weights": {
+      "get": {
+        "summary": "Get current weights",
+        "tags": [
+          "Governance"
+        ],
+        "description": "Returns the active epoch's governance weights, vote count, and metadata.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "epoch_id": {
+                      "type": "integer",
+                      "description": "Active epoch ID"
+                    },
+                    "status": {
+                      "type": "string",
+                      "description": "Epoch status"
+                    },
+                    "weights": {
+                      "type": "object",
+                      "properties": {
+                        "recency": {
+                          "type": "number"
+                        },
+                        "engagement": {
+                          "type": "number"
+                        },
+                        "bridging": {
+                          "type": "number"
+                        },
+                        "sourceDiversity": {
+                          "type": "number"
+                        },
+                        "relevance": {
+                          "type": "number"
+                        }
+                      }
+                    },
+                    "vote_count": {
+                      "type": "integer",
+                      "description": "Number of votes in this epoch"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "description": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "epoch_id",
+                    "status",
+                    "weights",
+                    "vote_count"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/governance/weights/history": {
+      "get": {
+        "summary": "Weight history",
+        "tags": [
+          "Governance"
+        ],
+        "description": "Returns all epochs with their weights, ordered newest first. Useful for timeline visualization of governance changes.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "epochs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "epoch_id": {
+                            "type": "integer"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "weights": {
+                            "type": "object",
+                            "properties": {
+                              "recency": {
+                                "type": "number"
+                              },
+                              "engagement": {
+                                "type": "number"
+                              },
+                              "bridging": {
+                                "type": "number"
+                              },
+                              "sourceDiversity": {
+                                "type": "number"
+                              },
+                              "relevance": {
+                                "type": "number"
+                              }
+                            }
+                          },
+                          "vote_count": {
+                            "type": "integer"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "closed_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                          },
+                          "description": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        }
+                      }
+                    },
+                    "total": {
+                      "type": "integer",
+                      "description": "Number of epochs returned"
+                    }
+                  },
+                  "required": [
+                    "epochs",
+                    "total"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/governance/weights/compare": {
+      "get": {
+        "summary": "Compare epoch weights",
+        "tags": [
+          "Governance"
+        ],
+        "description": "Compare weights between two epochs, showing the difference for each component.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "in": "query",
+            "name": "epoch1",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "in": "query",
+            "name": "epoch2",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "epoch1": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "weights": {
+                          "type": "object",
+                          "properties": {
+                            "recency": {
+                              "type": "number"
+                            },
+                            "engagement": {
+                              "type": "number"
+                            },
+                            "bridging": {
+                              "type": "number"
+                            },
+                            "sourceDiversity": {
+                              "type": "number"
+                            },
+                            "relevance": {
+                              "type": "number"
+                            }
+                          }
+                        },
+                        "status": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "epoch2": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "weights": {
+                          "type": "object",
+                          "properties": {
+                            "recency": {
+                              "type": "number"
+                            },
+                            "engagement": {
+                              "type": "number"
+                            },
+                            "bridging": {
+                              "type": "number"
+                            },
+                            "sourceDiversity": {
+                              "type": "number"
+                            },
+                            "relevance": {
+                              "type": "number"
+                            }
+                          }
+                        },
+                        "status": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "difference": {
+                      "type": "object",
+                      "description": "Weight differences (epoch2 − epoch1)",
+                      "properties": {
+                        "recency": {
+                          "type": "number"
+                        },
+                        "engagement": {
+                          "type": "number"
+                        },
+                        "bridging": {
+                          "type": "number"
+                        },
+                        "sourceDiversity": {
+                          "type": "number"
+                        },
+                        "relevance": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "epoch1",
+                    "epoch2",
+                    "difference"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/governance/epochs": {
+      "get": {
+        "summary": "List epochs",
+        "tags": [
+          "Governance"
+        ],
+        "description": "Returns a paginated list of governance epochs with weights, vote counts, and content rules. Optionally filter by status.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "voting",
+                "closed"
+              ]
+            },
+            "in": "query",
+            "name": "status",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "epochs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "phase": {
+                            "type": "string"
+                          },
+                          "weights": {
+                            "type": "object",
+                            "properties": {
+                              "recency": {
+                                "type": "number"
+                              },
+                              "engagement": {
+                                "type": "number"
+                              },
+                              "bridging": {
+                                "type": "number"
+                              },
+                              "sourceDiversity": {
+                                "type": "number"
+                              },
+                              "relevance": {
+                                "type": "number"
+                              }
+                            }
+                          },
+                          "vote_count": {
+                            "type": "integer"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "closed_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                          },
+                          "description": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "content_rules": {
+                            "type": "object",
+                            "properties": {
+                              "include_keywords": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "exclude_keywords": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "epochs",
+                    "total"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/governance/epochs/current": {
+      "get": {
+        "summary": "Get current epoch",
+        "tags": [
+          "Governance"
+        ],
+        "description": "Returns the current active or voting epoch with weights, vote/subscriber counts, voting schedule, and content rules.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "phase": {
+                      "type": "string"
+                    },
+                    "weights": {
+                      "type": "object",
+                      "properties": {
+                        "recency": {
+                          "type": "number"
+                        },
+                        "engagement": {
+                          "type": "number"
+                        },
+                        "bridging": {
+                          "type": "number"
+                        },
+                        "sourceDiversity": {
+                          "type": "number"
+                        },
+                        "relevance": {
+                          "type": "number"
+                        }
+                      }
+                    },
+                    "vote_count": {
+                      "type": "integer"
+                    },
+                    "subscriber_count": {
+                      "type": "integer",
+                      "description": "Active subscribers (potential voters)"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "voting_started_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "nullable": true
+                    },
+                    "voting_ends_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "nullable": true
+                    },
+                    "voting_closed_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "nullable": true
+                    },
+                    "description": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "content_rules": {
+                      "type": "object",
+                      "properties": {
+                        "include_keywords": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "exclude_keywords": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "status",
+                    "weights",
+                    "vote_count",
+                    "subscriber_count"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/governance/epochs/{id}": {
+      "get": {
+        "summary": "Get epoch by ID",
+        "tags": [
+          "Governance"
+        ],
+        "description": "Returns full details for a specific epoch including weights, vote statistics (averages and ranges), and content rules.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "phase": {
+                      "type": "string"
+                    },
+                    "weights": {
+                      "type": "object",
+                      "properties": {
+                        "recency": {
+                          "type": "number"
+                        },
+                        "engagement": {
+                          "type": "number"
+                        },
+                        "bridging": {
+                          "type": "number"
+                        },
+                        "sourceDiversity": {
+                          "type": "number"
+                        },
+                        "relevance": {
+                          "type": "number"
+                        }
+                      }
+                    },
+                    "vote_count": {
+                      "type": "integer"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "closed_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "nullable": true
+                    },
+                    "description": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "content_rules": {
+                      "type": "object",
+                      "properties": {
+                        "include_keywords": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "exclude_keywords": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "vote_statistics": {
+                      "type": "object",
+                      "nullable": true,
+                      "description": "Aggregate vote statistics (null if no votes)",
+                      "properties": {
+                        "average": {
+                          "type": "object",
+                          "properties": {
+                            "recency": {
+                              "type": "number"
+                            },
+                            "engagement": {
+                              "type": "number"
+                            },
+                            "bridging": {
+                              "type": "number"
+                            },
+                            "sourceDiversity": {
+                              "type": "number"
+                            },
+                            "relevance": {
+                              "type": "number"
+                            }
+                          }
+                        },
+                        "range": {
+                          "type": "object",
+                          "properties": {
+                            "recency": {
+                              "type": "object",
+                              "properties": {
+                                "min": {
+                                  "type": "number"
+                                },
+                                "max": {
+                                  "type": "number"
+                                }
+                              }
+                            },
+                            "engagement": {
+                              "type": "object",
+                              "properties": {
+                                "min": {
+                                  "type": "number"
+                                },
+                                "max": {
+                                  "type": "number"
+                                }
+                              }
+                            },
+                            "bridging": {
+                              "type": "object",
+                              "properties": {
+                                "min": {
+                                  "type": "number"
+                                },
+                                "max": {
+                                  "type": "number"
+                                }
+                              }
+                            },
+                            "sourceDiversity": {
+                              "type": "object",
+                              "properties": {
+                                "min": {
+                                  "type": "number"
+                                },
+                                "max": {
+                                  "type": "number"
+                                }
+                              }
+                            },
+                            "relevance": {
+                              "type": "object",
+                              "properties": {
+                                "min": {
+                                  "type": "number"
+                                },
+                                "max": {
+                                  "type": "number"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "status",
+                    "weights",
+                    "vote_count"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/governance/polis": {
+      "get": {
+        "summary": "Polis conversation info",
+        "tags": [
+          "Governance"
+        ],
+        "description": "Returns Polis conversation info if configured. Currently a placeholder for future deliberation integration.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "conversationId": {
+                      "type": "string"
+                    },
+                    "embedUrl": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "documentation": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "enabled"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/governance/polis/status": {
+      "get": {
+        "summary": "Polis integration status",
+        "tags": [
+          "Governance"
+        ],
+        "description": "Returns the current status of the Polis integration roadmap and planned features.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "integration": {
+                      "type": "string",
+                      "description": "Overall integration status"
+                    },
+                    "features": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "integration",
+                    "features"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/governance/content-rules": {
+      "get": {
+        "summary": "Get content rules",
+        "tags": [
+          "Governance"
+        ],
+        "description": "Returns the current epoch's content rules (active keywords) and per-keyword vote statistics. Keywords require 30% voter support to become active.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "epoch_id": {
+                      "type": "integer",
+                      "description": "Active epoch ID"
+                    },
+                    "include_keywords": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Active include keywords (met threshold)"
+                    },
+                    "exclude_keywords": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Active exclude keywords (met threshold)"
+                    },
+                    "include_keyword_votes": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "integer"
+                      },
+                      "description": "Keyword → vote count map for include keywords"
+                    },
+                    "exclude_keyword_votes": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "integer"
+                      },
+                      "description": "Keyword → vote count map for exclude keywords"
+                    },
+                    "total_voters": {
+                      "type": "integer",
+                      "description": "Number of voters who submitted keyword votes"
+                    },
+                    "threshold": {
+                      "type": "integer",
+                      "description": "Minimum votes required for keyword activation"
+                    }
+                  },
+                  "required": [
+                    "epoch_id",
+                    "include_keywords",
+                    "exclude_keywords",
+                    "total_voters",
+                    "threshold"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/governance/research-consent": {
+      "get": {
+        "summary": "Get research consent status",
+        "tags": [
+          "Governance"
+        ],
+        "description": "Returns the authenticated user's current research consent status. Research consent is separate from TOS — declining does not restrict governance access.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "consent": {
+                      "type": "boolean",
+                      "nullable": true,
+                      "description": "Current consent status"
+                    },
+                    "consentedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "nullable": true
+                    },
+                    "consentVersion": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Record research consent",
+        "tags": [
+          "Governance"
+        ],
+        "description": "Record or update the user's research consent decision. Consent changes are logged to the audit trail.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "consent": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "consent"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/transparency/post/{uri}": {
+      "get": {
+        "summary": "Explain post ranking",
+        "tags": [
+          "Transparency"
+        ],
+        "description": "Returns a full breakdown of why a post is ranked where it is: all 5 component scores (raw, weight, weighted), current rank, and a counterfactual showing what rank it would have with pure engagement sorting.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "uri",
+            "required": true,
+            "description": "AT-URI of the post (URL-encoded)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "post_uri": {
+                      "type": "string"
+                    },
+                    "epoch_id": {
+                      "type": "integer"
+                    },
+                    "epoch_description": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "total_score": {
+                      "type": "number"
+                    },
+                    "rank": {
+                      "type": "integer"
+                    },
+                    "components": {
+                      "type": "object",
+                      "description": "All 5 scoring components with raw, weight, and weighted values",
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "raw_score": {
+                            "type": "number"
+                          },
+                          "weight": {
+                            "type": "number"
+                          },
+                          "weighted": {
+                            "type": "number"
+                          }
+                        }
+                      }
+                    },
+                    "governance_weights": {
+                      "type": "object",
+                      "properties": {
+                        "recency": {
+                          "type": "number"
+                        },
+                        "engagement": {
+                          "type": "number"
+                        },
+                        "bridging": {
+                          "type": "number"
+                        },
+                        "source_diversity": {
+                          "type": "number"
+                        },
+                        "relevance": {
+                          "type": "number"
+                        }
+                      }
+                    },
+                    "counterfactual": {
+                      "type": "object",
+                      "properties": {
+                        "pure_engagement_rank": {
+                          "type": "integer"
+                        },
+                        "community_governed_rank": {
+                          "type": "integer"
+                        },
+                        "difference": {
+                          "type": "integer",
+                          "description": "Positive = governance boosted this post"
+                        }
+                      }
+                    },
+                    "scored_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "classification_method": {
+                      "type": "string",
+                      "enum": [
+                        "keyword",
+                        "embedding"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "post_uri",
+                    "epoch_id",
+                    "total_score",
+                    "rank",
+                    "components"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/transparency/stats": {
+      "get": {
+        "summary": "Feed statistics",
+        "tags": [
+          "Transparency"
+        ],
+        "description": "Returns aggregate statistics for the current feed including epoch weights, scoring metrics (posts scored, unique authors, avg/median bridging), governance info, and optional Gini coefficient.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "epoch": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "weights": {
+                          "type": "object",
+                          "properties": {
+                            "recency": {
+                              "type": "number"
+                            },
+                            "engagement": {
+                              "type": "number"
+                            },
+                            "bridging": {
+                              "type": "number"
+                            },
+                            "source_diversity": {
+                              "type": "number"
+                            },
+                            "relevance": {
+                              "type": "number"
+                            }
+                          }
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    },
+                    "feed_stats": {
+                      "type": "object",
+                      "properties": {
+                        "total_posts_scored": {
+                          "type": "integer"
+                        },
+                        "unique_authors": {
+                          "type": "integer"
+                        },
+                        "avg_bridging_score": {
+                          "type": "number"
+                        },
+                        "avg_engagement_score": {
+                          "type": "number"
+                        },
+                        "median_bridging_score": {
+                          "type": "number"
+                        },
+                        "median_total_score": {
+                          "type": "number"
+                        }
+                      }
+                    },
+                    "governance": {
+                      "type": "object",
+                      "properties": {
+                        "votes_this_epoch": {
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "metrics": {
+                      "type": "object",
+                      "nullable": true,
+                      "description": "Diversity and comparison metrics (available after first scoring run)",
+                      "properties": {
+                        "author_gini": {
+                          "type": "number",
+                          "nullable": true,
+                          "description": "Author concentration (0=equal, 1=monopoly)"
+                        },
+                        "vs_chronological_overlap": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "vs_engagement_overlap": {
+                          "type": "number",
+                          "nullable": true
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "epoch",
+                    "feed_stats",
+                    "governance"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/transparency/counterfactual": {
+      "get": {
+        "summary": "Counterfactual rankings",
+        "tags": [
+          "Transparency"
+        ],
+        "description": "\"What if the weights were different?\" Recalculates rankings using stored raw scores with alternate weights. Weights must sum to 1.0.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "default": 0.2
+            },
+            "in": "query",
+            "name": "recency",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "default": 0.2
+            },
+            "in": "query",
+            "name": "engagement",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "default": 0.2
+            },
+            "in": "query",
+            "name": "bridging",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "default": 0.2
+            },
+            "in": "query",
+            "name": "source_diversity",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "default": 0.2
+            },
+            "in": "query",
+            "name": "relevance",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "alternate_weights": {
+                      "type": "object",
+                      "properties": {
+                        "recency": {
+                          "type": "number"
+                        },
+                        "engagement": {
+                          "type": "number"
+                        },
+                        "bridging": {
+                          "type": "number"
+                        },
+                        "source_diversity": {
+                          "type": "number"
+                        },
+                        "relevance": {
+                          "type": "number"
+                        }
+                      }
+                    },
+                    "current_weights": {
+                      "type": "object",
+                      "properties": {
+                        "recency": {
+                          "type": "number"
+                        },
+                        "engagement": {
+                          "type": "number"
+                        },
+                        "bridging": {
+                          "type": "number"
+                        },
+                        "source_diversity": {
+                          "type": "number"
+                        },
+                        "relevance": {
+                          "type": "number"
+                        }
+                      }
+                    },
+                    "posts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "post_uri": {
+                            "type": "string"
+                          },
+                          "original_score": {
+                            "type": "number"
+                          },
+                          "original_rank": {
+                            "type": "integer"
+                          },
+                          "counterfactual_score": {
+                            "type": "number"
+                          },
+                          "counterfactual_rank": {
+                            "type": "integer"
+                          },
+                          "rank_delta": {
+                            "type": "integer",
+                            "description": "Positive = moved up with alternate weights"
+                          }
+                        }
+                      }
+                    },
+                    "summary": {
+                      "type": "object",
+                      "properties": {
+                        "total_posts": {
+                          "type": "integer"
+                        },
+                        "posts_moved_up": {
+                          "type": "integer"
+                        },
+                        "posts_moved_down": {
+                          "type": "integer"
+                        },
+                        "posts_unchanged": {
+                          "type": "integer"
+                        },
+                        "max_rank_change": {
+                          "type": "integer"
+                        },
+                        "avg_rank_change": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "alternate_weights",
+                    "current_weights",
+                    "posts",
+                    "summary"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/transparency/audit": {
+      "get": {
+        "summary": "Governance audit log",
+        "tags": [
+          "Transparency"
+        ],
+        "description": "Returns a paginated, append-only audit log of all governance actions. Vote details are redacted to preserve voter privacy (shows counts, not specific votes).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "default": 0
+            },
+            "in": "query",
+            "name": "offset",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "action",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "number"
+            },
+            "in": "query",
+            "name": "epoch_id",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "action": {
+                            "type": "string",
+                            "description": "Action type (e.g. vote_cast, epoch_created)"
+                          },
+                          "actor_did": {
+                            "type": "string",
+                            "nullable": true,
+                            "description": "Redacted for privacy"
+                          },
+                          "epoch_id": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "details": {
+                            "type": "object",
+                            "additionalProperties": true,
+                            "description": "Action-specific details (vote details redacted)"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    },
+                    "pagination": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer"
+                        },
+                        "limit": {
+                          "type": "integer"
+                        },
+                        "offset": {
+                          "type": "integer"
+                        },
+                        "has_more": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "limit",
+                        "offset",
+                        "has_more"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "entries",
+                    "pagination"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/legal/tos": {
+      "get": {
+        "summary": "Terms of Service",
+        "tags": [
+          "Legal"
+        ],
+        "description": "Returns the current Terms of Service document in Markdown format with version info.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "content": {
+                      "type": "string",
+                      "description": "Full document content in Markdown"
+                    },
+                    "document": {
+                      "type": "string",
+                      "enum": [
+                        "tos",
+                        "privacy"
+                      ]
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "lastUpdated": {
+                      "type": "string",
+                      "format": "date"
+                    }
+                  },
+                  "required": [
+                    "content",
+                    "document",
+                    "version",
+                    "lastUpdated"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/legal/privacy": {
+      "get": {
+        "summary": "Privacy Policy",
+        "tags": [
+          "Legal"
+        ],
+        "description": "Returns the current Privacy Policy document in Markdown format with version info.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "content": {
+                      "type": "string",
+                      "description": "Full document content in Markdown"
+                    },
+                    "document": {
+                      "type": "string",
+                      "enum": [
+                        "tos",
+                        "privacy"
+                      ]
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "lastUpdated": {
+                      "type": "string",
+                      "format": "date"
+                    }
+                  },
+                  "required": [
+                    "content",
+                    "document",
+                    "version",
+                    "lastUpdated"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code (e.g. \"ValidationError\", \"NotFound\")"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error message"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "description": "Request correlation ID for debugging"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mcp": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "delete": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Public health check",
+        "tags": [
+          "Health"
+        ],
+        "description": "Returns a redacted health status (ok or degraded). Does not expose component details.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok",
+                        "degraded"
+                      ],
+                      "description": "Overall system health"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/live": {
+      "get": {
+        "summary": "Liveness probe",
+        "tags": [
+          "Health"
+        ],
+        "description": "Returns 200 if the process is running. Used by Kubernetes liveness probes.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "live"
+                      ],
+                      "description": "Process is running"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "not live"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "summary": "Readiness probe",
+        "tags": [
+          "Health"
+        ],
+        "description": "Returns 200 if database and Redis are healthy. Used by Kubernetes readiness probes.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ready"
+                      ],
+                      "description": "All critical dependencies healthy"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "not ready"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/epochs": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/admin/epochs/current": {
+      "patch": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/admin/epochs/transition": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/admin/announcements": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/admin/feed-health": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/admin/jetstream/reconnect": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/admin/feed/rescore": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://feed.yourdomain.com",
+      "description": "Production"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Feed",
+      "description": "AT Protocol feed endpoints (called by Bluesky app)"
+    },
+    {
+      "name": "Governance",
+      "description": "Voting, epochs, weights, and community governance"
+    },
+    {
+      "name": "Auth",
+      "description": "Bluesky authentication for governance actions"
+    },
+    {
+      "name": "Topics",
+      "description": "Topic catalog and topic weight voting"
+    },
+    {
+      "name": "Transparency",
+      "description": "Score explanations, feed stats, and audit logs"
+    },
+    {
+      "name": "Admin",
+      "description": "Admin-only endpoints (requires BOT_ADMIN_DIDS)"
+    },
+    {
+      "name": "Export",
+      "description": "Research data export (anonymized, admin-only)"
+    },
+    {
+      "name": "Health",
+      "description": "Server health checks and liveness probes"
+    },
+    {
+      "name": "Bot",
+      "description": "Announcement bot management"
+    },
+    {
+      "name": "Legal",
+      "description": "Legal documents (terms of service, privacy policy)"
+    }
+  ]
+}

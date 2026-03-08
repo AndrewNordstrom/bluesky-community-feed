@@ -30,8 +30,8 @@ async function main(): Promise<void> {
     : DEFAULT_OUTPUT;
 
   // Dynamically import the server builder to avoid top-level side effects
-  const { buildApp } = await import('../src/feed/server.js');
-  const app = await buildApp();
+  const { createServer } = await import('../src/feed/server.js');
+  const app = await createServer();
 
   // Start listening on a random port
   await app.listen({ port: 0, host: '127.0.0.1' });

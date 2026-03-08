@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>API Reference — Corgi Network</title>
+  <meta name="description" content="Complete API reference for the Community-Governed Bluesky Feed Generator at corgi.network." />
+  <link rel="icon" href="https://corgi.network/favicon.ico" />
+  <link rel="apple-touch-icon" href="https://corgi.network/apple-touch-icon.png" />
+  <style>
+    :root {
+      --bg-app: #0a0a0a;
+      --bg-card: #161718;
+      --bg-elevated: #1e1f21;
+      --text-primary: #f1f3f5;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b6e70;
+      --accent: #FF5722;
+      --accent-hover: #e64a19;
+      --border: #2e3033;
+      --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-app);
+      color: var(--text-primary);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Top navigation bar ───────────────────────────────── */
+    .top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      height: 56px;
+      background: rgba(10, 10, 10, 0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .top-bar-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .corgi-logo {
+      width: 32px;
+      height: 32px;
+    }
+
+    .top-bar-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+      text-decoration: none;
+    }
+
+    .top-bar-title:hover { color: var(--accent); }
+
+    .top-bar-sep {
+      color: var(--text-muted);
+      font-weight: 300;
+      font-size: 20px;
+      margin: 0 2px;
+    }
+
+    .top-bar-subtitle {
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--text-secondary);
+    }
+
+    .top-bar-links {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .top-bar-links a {
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+
+    .top-bar-links a:hover { color: var(--text-primary); }
+
+    .github-link {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .github-link svg {
+      width: 16px;
+      height: 16px;
+      fill: var(--text-secondary);
+      transition: fill 0.15s ease;
+    }
+
+    .github-link:hover svg { fill: var(--text-primary); }
+
+    /* ── Redoc container ──────────────────────────────────── */
+    #redoc-container {
+      min-height: calc(100vh - 56px);
+    }
+
+    /* ── Mobile adjustments ───────────────────────────────── */
+    @media (max-width: 640px) {
+      .top-bar { padding: 0 16px; }
+      .top-bar-links { gap: 12px; }
+      .top-bar-sep, .top-bar-subtitle { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Top navigation -->
+  <nav class="top-bar">
+    <div class="top-bar-left">
+      <a href="https://corgi.network" aria-label="Corgi Network home">
+        <svg class="corgi-logo" viewBox="0 0 604.22 503.15" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#FF5722" d="M603.5,149.7c-3.13-2.75-6.54-3.53-10.57-4.33-1.55-.29-3.1-.59-4.65-.9-.9-.18-1.77-.36-2.64-.53-6.15-1.23-12.29-2.47-18.42-3.76-1.43-.3-2.85-.6-4.28-.9-6.26-1.26-12.5-2.44-18.48-4.72-5.95-2.78-9.51-5.53-12.19-11.68-3.6-10.39-7.26-21.31-15.32-29.1-17.6-14.24-38.25-16.87-60.06-15.88-5.34.27-10.67.52-16.02.38-5.29-.42-8.27-2.55-11.74-6.52-14.05-17.87-43.18-33.38-64.42-40.55-8.84-2.5-16.45-3.23-23.67,2.94-4.48,4.61-6.02,10.17-6.12,16.47.01.86.03,1.7.04,2.54.11,13.62,2.3,28.11,7.09,40.92.5,1.24.98,2.44,1.47,3.64,4.93,13.66,10.98,26.39,19.03,38.48q2.11,3.19,4.2,6.41,1,2.1.19,4.31-.6,1.22-1.19,2.41c-.45.94-.89,1.84-1.33,2.75-.51,1.01-1,1.98-1.49,2.96-1.02,2.08-2.04,4.17-3.07,6.25-1.64,3.27-3.27,6.53-4.88,9.81-1.05,2.14-2.09,4.27-3.15,6.41-.52,1.05-1.03,2.07-1.53,3.09-4.16,8.47-8.6,16.82-15.23,23.63-15.24,11.81-29.49,14.94-48.3,14.87-2.03,0-4.07-.01-6.1,0-5.56.01-11.11.02-16.67,0-5.91-.01-11.81-.02-17.72-.01-9.9,0-19.8,0-29.71-.02-11.52-.02-23.03-.03-34.55-.03-11.18,0-22.36,0-33.53,0-4.74,0-9.47,0-14.21,0-5.67,0-11.33,0-17-.01-2.09,0-4.18-.01-6.28-.02-2.9,0-5.81,0-8.71,0-.9,0-1.77,0-2.65-.01-5.62.03-10.72-.43-16.2-1.76-.66-.17-1.29-.34-1.93-.5-17.25-4.47-33.74-14.19-45.94-27.12q-2.03-2.32-4.06-3.88c-2.73.12-4.42.67-6.77,2.02-8.84,7.46-14.16,17.66-16.23,28.98-1.51,17.74,3.29,29.69,13.86,43.53.39.5.76.98,1.14,1.47C8.15,279.83.31,301.8.05,325.54c0,1.92,0,3.84,0,5.77-.01,2.78-.02,5.55-.01,8.33.01,2.83.02,5.66,0,8.49-.07,8.72-.11,17.43.22,26.14,1.52,22.89,12.13,45.55,29.1,61.05,12.79,9.72,22.96,19.09,29.7,33.82,4.18,9.18,8.38,18.54,14.91,26.34,6.94,6.44,15.89,7.68,24.95,7.68,1.97-.03,3.93-.06,5.9-.07,3.5-.01,6.99-.03,10.48-.08,3.61-.05,7.23-.07,10.84-.09,7.78-.04,15.56-.11,23.34-.21.01-.92.03-1.82.04-2.71.01-1.21.02-2.38.03-3.55.04-3.95-.07-6.74-1.2-10.55-4.64-7.88-9.62-13.85-17.88-18.19-2.04-.34-4.02-.67-6-1v-15h225c0,12.88,10.06,32.07,18.41,41.81,8.16,7.87,15.74,9.53,26.91,9.53,1.97-.02,3.94-.05,5.92-.06,3.5,0,7-.03,10.5-.06,3.62-.03,7.24-.06,10.86-.07,7.8-.03,15.6-.09,23.39-.16,0-.78.02-1.54.02-2.3,0-1.02.01-2.02.02-3.01.02-1.9,0-3.8-.04-5.7-1.42-6.44-4.85-13.49-9.94-17.81q-1.55-1.1-3.06-2.19c-3.06-2.23-5.61-3.86-9.19-5.11q-1.42-.45-2.81-.89c.1-3.25.2-6.51.31-9.76.04-1.36.09-2.67.13-3.99q.06-1.99.12-3.95c.04-1.29.08-2.54.13-3.79.07-2.17.17-4.35.32-6.52,2.69-12.81,8.15-21.73,19-29-4.36,8.73-5.75,20.41-5,30h2c11.49-5.13,23.07-13.31,31.67-22.54.45-.5.89-.98,1.33-1.46.81-.79,1.59-1.55,2.38-2.31,27.35-28,43.07-63.32,43.15-102.72-.01-2.64-.02-5.27-.01-7.91.03-4.73.05-9.47.05-14.2,0-7.72,0-15.44.04-23.16.02-2.72.03-5.43.02-8.15,0-1.7,0-3.4,0-5.11,0-.81,0-1.6.01-2.38-.07-6.35.82-11.08,5.06-16.04q.94-.83,1.87-1.65,10.28-6.52,22.23-9.66c7.42-2.01,14.83-4.02,22-6.8.75-.31,1.48-.61,2.21-.91,9.92-4,17.1-11.18,23.15-19.88,7.35-12.37,13.77-29.69,10.85-44.12ZM418.5,115.32c-.5.88-1,1.75-1.51,2.65-1.48,2.59-2.98,5.16-4.49,7.72q-.63,1.08-1.27,2.18-6.22,10.57-8.73,11.82c-3.19.62-5.25.44-8.08-1.21-19.72-14.69-32.08-40.04-36.92-63.79-.65-5.75-.44-10.92,3.27-15.6,2.98-2.41,5.94-1.99,9.64-1.87,13.47,2.04,25.16,13.45,34.79,22.36,2.09,1.92,4.24,3.74,6.43,5.55q11.27,9.91,12.41,16.77c-.73,5.19-2.91,8.93-5.53,13.41ZM493.5,150.7c-15.05-7.42-3.82-30.46,11.31-21.25,11.24,8.23,1.76,25.27-11.31,21.25Z"/>
+          <path fill="#FF5722" d="M462.5.7c3.62,3.69,4.81,6.99,5.95,11.98.16.69.32,1.38.49,2.09.53,2.31,1.05,4.62,1.56,6.93.39,1.7.77,3.4,1.16,5.1,1.01,4.48,2.01,8.97,2.99,13.46.61,2.8,1.23,5.59,1.85,8.38.39,1.79.78,3.57,1.18,5.36.18.83.37,1.66.56,2.52.68,3.12,1.27,5.98,1.27,9.18-5.19.27-10.38.47-15.58.6-1.76.05-3.52.13-5.28.23q-16.18.86-22.78-4.81c-2.28-2.23-4.35-4.54-6.36-7.02,2.33-7.51,5.32-14.69,8.45-21.89.86-1.97,1.7-3.94,2.55-5.92q12.12-28.08,22-26.19Z"/>
+        </svg>
+      </a>
+      <a class="top-bar-title" href="https://corgi.network">corgi.network</a>
+      <span class="top-bar-sep">/</span>
+      <span class="top-bar-subtitle">API Reference</span>
+    </div>
+    <div class="top-bar-links">
+      <a href="https://corgi.network">Home</a>
+      <a href="https://corgi.network/dashboard">Dashboard</a>
+      <a class="github-link" href="https://github.com/AndrewNordstrom/bluesky-community-feed" target="_blank" rel="noopener">
+        <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </nav>
+
+  <!-- Redoc API documentation -->
+  <div id="redoc-container"></div>
+
+  <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+  <script>
+    Redoc.init('./openapi.json', {
+      theme: {
+        colors: {
+          primary: { main: '#FF5722' },
+          success: { main: '#22c55e' },
+          warning: { main: '#f59e0b' },
+          error: { main: '#ef4444' },
+          text: {
+            primary: '#f1f3f5',
+            secondary: '#9ca3af',
+          },
+          http: {
+            get: '#22c55e',
+            post: '#3b82f6',
+            put: '#f59e0b',
+            delete: '#ef4444',
+            patch: '#a855f7',
+          },
+        },
+        typography: {
+          fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+          fontSize: '15px',
+          headings: {
+            fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+            fontWeight: '600',
+          },
+          code: {
+            fontFamily: '"SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace',
+            fontSize: '13px',
+            backgroundColor: '#1e1f21',
+            wrap: true,
+          },
+          links: {
+            color: '#FF5722',
+          },
+        },
+        sidebar: {
+          width: '280px',
+          backgroundColor: '#0a0a0a',
+          textColor: '#9ca3af',
+          activeTextColor: '#f1f3f5',
+          groupItems: {
+            activeBackgroundColor: '#1e1f21',
+            activeTextColor: '#f1f3f5',
+            textTransform: 'none',
+          },
+          level1Items: {
+            activeBackgroundColor: '#1e1f21',
+            activeTextColor: '#FF5722',
+            textTransform: 'none',
+          },
+          arrow: {
+            color: '#6b6e70',
+          },
+        },
+        rightPanel: {
+          backgroundColor: '#161718',
+          textColor: '#f1f3f5',
+        },
+        schema: {
+          nestedBackground: '#1a1a1a',
+          linesColor: '#2e3033',
+          typeNameColor: '#FF5722',
+          typeTitleColor: '#f1f3f5',
+          requireLabelColor: '#ef4444',
+        },
+        codeBlock: {
+          backgroundColor: '#0a0a0a',
+        },
+      },
+      expandResponses: '200',
+      hideDownloadButton: false,
+      sortPropsAlphabetically: false,
+      pathInMiddlePanel: true,
+      hideHostname: false,
+      nativeScrollbars: false,
+      requiredPropsFirst: true,
+      showExtensions: false,
+      jsonSampleExpandLevel: 2,
+    }, document.getElementById('redoc-container'));
+  </script>
+</body>
+</html>
