@@ -12,6 +12,8 @@ import { getCurrentContentRules, checkContentRules, hasActiveContentRules } from
 import { classifyPost, type TopicVector } from '../../scoring/topics/classifier.js';
 import { getTaxonomy } from '../../scoring/topics/taxonomy.js';
 import { checkGovernanceGate, isGovernanceGateReady } from '../governance-gate.js';
+import { classifyPostByEmbedding } from '../embedding-gate.js';
+import { isEmbedderReady } from '../../scoring/topics/embedder.js';
 
 /** AT Protocol content labels that indicate NSFW content. */
 const NSFW_LABELS = new Set(['porn', 'sexual', 'graphic-media', 'nudity']);
@@ -144,6 +146,26 @@ export async function handlePost(
       }
     } catch (err) {
       logger.warn({ err, uri }, 'Governance gate check failed, inserting post anyway');
+    }
+  }
+
+  // Governance gate passed. Refine classification with embeddings if available.
+  // The embedding produces a semantically accurate topic vector that replaces
+  // the keyword-based vector. "fork in the road" and "fork the repository"
+  // are trivially distinguishable in embedding space.
+  // Fail-open: if embedder is unavailable, the keyword vector is stored as-is.
+  if (config.TOPIC_EMBEDDING_ENABLED && isEmbedderReady()) {
+    try {
+      const classificationText = [text ?? '', ...altTexts].filter(Boolean).join(' ');
+      const embResult = await classifyPostByEmbedding(classificationText);
+      if (embResult && Object.keys(embResult.vector).length > 0) {
+        topicVector = embResult.vector;
+      }
+      // If embedding produces empty vector but keywords had matches,
+      // keep the keyword vector. The post already passed the governance gate
+      // on keyword matches, so it's worth storing with keyword classification.
+    } catch (err) {
+      logger.warn({ err, uri }, 'Embedding classification failed at ingestion — using keyword vector');
     }
   }
 
