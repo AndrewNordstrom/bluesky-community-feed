@@ -59,10 +59,10 @@ const ConfigSchema = z.object({
   FEED_MAX_POSTS: z.coerce.number().default(1000),
 
   // Topic embedding classifier
-  /** Enable semantic embedding classifier in scoring pipeline. */
+  /** Enable semantic embedding classifier at ingestion time. */
   TOPIC_EMBEDDING_ENABLED: zodEnvBool(false),
   /** Minimum cosine similarity threshold for topic assignment (0.0-1.0). */
-  TOPIC_EMBEDDING_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.25),
+  TOPIC_EMBEDDING_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.35),
 
   // Governance
   GOVERNANCE_MIN_VOTES: z.coerce.number().default(5),
