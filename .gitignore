@@ -19,6 +19,7 @@ dist/
 .claude/
 .cursor/
 Prompts/
+reports/
 AGENTS.md
 CLAUDE.md
 TASKING.md
