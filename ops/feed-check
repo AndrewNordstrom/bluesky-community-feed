@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Quick feed quality audit
+# Usage: ops/feed-check        (top 30 posts)
+# Usage: ops/feed-check 50     (top 50 posts)
+set -euo pipefail
+LIMIT="${1:-30}"
+
+docker exec bluesky-feed-postgres psql -U feed -d bluesky_feed -c "
+SELECT 
+  ROW_NUMBER() OVER (ORDER BY ps.total_score DESC) as rank,
+  LEFT(p.text, 100) as text,
+  p.topic_vector::text as topics,
+  ROUND(ps.total_score::numeric, 3) as total,
+  ROUND(ps.relevance_score::numeric, 3) as relev,
+  ROUND(ps.engagement_score::numeric, 3) as engage,
+  ps.classification_method as method,
+  COALESCE(pe.like_count,0) as likes,
+  COALESCE(pe.reply_count,0) as replies
+FROM post_scores ps
+JOIN posts p ON p.uri = ps.post_uri
+LEFT JOIN post_engagement pe ON pe.post_uri = ps.post_uri
+WHERE ps.epoch_id = (SELECT id FROM governance_epochs WHERE status='active' ORDER BY id DESC LIMIT 1)
+  AND p.deleted = FALSE
+  AND p.created_at > NOW() - INTERVAL '72 hours'
+  AND ps.relevance_score >= 0.15
+ORDER BY ps.total_score DESC
+LIMIT $LIMIT;
+"

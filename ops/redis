@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Quick redis-cli wrapper
+# Usage: ops/redis "GET feed:count"
+# Usage: ops/redis DEL governance_gate:topic_weights
+# Usage: ops/redis (opens interactive redis-cli)
+set -euo pipefail
+if [ $# -eq 0 ]; then
+  docker exec -it bluesky-feed-redis redis-cli
+else
+  docker exec bluesky-feed-redis redis-cli "$@"
+fi

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Quick log viewer for the feed service
+# Usage: ops/logs              (last 100 lines)
+# Usage: ops/logs -f           (follow/tail)
+# Usage: ops/logs 500          (last 500 lines)
+# Usage: ops/logs grep "scoring"  (grep recent logs)
+set -euo pipefail
+
+if [ "${1:-}" = "-f" ]; then
+  journalctl -u bluesky-feed -f --no-pager
+elif [ "${1:-}" = "grep" ]; then
+  shift
+  journalctl -u bluesky-feed --since "30 minutes ago" --no-pager | grep -i "${1:-}"
+elif [[ "${1:-}" =~ ^[0-9]+$ ]]; then
+  journalctl -u bluesky-feed -n "$1" --no-pager
+else
+  journalctl -u bluesky-feed -n 100 --no-pager
+fi
