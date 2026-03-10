@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Quick system status overview
+# Usage: ops/status
+set -euo pipefail
+
+echo "=== Service ==="
+systemctl is-active bluesky-feed 2>/dev/null || echo "NOT RUNNING"
+
+echo ""
+echo "=== Health ==="
+curl -sS http://localhost:3001/health 2>/dev/null | python3 -m json.tool 2>/dev/null || echo "Health endpoint unreachable"
+
+echo ""
+echo "=== Disk ==="
+df -h / | tail -1
+
+echo ""
+echo "=== Memory ==="
+free -h | grep Mem
+
+echo ""
+echo "=== DB Stats ==="
+docker exec bluesky-feed-postgres psql -U feed -d bluesky_feed -t -A -c "
+SELECT 'posts: ' || COUNT(*) FROM posts WHERE deleted=FALSE AND created_at > NOW()-INTERVAL '72h'
+UNION ALL
+SELECT 'scored: ' || COUNT(*) FROM post_scores WHERE epoch_id=(SELECT id FROM governance_epochs WHERE status='active' ORDER BY id DESC LIMIT 1)
+UNION ALL
+SELECT 'feed size: ' || (SELECT COUNT(*) FROM (SELECT 1) x WHERE EXISTS (SELECT 1))
+"
+
+echo ""
+echo "=== Redis Feed ==="
+docker exec bluesky-feed-redis redis-cli ZCARD feed:current
+docker exec bluesky-feed-redis redis-cli GET feed:updated_at
+
+echo ""
+echo "=== Last Scoring ==="
+journalctl -u bluesky-feed --since "15 minutes ago" --no-pager 2>/dev/null | grep -i "scoring pipeline complete" | tail -1 || echo "No recent scoring run found"

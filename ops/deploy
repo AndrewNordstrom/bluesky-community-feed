@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Standard deploy: pull, build, migrate, restart
+# Usage: ops/deploy
+# Usage: ops/deploy --skip-migrate  (skip migrations)
+set -euo pipefail
+cd /opt/bluesky-feed
+
+echo "=== Pulling latest ==="
+git pull --ff-only origin main
+
+echo "=== Installing deps ==="
+npm install --no-audit --no-fund
+
+echo "=== Building ==="
+npx tsc
+
+if [ "${1:-}" != "--skip-migrate" ]; then
+  echo "=== Running migrations ==="
+  npm run migrate
+fi
+
+echo "=== Restarting service ==="
+systemctl restart bluesky-feed
+sleep 3
+
+echo "=== Health check ==="
+curl -sS http://localhost:3001/health | head -c 200
+echo ""
+
+echo "=== Status ==="
+systemctl is-active bluesky-feed

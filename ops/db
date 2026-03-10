@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Quick psql wrapper for the feed database
+# Usage: ops/db "SELECT COUNT(*) FROM posts"
+# Usage: ops/db (opens interactive psql)
+set -euo pipefail
+if [ $# -eq 0 ]; then
+  docker exec -it bluesky-feed-postgres psql -U feed -d bluesky_feed
+else
+  docker exec bluesky-feed-postgres psql -U feed -d bluesky_feed -t -A -c "$1"
+fi
