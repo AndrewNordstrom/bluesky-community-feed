@@ -750,3 +750,25 @@ The `classification_method` column in `post_scores` always showed `'keyword'` be
 
 ### Open questions
 - The backfill only catches posts with non-standard values (0.35-0.99). Posts where the embedding agreed with keyword results (producing similar 0.2/1.0 values) remain marked as keyword. This is a minor inaccuracy affecting a small number of posts.
+
+## 2026-03-11 #01 — Persistent Report Generation Script
+**Branch:** `dev/report-script`
+**Commits:** `2b92a83`, `71e26f5`
+**Files changed:** `scripts/generate-report.py`, `ops/README.md`
+
+### What changed
+Added `scripts/generate-report.py` — a reusable Python script that SSHs to the VPS, pulls scoring data (top 1000 posts, active epoch weights, system stats) in a single call, and generates a 6-page .docx report with matplotlib charts and styled tables. Supports `--dry-run`, `--csv` for offline mode, `--date` for custom labels, and `--output` for custom paths. Added usage docs to `ops/README.md` and a context line to `CLAUDE.md`.
+
+### Why
+The feed data analysis report had been generated twice before, each time by writing a throwaway Python script in `/tmp/`. Each session reinvented the format, producing inconsistent charts, tables, and styling. This permanent script ensures every future report uses identical structure and presentation.
+
+### Measurements
+Dry-run verified VPS connectivity and data extraction (1000 posts, 910 unique authors, epoch 2). Full report generated successfully at 141 KB. No test changes (Python script, not part of TypeScript test suite).
+
+### Decisions & alternatives
+- Python over TypeScript: python-docx + matplotlib + pandas are purpose-built for document generation with charts. All three were already installed (Python 3.12).
+- Three queries in one SSH call: Posts via `COPY TO STDOUT WITH CSV HEADER`, epoch and stats via `row_to_json()`, separated by `---REPORT-MARKER---` markers. Minimizes SSH round-trips.
+- Used `tick_labels` instead of deprecated `labels` parameter in matplotlib 3.9+ boxplot.
+
+### Open questions
+- None. Script is tested and working.
