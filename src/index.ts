@@ -52,6 +52,10 @@ async function main() {
 
     // Tell systemd we're ready (Type=notify). No-op outside systemd.
     sdNotifyReady();
+
+    // Start watchdog heartbeat immediately after READY so long startup
+    // phases cannot miss the first watchdog deadline.
+    startWatchdog();
   } catch (err) {
     logger.fatal({ err }, 'Failed to start HTTP server');
     process.exit(1);
@@ -156,12 +160,7 @@ async function main() {
     process.exit(1);
   }
 
-  // 7. Start systemd watchdog heartbeat (no-op outside systemd).
-  // Sends WATCHDOG=1 every 30s only when DB + Redis are healthy.
-  // If both are down for >60s, systemd kills and restarts us.
-  startWatchdog();
-
-  // 8. Register graceful shutdown handlers
+  // 7. Register graceful shutdown handlers
   registerShutdownHandlers({
     server: app,
     stopScoring,
@@ -175,7 +174,7 @@ async function main() {
     stopInteractionAggregator,
   });
 
-  // 9. Log startup complete
+  // 8. Log startup complete
   logger.info({
     serviceDid: config.FEEDGEN_SERVICE_DID,
     publisherDid: config.FEEDGEN_PUBLISHER_DID,
