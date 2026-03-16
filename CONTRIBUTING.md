@@ -47,6 +47,44 @@ npm run migrate
 - Follow issue label policy in [`docs/ISSUE_TRIAGE.md`](docs/ISSUE_TRIAGE.md)
 - Follow release/changelog policy in [`RELEASING.md`](RELEASING.md)
 
+## PR Guidelines (Required)
+
+### PR Granularity
+
+- One PR must represent one logical change.
+- Target reviewable diffs (about 50-300 meaningful lines) whenever possible.
+- Each PR must be independently mergeable with green checks on `main`.
+- Do not bundle unrelated work (feature + refactor, bug fix + dependency cleanup, etc.).
+
+### Branch Naming
+
+- Include the Linear issue ID in branch names.
+- Pattern examples:
+  - `proj-42-implement-int8-matmul`
+  - `lab-17-add-vote-normalization`
+
+### PR Title and Description
+
+- Use imperative, descriptive titles.
+- PR description must include:
+  - what this PR does
+  - why this is needed (with Linear link/context)
+  - testing performed
+  - reviewer focus areas
+- Include an auto-close keyword for Linear issue tracking (for example: `Fixes PROJ-42` or `Closes LAB-17`).
+
+### CodeRabbit Review-Fix Loop
+
+- Expect CodeRabbit auto-review on each PR.
+- Address findings by pushing follow-up commits to the same branch.
+- If you disagree with a finding, respond with rationale in the PR thread instead of dismissing silently.
+- Iterate until findings are resolved and checks remain green.
+
+### Sensitive Changes
+
+- Security-sensitive changes (auth, input validation, data access) should be isolated in dedicated PRs.
+- Add the `security` label in Linear for security-sensitive work.
+
 ## Adding A Votable Weight
 
 1. Update backend parameter config in `src/config/votable-params.ts`.

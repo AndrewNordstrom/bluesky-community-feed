@@ -19,6 +19,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 - README command examples and tooling descriptions updated to match current CLI and MCP behavior
 - PR template and contributing checklist now enforce changelog and security/audit validation gates
+- PR template and contributor guide now enforce small, single-purpose PR scope and Linear-linked branch/PR conventions
 
 ## [1.1.0] — 2026-03-06
 
