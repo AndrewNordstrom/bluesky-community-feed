@@ -1,0 +1,83 @@
+{
+  "maxAgeDays": 120,
+  "scanPaths": [
+    "README.md",
+    "CONTRIBUTING.md",
+    "RELEASING.md",
+    "ROADMAP.md",
+    "SUPPORT.md",
+    "docs",
+    ".github/PULL_REQUEST_TEMPLATE.md"
+  ],
+  "ignoreFilesForLint": [
+    "docs/dev-journal.md",
+    "docs/SECURITY_AUDIT.md"
+  ],
+  "documents": [
+    {
+      "path": "README.md",
+      "owner": "core",
+      "lastReviewed": "2026-03-16"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "owner": "core",
+      "lastReviewed": "2026-03-16"
+    },
+    {
+      "path": "RELEASING.md",
+      "owner": "core",
+      "lastReviewed": "2026-03-16"
+    },
+    {
+      "path": "ROADMAP.md",
+      "owner": "core",
+      "lastReviewed": "2026-03-16"
+    },
+    {
+      "path": "SUPPORT.md",
+      "owner": "core",
+      "lastReviewed": "2026-03-16"
+    },
+    {
+      "path": "docs/SYSTEM_OVERVIEW.md",
+      "owner": "core",
+      "lastReviewed": "2026-03-16"
+    },
+    {
+      "path": "docs/DEPLOYMENT.md",
+      "owner": "ops",
+      "lastReviewed": "2026-03-16"
+    },
+    {
+      "path": "docs/OPS_RUNBOOK.md",
+      "owner": "ops",
+      "lastReviewed": "2026-03-16"
+    },
+    {
+      "path": "docs/MCP_SETUP.md",
+      "owner": "platform",
+      "lastReviewed": "2026-03-16"
+    },
+    {
+      "path": "docs/STABILITY_TEST.md",
+      "owner": "ops",
+      "lastReviewed": "2026-03-16"
+    },
+    {
+      "path": "docs/STATUS.md",
+      "owner": "core",
+      "lastReviewed": "2026-03-16"
+    },
+    {
+      "path": "docs/ISSUE_TRIAGE.md",
+      "owner": "core",
+      "lastReviewed": "2026-03-16"
+    },
+    {
+      "path": "docs/SECURITY.md",
+      "owner": "security",
+      "lastReviewed": "2026-03-16"
+    }
+  ]
+}

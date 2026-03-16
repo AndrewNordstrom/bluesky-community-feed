@@ -242,10 +242,10 @@ cd web && npm run dev    # Start frontend (port 5173)
 
 # Database
 npm run migrate          # Run migrations
-npm run score            # Manually trigger scoring
+npm run cli -- feed rescore  # Manually trigger scoring
 
 # Production
-docker-compose up -d     # Start PostgreSQL + Redis
+docker compose up -d     # Start PostgreSQL + Redis
 npm run build            # Compile TypeScript
 npm start                # Start production server
 ```

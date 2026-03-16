@@ -75,6 +75,6 @@ Read these files in order:
 3. `docs/SYSTEM_OVERVIEW.md` — Detailed system walkthrough
 4. `docs/dev-journal.md` — Chronological record of every change with rationale
 
-The full test suite: `npm run build && npm test -- --run` (402 tests across 66 files, should all pass)
+The full test suite: `npm run build && npm test -- --run` (400+ tests, should all pass)
 
 Key architectural decisions are documented in the dev journal entries under "Decisions & alternatives" — read those before proposing changes to understand why things are the way they are.

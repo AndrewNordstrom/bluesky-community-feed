@@ -26,7 +26,7 @@ Content-Type: application/json
 Accept: application/json, text/event-stream
 ```
 
-## Tools (23 total)
+## Tools (30 total)
 
 ### Governance (10)
 
@@ -53,6 +53,16 @@ Accept: application/json, text/event-stream
 | `explain_post_score` | Detailed score breakdown for a specific post |
 | `counterfactual_analysis` | What-if analysis with hypothetical weights |
 
+### Topics (5)
+
+| Tool | Description |
+|------|-------------|
+| `list_topics` | List all topics in the catalog with post counts and weights |
+| `add_topic` | Add a new topic to the voting catalog |
+| `update_topic` | Update a topic's metadata and terms |
+| `get_topic_stats` | Topic classification coverage and distribution summary |
+| `classify_text` | Debug classify arbitrary text against the taxonomy |
+
 ### Participants (3)
 
 | Tool | Description |
@@ -75,6 +85,13 @@ Accept: application/json, text/event-stream
 |------|-------------|
 | `list_announcements` | List all announcements |
 | `send_announcement` | Post an announcement (max 280 chars) |
+
+### Reports (2)
+
+| Tool | Description |
+|------|-------------|
+| `generate_feed_report` | Generate the DOCX feed quality report |
+| `get_feed_snapshot` | Return current feed/admin status snapshot JSON |
 
 ## Client Configuration
 
