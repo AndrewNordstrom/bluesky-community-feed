@@ -271,6 +271,7 @@ See `npm run cli -- --help` for all commands.
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Contributor guidelines |
 | [`CHANGELOG.md`](CHANGELOG.md) | Version history |
 | [`SECURITY.md`](SECURITY.md) | Vulnerability reporting policy |
+| [`SUPPORT.md`](SUPPORT.md) | Support channels and issue guidance |
 | [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Community code of conduct |
 | [`legal/`](legal/) | Terms of Service, Privacy Policy |
 

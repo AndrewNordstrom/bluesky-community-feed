@@ -14,6 +14,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - CodeQL scanning workflow and branch-protection-required check integration
 - Offline report fixture data + pinned Python report requirements for reproducible script validation
 - Roadmap, release policy, and issue triage policy docs
+- Dedicated support guide (`SUPPORT.md`) and issue-template contact links for support/security routing
 
 ### Changed
 - README command examples and tooling descriptions updated to match current CLI and MCP behavior
