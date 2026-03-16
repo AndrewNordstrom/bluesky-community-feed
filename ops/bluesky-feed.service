@@ -32,7 +32,8 @@ Environment=NODE_OPTIONS=--max-old-space-size=896
 ExecStart=/usr/bin/node dist/index.js
 
 # Watchdog: process must send WATCHDOG=1 every 60s or systemd kills it.
-# The app sends heartbeats every 30s (half of WatchdogSec) only when
+# The app schedules heartbeats at half of WATCHDOG_USEC and sends an
+# immediate first heartbeat after READY=1. Heartbeats are sent only when
 # database AND Redis health checks pass. If dependencies are down for
 # >60s the process is killed and restarted automatically.
 WatchdogSec=60

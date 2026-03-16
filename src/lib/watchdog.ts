@@ -13,14 +13,34 @@ import { execFile } from 'node:child_process';
 import { logger } from './logger.js';
 import { isReady } from './health.js';
 
-const NOTIFY_SOCKET = process.env.NOTIFY_SOCKET;
+// Default to 60s if systemd does not set WATCHDOG_USEC.
+const DEFAULT_WATCHDOG_MS = 60_000;
+// Never schedule faster than 1s to avoid tight loops on malformed env.
+const MIN_HEARTBEAT_INTERVAL_MS = 1_000;
+
+function hasNotifySocket(): boolean {
+  return Boolean(process.env.NOTIFY_SOCKET);
+}
+
+function getWatchdogIntervalMs(): number {
+  const raw = process.env.WATCHDOG_USEC;
+  if (!raw) return DEFAULT_WATCHDOG_MS / 2;
+
+  const watchdogUsec = Number(raw);
+  if (!Number.isFinite(watchdogUsec) || watchdogUsec <= 0) {
+    return DEFAULT_WATCHDOG_MS / 2;
+  }
+
+  const watchdogMs = Math.floor(watchdogUsec / 1000);
+  return Math.max(MIN_HEARTBEAT_INTERVAL_MS, Math.floor(watchdogMs / 2));
+}
 
 /**
  * Send a watchdog heartbeat to systemd via systemd-notify(1).
  * No-op if NOTIFY_SOCKET is not set (non-systemd environments).
  */
 function sdNotifyWatchdog(): void {
-  if (!NOTIFY_SOCKET) return;
+  if (!hasNotifySocket()) return;
 
   // execFile with hardcoded args — safe, no shell injection possible
   execFile('systemd-notify', ['WATCHDOG=1'], (err) => {
@@ -35,7 +55,7 @@ function sdNotifyWatchdog(): void {
  * Call once after HTTP server is listening.
  */
 export function sdNotifyReady(): void {
-  if (!NOTIFY_SOCKET) return;
+  if (!hasNotifySocket()) return;
 
   // execFile with hardcoded args — safe, no shell injection possible
   execFile('systemd-notify', ['--ready'], (err) => {
@@ -79,24 +99,32 @@ let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
  * No-op if NOTIFY_SOCKET is not set.
  */
 export function startWatchdog(): void {
-  if (!NOTIFY_SOCKET) {
+  if (!hasNotifySocket()) {
     logger.debug('NOTIFY_SOCKET not set — watchdog disabled (non-systemd environment)');
     return;
   }
 
-  // Send heartbeat every 30s (half of WatchdogSec=60)
-  const HEARTBEAT_INTERVAL_MS = 30_000;
+  // Ensure we never leave a stale interval around if called twice.
+  stopWatchdog();
+
+  // Send first heartbeat immediately so long startup paths do not miss
+  // the initial watchdog deadline.
+  sendHeartbeat().catch((err) => {
+    logger.error({ err }, 'Initial watchdog heartbeat failed');
+  });
+
+  const intervalMs = getWatchdogIntervalMs();
 
   heartbeatInterval = setInterval(() => {
     sendHeartbeat().catch((err) => {
       logger.error({ err }, 'Watchdog heartbeat loop error');
     });
-  }, HEARTBEAT_INTERVAL_MS);
+  }, intervalMs);
 
   // Don't prevent process exit
   heartbeatInterval.unref();
 
-  logger.info({ intervalMs: HEARTBEAT_INTERVAL_MS }, 'Watchdog heartbeat started');
+  logger.info({ intervalMs }, 'Watchdog heartbeat started');
 }
 
 /**
