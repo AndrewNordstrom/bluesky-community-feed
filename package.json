@@ -20,7 +20,7 @@
     "seed-topics": "tsx scripts/seed-topics.ts",
     "backfill-topics": "tsx scripts/backfill-topics.ts",
     "report:pdf": "python3 scripts/generate-report-pdf.py",
-    "build:mcp-local": "node -e \"const fs=require('fs'); if(!fs.existsSync('src/mcp-local/tsconfig.json')) { console.log('src/mcp-local not present; skipping build:mcp-local'); process.exit(0); }\" && cd src/mcp-local && npx tsc -p tsconfig.json",
+    "build:mcp-local": "if [ -f src/mcp-local/tsconfig.json ]; then cd src/mcp-local && npx tsc -p tsconfig.json; else echo 'src/mcp-local not present; skipping build:mcp-local'; fi",
     "verify": "npm run build && npm test -- --run && npm run cli:build && npm run build:mcp-local && cd web && npm run lint && npm run build",
     "prepare": "husky"
   },
