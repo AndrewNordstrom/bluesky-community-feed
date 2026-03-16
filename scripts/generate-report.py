@@ -35,7 +35,7 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Inches, Pt, RGBColor, Twips
+from docx.shared import Inches, Pt, RGBColor
 from report_utils import format_int
 
 # ---------------------------------------------------------------------------
@@ -1348,16 +1348,16 @@ def print_dry_run(df, epoch, stats):
     print(f"Median total score: {df['total_score'].median():.4f}")
 
     if "classification_method" in df.columns:
-        print(f"\nClassification methods:")
+        print("\nClassification methods:")
         for method, count in df["classification_method"].fillna("unknown").value_counts().items():
             print(f"  {method}: {count} ({count/len(df)*100:.1f}%)")
 
     if "primary_topic" in df.columns:
-        print(f"\nTop 10 topics:")
+        print("\nTop 10 topics:")
         for topic, count in df["primary_topic"].value_counts().head(10).items():
             print(f"  {topic}: {count}")
 
-    print(f"\nScore components (medians):")
+    print("\nScore components (medians):")
     for col, label in zip(SCORE_COMPONENTS, COMPONENT_LABELS):
         if col in df.columns:
             print(f"  {label}: {df[col].median():.4f}")
