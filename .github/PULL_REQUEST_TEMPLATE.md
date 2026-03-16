@@ -40,6 +40,7 @@
 - [ ] `MPLCONFIGDIR=/tmp python3 scripts/generate-report-pdf.py --csv tests/fixtures/report/report-sample.csv --epoch-json tests/fixtures/report/epoch-sample.json --dry-run` passes
 - [ ] `npm audit --audit-level=moderate` passes
 - [ ] `cd web && npm audit --audit-level=moderate` passes
+- [ ] `npm run docs:verify` passes
 - [ ] Migrations included for schema changes
 - [ ] No hardcoded secrets, DIDs, or production domains
 - [ ] Parameterized SQL only (no string interpolation)

@@ -14,7 +14,7 @@ The stability test validates that the system can:
 
 Before starting the test, verify:
 
-- [ ] Docker containers running (`docker-compose ps`)
+- [ ] Docker containers running (`docker compose ps`)
 - [ ] PostgreSQL has recent data (`SELECT COUNT(*) FROM posts`)
 - [ ] Redis is operational (`redis-cli ping`)
 - [ ] Application starts without errors (`npm run dev`)
@@ -29,7 +29,7 @@ Before starting the test, verify:
 NODE_ENV=production npm run start
 
 # Or with Docker
-docker-compose up -d
+docker compose up -d
 ```
 
 Record start time: `_____________`
@@ -43,7 +43,7 @@ Set up a cron job or monitoring tool to check:
 ```bash
 # Health check
 curl -s http://localhost:3000/health | jq '.status'
-# Expected: "healthy"
+# Expected: "ok"
 
 # Verify feed is returning data
 curl -s "http://localhost:3000/xrpc/app.bsky.feed.getFeedSkeleton?feed=at://...&limit=1" | jq '.feed | length'
@@ -99,9 +99,9 @@ Run each of these once during the 24-hour period:
 #### 1. PostgreSQL Restart (Hour 4)
 
 ```bash
-docker-compose stop postgres
+docker compose stop postgres
 sleep 30
-docker-compose start postgres
+docker compose start postgres
 ```
 
 **Expected behavior:**
@@ -119,9 +119,9 @@ curl http://localhost:3000/health
 #### 2. Redis Restart (Hour 8)
 
 ```bash
-docker-compose stop redis
+docker compose stop redis
 sleep 30
-docker-compose start redis
+docker compose start redis
 ```
 
 **Expected behavior:**

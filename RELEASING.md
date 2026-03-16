@@ -21,6 +21,7 @@ Run from repository root:
 
 ```bash
 npm run verify
+npm run docs:verify
 python3 -m py_compile scripts/generate-report.py scripts/generate-report-pdf.py scripts/report_utils.py
 MPLCONFIGDIR=/tmp python3 scripts/generate-report.py --csv tests/fixtures/report/report-sample.csv --epoch-json tests/fixtures/report/epoch-sample.json --dry-run
 MPLCONFIGDIR=/tmp python3 scripts/generate-report-pdf.py --csv tests/fixtures/report/report-sample.csv --epoch-json tests/fixtures/report/epoch-sample.json --dry-run

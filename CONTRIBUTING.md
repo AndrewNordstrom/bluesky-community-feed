@@ -27,6 +27,7 @@ npm run migrate
 - Build frontend: `cd web && npm run build`
 - Run frontend dev server: `cd web && npm run dev`
 - Full local gate: `npm run verify`
+- Docs freshness gate: `npm run docs:verify`
 
 ## Project Structure
 
@@ -101,6 +102,7 @@ npm run migrate
 - `MPLCONFIGDIR=/tmp python3 scripts/generate-report-pdf.py --csv tests/fixtures/report/report-sample.csv --epoch-json tests/fixtures/report/epoch-sample.json --dry-run` passes
 - `npm audit --audit-level=moderate` passes
 - `cd web && npm audit --audit-level=moderate` passes
+- `npm run docs:verify` passes
 - `CHANGELOG.md` updated for user/operator-visible changes
 - Migrations included for schema changes
 - Notes included for operational or rollout impact
