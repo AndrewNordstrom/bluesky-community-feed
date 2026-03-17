@@ -30,7 +30,37 @@ jobs:
             npm ci --ignore-scripts
             npm audit --audit-level=high
             npm run build
+            # Run tests against deterministic defaults from .env.example,
+            # not production tuning values from /opt/bluesky-feed/.env.
+            ENV_BACKUP=""
+            restore_env_file() {
+              if [ -n "${ENV_BACKUP}" ] && [ -f "${ENV_BACKUP}" ]; then
+                cp "${ENV_BACKUP}" .env
+                rm -f "${ENV_BACKUP}"
+                ENV_BACKUP=""
+              else
+                rm -f .env
+              fi
+            }
+            if [ -f .env ]; then
+              ENV_BACKUP="$(mktemp /tmp/bluesky-feed-env-backup.XXXXXX)"
+              cp .env "${ENV_BACKUP}"
+              if ! cmp -s .env "${ENV_BACKUP}"; then
+                echo "Failed to verify .env backup integrity"
+                rm -f "${ENV_BACKUP}"
+                ENV_BACKUP=""
+                exit 1
+              fi
+            fi
+            trap restore_env_file EXIT
+            if [ ! -f .env.example ]; then
+              echo ".env.example is missing; cannot run deterministic deploy tests"
+              exit 1
+            fi
+            cp .env.example .env
             npm run test -- --reporter=verbose --run
+            restore_env_file
+            trap - EXIT
             cd web && npm ci && npm run build
             cd ..
             cd cli && npm ci && npx tsc
