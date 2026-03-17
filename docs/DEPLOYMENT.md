@@ -205,6 +205,32 @@ sudo journalctl -u bluesky-feed -f
 sudo systemctl restart bluesky-feed
 ```
 
+## 13. Optional: public docs subdomain (`docs.corgi.network`)
+
+This repository includes a dedicated docs deployment workflow:
+
+- Workflow: `.github/workflows/deploy-docs.yml`
+- Source artifacts: `docs/docs-site/index.html` and `docs/docs-site/openapi.json`
+- VPS target directory: `/var/www/corgi-docs`
+
+Expected Nginx location:
+
+```nginx
+location / {
+    root /var/www/corgi-docs;
+    index index.html;
+    try_files $uri $uri/ /index.html;
+}
+```
+
+Required GitHub Actions secrets:
+
+- `VPS_HOST`
+- `VPS_USER`
+- `VPS_SSH_KEY`
+
+On each `main` push that changes `docs/docs-site/**`, the workflow uploads the docs bundle to the VPS and verifies that live `https://docs.corgi.network/` and `/openapi.json` hashes match the repository artifacts.
+
 ## Operations checklist
 
 - Keep ports `5432` and `6379` private.

@@ -1,6 +1,7 @@
 # Community-Governed Bluesky Feed
 
 [![Deploy](https://github.com/AndrewNordstrom/bluesky-community-feed/actions/workflows/deploy.yml/badge.svg)](https://github.com/AndrewNordstrom/bluesky-community-feed/actions/workflows/deploy.yml)
+[![Deploy Docs](https://github.com/AndrewNordstrom/bluesky-community-feed/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/AndrewNordstrom/bluesky-community-feed/actions/workflows/deploy-docs.yml)
 [![CI](https://github.com/AndrewNordstrom/bluesky-community-feed/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/AndrewNordstrom/bluesky-community-feed/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/AndrewNordstrom/bluesky-community-feed/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/AndrewNordstrom/bluesky-community-feed/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -59,7 +60,8 @@ A production Bluesky custom feed where subscribers democratically vote on rankin
 - Admin dashboard: governance controls, feed health, interactions, audit log
 - CLI tool (`feed-cli`): full admin operations from any terminal, no VPS access required
 - MCP server: Streamable HTTP admin tools for natural-language feed management
-- OpenAPI documentation at `/docs`
+- Public API reference at [docs.corgi.network](https://docs.corgi.network), auto-deployed from `docs/docs-site/`
+- Admin Swagger UI at `/docs` (production-gated)
 - Research data export: votes, scores, engagement, epochs, audit log (CSV/JSON)
 
 **Engineering**
