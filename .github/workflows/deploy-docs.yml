@@ -1,0 +1,99 @@
+name: Deploy Docs
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - docs/docs-site/**
+      - .github/workflows/deploy-docs.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-docs
+  cancel-in-progress: true
+
+jobs:
+  deploy-docs:
+    name: deploy-docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Validate docs artifacts
+        run: |
+          test -s docs/docs-site/index.html
+          test -s docs/docs-site/openapi.json
+
+      - name: Configure SSH access
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${VPS_SSH_KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${VPS_HOST}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+          # Fail fast if connection/auth is invalid.
+          ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes "${VPS_USER}@${VPS_HOST}" 'echo "SSH connection OK"'
+
+      - name: Publish docs bundle to VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          set -euo pipefail
+          tar -C docs/docs-site -czf /tmp/corgi-docs.tgz .
+          scp -i ~/.ssh/id_ed25519 /tmp/corgi-docs.tgz "${VPS_USER}@${VPS_HOST}:/tmp/corgi-docs.tgz"
+          ssh -i ~/.ssh/id_ed25519 "${VPS_USER}@${VPS_HOST}" '
+            set -euo pipefail
+            DEPLOY_DIR="$(mktemp -d /tmp/corgi-docs-deploy.XXXXXX)"
+            cleanup() {
+              rm -rf "${DEPLOY_DIR}"
+              rm -f /tmp/corgi-docs.tgz
+            }
+            trap cleanup EXIT
+            tar -xzf /tmp/corgi-docs.tgz -C "${DEPLOY_DIR}"
+            sudo mkdir -p /var/www/corgi-docs
+            sudo rsync -a --delete "${DEPLOY_DIR}/" /var/www/corgi-docs/
+            sudo chown -R root:root /var/www/corgi-docs
+            sudo find /var/www/corgi-docs -type d -exec chmod 755 {} +
+            sudo find /var/www/corgi-docs -type f -exec chmod 644 {} +
+            test -s /var/www/corgi-docs/index.html
+            test -s /var/www/corgi-docs/openapi.json
+          '
+          rm -f /tmp/corgi-docs.tgz
+
+      - name: Verify live docs hashes match repo artifacts
+        run: |
+          set -euo pipefail
+          EXPECTED_INDEX_SHA="$(sha256sum docs/docs-site/index.html | awk '{print $1}')"
+          EXPECTED_OPENAPI_SHA="$(sha256sum docs/docs-site/openapi.json | awk '{print $1}')"
+          ACTUAL_INDEX_SHA=""
+          ACTUAL_OPENAPI_SHA=""
+          for attempt in 1 2 3 4 5; do
+            ACTUAL_INDEX_SHA="$(curl -fsSL --max-time 10 https://docs.corgi.network/ | sha256sum | awk '{print $1}')"
+            ACTUAL_OPENAPI_SHA="$(curl -fsSL --max-time 10 https://docs.corgi.network/openapi.json | sha256sum | awk '{print $1}')"
+            if [ "${ACTUAL_INDEX_SHA}" = "${EXPECTED_INDEX_SHA}" ] && [ "${ACTUAL_OPENAPI_SHA}" = "${EXPECTED_OPENAPI_SHA}" ]; then
+              echo "Live docs match repo artifacts."
+              exit 0
+            fi
+            echo "Attempt ${attempt}/5: docs hash mismatch, retrying in 3s..."
+            sleep 3
+          done
+          echo "Live docs hash verification failed."
+          echo "Expected index:  ${EXPECTED_INDEX_SHA}"
+          echo "Actual index:    ${ACTUAL_INDEX_SHA}"
+          echo "Expected openapi: ${EXPECTED_OPENAPI_SHA}"
+          echo "Actual openapi:   ${ACTUAL_OPENAPI_SHA}"
+          exit 1
