@@ -35,13 +35,15 @@ jobs:
             ENV_BACKUP=""
             restore_env_file() {
               if [ -n "${ENV_BACKUP}" ] && [ -f "${ENV_BACKUP}" ]; then
-                mv "${ENV_BACKUP}" .env
+                cp "${ENV_BACKUP}" .env
+                rm -f "${ENV_BACKUP}"
+                ENV_BACKUP=""
               else
                 rm -f .env
               fi
             }
             if [ -f .env ]; then
-              ENV_BACKUP=".env.deploy-test-backup.$(date +%s)"
+              ENV_BACKUP="$(mktemp /tmp/bluesky-feed-env-backup.XXXXXX)"
               cp .env "${ENV_BACKUP}"
             fi
             if [ ! -f .env.example ]; then
