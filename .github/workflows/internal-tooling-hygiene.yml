@@ -1,0 +1,13 @@
+name: internal-tooling-hygiene
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  internal-tooling-hygiene:
+    uses: andrewnordstrom-eng/.github/.github/workflows/internal-tooling-hygiene.yml@main
+    secrets: inherit
