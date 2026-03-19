@@ -54,3 +54,15 @@ test-results/
 
 # Research exports
 data/exports/
+
+# Internal tooling artifacts (local-only; never commit)
+/.claude/
+/.cursor/
+/.codex/
+/.aider/
+/.copilot/
+/AGENTS.md
+/CLAUDE.md
+/CLAUDE_CODE_PROMPT.md
+/TASKING.md
+/Prompts/
