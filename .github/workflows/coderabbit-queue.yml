@@ -1,18 +1,14 @@
 name: coderabbit-queue
 
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, reopened, ready_for_review, synchronize, labeled, unlabeled, converted_to_draft, closed]
 
 permissions:
+  contents: read
   pull-requests: write
   issues: write
 
 jobs:
   coderabbit-queue:
-    if: >-
-      github.event.pull_request.head.repo.fork == false &&
-      (github.event.pull_request.author_association == 'OWNER' ||
-       github.event.pull_request.author_association == 'MEMBER' ||
-       github.event.pull_request.author_association == 'COLLABORATOR')
-    uses: andrewnordstrom-eng/.github-public/.github/workflows/coderabbit-queue.yml@3c607b1f39d2cf8d6dac6029115ad99964109401
+    uses: andrewnordstrom-eng/.github-public/.github/workflows/coderabbit-queue.yml@ed97e9febd99c0e70f55ce64b57db46dd5aded8b
