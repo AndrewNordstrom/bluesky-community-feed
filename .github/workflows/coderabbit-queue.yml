@@ -5,6 +5,7 @@ on:
     types: [opened, reopened, ready_for_review, synchronize, labeled, unlabeled, converted_to_draft, closed]
 
 permissions:
+  contents: read
   pull-requests: write
   issues: write
 
