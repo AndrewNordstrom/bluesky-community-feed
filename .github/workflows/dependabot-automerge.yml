@@ -11,4 +11,4 @@ permissions:
 
 jobs:
   dependabot-automerge:
-    uses: andrewnordstrom-eng/.github-public/.github/workflows/dependabot-automerge.yml@ed97e9febd99c0e70f55ce64b57db46dd5aded8b
+    uses: andrewnordstrom-eng/.github-public/.github/workflows/dependabot-automerge.yml@3aaa6ed6e1feef3410e1c5bbdbfa669d43ca39db
