@@ -695,7 +695,7 @@ After merging `dev/embedding-at-ingestion` to main, the VPS was deployed but emb
 - Scoring pipeline: 1,904 posts in 17s (down from 2,500 in 41s pre-purge)
 
 ### Decisions & alternatives
-- **Soft delete over hard delete**: `deleted=TRUE` preserves data integrity and audit trail.
+- **Soft delete over hard delete**: CLAUDE.md Critical Rule #3 — `deleted=TRUE` preserves data integrity and audit trail.
 - **Purge over backfill**: 10x faster (2 min vs 100 min). The 19% backfill replacement rate meant 81% of posts would keep their keyword vectors anyway — not worth the time.
 - **2-hour cutoff**: Conservative enough to keep recently ingested (properly classified) posts while removing the bulk of keyword-only classified content.
 - **Deadlock retry**: Scoring pipeline running concurrently caused 4 deadlocks — retry-on-deadlock loop handled gracefully.
@@ -757,7 +757,7 @@ The `classification_method` column in `post_scores` always showed `'keyword'` be
 **Files changed:** `scripts/generate-report.py`, `ops/README.md`
 
 ### What changed
-Added `scripts/generate-report.py` — a reusable Python script that SSHs to the VPS, pulls scoring data (top 1000 posts, active epoch weights, system stats) in a single call, and generates a 6-page .docx report with matplotlib charts and styled tables. Supports `--dry-run`, `--csv` for offline mode, `--date` for custom labels, and `--output` for custom paths. Added usage docs to `ops/README.md`.
+Added `scripts/generate-report.py` — a reusable Python script that SSHs to the VPS, pulls scoring data (top 1000 posts, active epoch weights, system stats) in a single call, and generates a 6-page .docx report with matplotlib charts and styled tables. Supports `--dry-run`, `--csv` for offline mode, `--date` for custom labels, and `--output` for custom paths. Added usage docs to `ops/README.md` and a context line to `CLAUDE.md`.
 
 ### Why
 The feed data analysis report had been generated twice before, each time by writing a throwaway Python script in `/tmp/`. Each session reinvented the format, producing inconsistent charts, tables, and styling. This permanent script ensures every future report uses identical structure and presentation.
@@ -782,7 +782,7 @@ Dry-run verified VPS connectivity and data extraction (1000 posts, 910 unique au
 Added two MCP tools: `generate_feed_report` wraps `scripts/generate-report.py` via `execFile` with 120s timeout, exposing report generation to any MCP client. `get_feed_snapshot` combines `/api/admin/status` and `/api/admin/feed-health` into a single JSON response for quick metric checks without generating a full docx.
 
 ### Why
-The report script was created in the previous entry but could only be triggered from the command line. MCP tools let the CLI and the admin dashboard trigger report generation with natural language.
+The report script was created in the previous entry but could only be triggered from the command line. MCP tools let Claude Code, the CLI, and the admin dashboard trigger report generation with natural language.
 
 ### Measurements
 402 tests pass across 66 files. MCP tool count: 28 to 30. TypeScript compiles clean. Pre-commit hook passes.
@@ -821,3 +821,34 @@ Bluesky app showed "could not resolve identity: did:web:feed.corgi.network" — 
 ### Open questions
 - Pre-existing `ajv` dependency issue causes 25 test file failures (missing `json-schema-draft-07.json` in ajv@8.18.0). Unrelated to this fix, needs separate investigation.
 - Feed record may need re-publishing with `npm run publish-feed` if Bluesky still caches old `did:web` reference.
+
+## 2026-03-13 #02 — Production Reliability: Systemd Watchdog & Self-Healing
+**Branch:** `dev/production-reliability`
+**Commits:** `1d5721d`
+**PR:** #25
+**Files changed:** ops/bluesky-feed.service, src/lib/watchdog.ts, src/index.ts, src/lib/shutdown.ts, ops/health-watchdog, ops/health-watchdog.service, ops/health-watchdog.timer, ops/setup-monitoring.sh, ops/install.sh, .github/workflows/deploy.yml, .github/workflows/daily-health.yml, package.json, package-lock.json, tests/watchdog.test.ts
+
+### What changed
+Added systemd watchdog integration so the VPS auto-detects and auto-recovers from silent failures (like the recent CORS hang where the process was alive but not serving HTTP). The Node app sends sd_notify heartbeats every 30s, gated on `isReady()` (DB + Redis healthy). If health checks fail for >60s, systemd kills and restarts the process. Also added post-deploy health verification with automatic rollback, daily health alerting (GitHub Issues + healthchecks.io), external health-watchdog timer, and cgroup memory limits.
+
+### Why
+The feed was down for days because the Node process was running but not responding to HTTP — systemd reported "active (running)" the whole time. The existing health probes (`/health/ready`) were never checked by anything automated. This closes every gap: in-process watchdog catches unhealthy state, external timer catches unresponsive process, deploy workflow catches bad deploys, and daily workflow alerts on sustained failures.
+
+### Measurements
+- Build: clean, no TypeScript errors
+- Tests: 64 passed, 3 failed (pre-existing @atproto/xrpc-server express module issue)
+- ajv override fixed 22 of 25 previously broken test files
+- Watchdog interval: 30s (half of WatchdogSec=60, per systemd docs)
+- Health-watchdog timer: 5-min interval with 3 retries before restart
+
+### Decisions & alternatives
+- **execFile over node:dgram**: Originally tried `createSocket('unix_dgram')` for sd_notify but TypeScript types don't include `unix_dgram` as a valid SocketType. Switched to `execFile('systemd-notify', ['WATCHDOG=1'])` — simpler, type-safe, no npm deps, hardcoded args prevent shell injection.
+- **Belt-and-suspenders**: In-process watchdog + external bash timer. The in-process watchdog catches DB/Redis failures; the external timer catches cases where the process is responsive but `/health/ready` returns 503 (or the watchdog itself is broken).
+- **Deploy rollback strategy**: Saves `PREV_COMMIT` SHA before deploy, rolls back via `git checkout $PREV_COMMIT` + rebuild + restart. Simple and reliable vs. blue-green or canary.
+- **ajv@8.17.1 pin via overrides**: Chose npm overrides over `resolutions` (yarn) or patching. Fixes the `@fastify/ajv-compiler@4.0.5` incompatibility with `ajv@8.18.0` that removed `json-schema-draft-07.json`.
+
+### Open questions
+- 3 remaining test failures (`config-defaults-security`, `feed-skeleton-validation`, `rate-limit-config`) are a different pre-existing issue — `Cannot find module './lib/express'` from `@atproto/xrpc-server`. Needs separate investigation.
+- Systemd units need manual installation on VPS via `ops/install.sh` after merge.
+- UptimeRobot and Healthchecks.io accounts need manual setup (see `ops/setup-monitoring.sh`).
+- `HEALTHCHECK_PING_URL` GitHub secret needs to be configured for deploy/daily-health alerting.
