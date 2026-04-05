@@ -368,17 +368,23 @@ function validateRepoContract(problems) {
     }
   });
 
-  const trackerMatch = content.match(
-    /^###\s+Doc Compliance Tracker.*$(?:\n+|\r\n+)([\s\S]*?)(?=^##\s|\Z)/m,
-  );
-
-  if (!trackerMatch) {
+  const trackerHeadingIndex = content.indexOf('### Doc Compliance Tracker');
+  if (trackerHeadingIndex === -1) {
     problems.push('repo contract missing "### Doc Compliance Tracker" subsection');
     return;
   }
 
-  const trackerLines = trackerMatch[1]
-    .split('\n')
+  const trackerSection = content.slice(trackerHeadingIndex);
+  const trackerSectionLines = trackerSection.split('\n');
+  const nextTopLevelHeadingIndex = trackerSectionLines.findIndex(
+    (line, index) => index > 0 && /^##\s+/.test(line),
+  );
+  const trackerBodyLines =
+    nextTopLevelHeadingIndex === -1
+      ? trackerSectionLines.slice(1)
+      : trackerSectionLines.slice(1, nextTopLevelHeadingIndex);
+
+  const trackerLines = trackerBodyLines
     .map(line => line.trim())
     .filter(Boolean)
     .filter(line => line.startsWith('|'));

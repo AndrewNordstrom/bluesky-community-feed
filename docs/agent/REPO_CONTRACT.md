@@ -281,12 +281,12 @@ See `docs/OPS_RUNBOOK.md` for full operational procedures.
 |--------------|----------------|--------|-------|
 | readme | `README.md` | Exists | Canonical entry point for repo overview and setup |
 | repo_contract | `docs/agent/REPO_CONTRACT.md` | Exists | Added in this PR |
-| architecture | `docs/ARCHITECTURE.md` | Missing | Partial coverage lives in `docs/SYSTEM_OVERVIEW.md` |
-| operator_runbook | `docs/runbooks/operator-quickstart.md` | Missing | Partial coverage lives in `docs/OPS_RUNBOOK.md` |
-| incident_runbook | `docs/runbooks/incident-response.md` | Missing | Partial coverage lives in `docs/OPS_RUNBOOK.md` incident playbooks |
-| release_operability | `docs/OPERABILITY.md` | Missing | Partial coverage lives in `docs/DEPLOYMENT.md` and `RELEASING.md` |
-| adr_index | `docs/adr/README.md` | Missing | No tracked ADR index yet |
-| prd_or_strategy | `docs/PRD.md` | Missing | ChatPRD brief exists externally, but no tracked repo PRD yet |
+| architecture | `docs/ARCHITECTURE.md` | Exists | Added in this PR |
+| operator_runbook | `docs/runbooks/operator-quickstart.md` | Exists | Added in this PR |
+| incident_runbook | `docs/runbooks/incident-response.md` | Exists | Added in this PR |
+| release_operability | `docs/OPERABILITY.md` | Exists | Added in this PR |
+| adr_index | `docs/adr/README.md` | Exists | Added in this PR; no ADR files tracked yet |
+| prd_or_strategy | `docs/PRD.md` | Exists | Added in this PR |
 | contributing | `CONTRIBUTING.md` | Exists | Repo-local contribution guide already tracked |
 
 ---
