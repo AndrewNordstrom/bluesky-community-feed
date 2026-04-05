@@ -1,0 +1,19 @@
+name: coderabbit-freshness
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+  status: {}
+  check_suite:
+    types: [completed]
+
+permissions:
+  contents: read
+  checks: read
+  pull-requests: read
+  statuses: read
+
+jobs:
+  coderabbit-freshness:
+    uses: andrewnordstrom-eng/.github/.github/workflows/coderabbit-freshness.yml@8b68c0663d4a7cd72bdf6051a5cff65f9ff46188
