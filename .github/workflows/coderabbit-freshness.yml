@@ -10,6 +10,9 @@ on:
 
 permissions:
   contents: read
+  checks: read
+  pull-requests: read
+  statuses: read
 
 jobs:
   coderabbit-freshness:
