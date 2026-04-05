@@ -432,7 +432,21 @@ function validateRepoContract(problems) {
       return;
     }
 
-    if (status === 'Exists' && !existsSync(path.join(repoRoot, canonicalPath))) {
+    const resolvedCanonicalPath = path.resolve(repoRoot, canonicalPath);
+    const relativeCanonicalPath = path.relative(repoRoot, resolvedCanonicalPath);
+    const isOutsideRepo =
+      path.isAbsolute(canonicalPath) ||
+      relativeCanonicalPath.startsWith('..') ||
+      path.isAbsolute(relativeCanonicalPath);
+
+    if (isOutsideRepo) {
+      problems.push(
+        `repo contract doc compliance row ${index + 1} has out-of-repo canonical path "${canonicalPath}"`
+      );
+      return;
+    }
+
+    if (status === 'Exists' && !existsSync(resolvedCanonicalPath)) {
       problems.push(
         `repo contract doc compliance row ${index + 1} marks "${canonicalPath}" as Exists, but the file is missing`
       );
