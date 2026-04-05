@@ -183,7 +183,7 @@ npm run cli -- --help
 
 ---
 
-## 6. Deploy and Rollback
+## 6. Deploy and Rollback Notes
 
 ### Production deploy path
 
@@ -232,6 +232,7 @@ Notes:
 ### Infrastructure containers
 
 PostgreSQL and Redis run via Docker Compose on the VPS:
+
 ```bash
 cd /opt/bluesky-feed
 docker compose -f docker-compose.prod.yml up -d
@@ -273,6 +274,20 @@ See `docs/OPS_RUNBOOK.md` for full operational procedures.
 | Legal (ToS, Privacy) | `legal/` |
 | OpenAPI spec | `docs/openapi-public.json` |
 | API reference (live) | `https://docs.corgi.network` |
+
+### Doc Compliance Tracker (production_service)
+
+| Required Doc | Canonical Path | Status | Notes |
+|--------------|----------------|--------|-------|
+| readme | `README.md` | Exists | Canonical entry point for repo overview and setup |
+| repo_contract | `docs/agent/REPO_CONTRACT.md` | Exists | Added in this PR |
+| architecture | `docs/ARCHITECTURE.md` | Missing | Partial coverage lives in `docs/SYSTEM_OVERVIEW.md` |
+| operator_runbook | `docs/runbooks/operator-quickstart.md` | Missing | Partial coverage lives in `docs/OPS_RUNBOOK.md` |
+| incident_runbook | `docs/runbooks/incident-response.md` | Missing | Partial coverage lives in `docs/OPS_RUNBOOK.md` incident playbooks |
+| release_operability | `docs/OPERABILITY.md` | Missing | Partial coverage lives in `docs/DEPLOYMENT.md` and `RELEASING.md` |
+| adr_index | `docs/adr/README.md` | Missing | No tracked ADR index yet |
+| prd_or_strategy | `docs/PRD.md` | Missing | ChatPRD brief exists externally, but no tracked repo PRD yet |
+| contributing | `CONTRIBUTING.md` | Exists | Repo-local contribution guide already tracked |
 
 ---
 
@@ -338,19 +353,3 @@ See `docs/OPS_RUNBOOK.md` for full operational procedures.
 | Retention/cleanup logs | `sudo journalctl -t bluesky-ops-retention -n 100 --no-pager` |
 | Linear project board | `https://linear.app/andrewnord/project/bluesky-corgi-8f5a0fc7a693` |
 | API documentation (live) | `https://docs.corgi.network` |
-
----
-
-## Doc Compliance Tracker (production_service)
-
-| Required Doc | Canonical Path | Status |
-|--------------|----------------|--------|
-| readme | `README.md` | Exists |
-| repo_contract | `docs/agent/REPO_CONTRACT.md` | Added (this file) |
-| architecture | `docs/ARCHITECTURE.md` | Missing (partial coverage in `docs/SYSTEM_OVERVIEW.md`) |
-| operator_runbook | `docs/runbooks/operator-quickstart.md` | Missing (partial coverage in `docs/OPS_RUNBOOK.md`) |
-| incident_runbook | `docs/runbooks/incident-response.md` | Missing (partial coverage in `docs/OPS_RUNBOOK.md` incident playbooks section) |
-| release_operability | `docs/OPERABILITY.md` | Missing (partial coverage in `docs/DEPLOYMENT.md` and `RELEASING.md`) |
-| adr_index | `docs/adr/README.md` | Missing |
-| prd_or_strategy | `docs/PRD.md` | Missing (ChatPRD product brief exists externally) |
-| contributing | `CONTRIBUTING.md` | Exists |
