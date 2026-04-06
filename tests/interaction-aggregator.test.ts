@@ -28,9 +28,8 @@ vi.mock('../src/lib/logger.js', () => ({
   },
 }));
 
-const { startInteractionAggregator, stopInteractionAggregator } = await import(
-  '../src/maintenance/interaction-aggregator.js'
-);
+const { startInteractionAggregator, stopInteractionAggregator } =
+  await import('../src/maintenance/interaction-aggregator.js');
 
 describe('interaction aggregator', () => {
   beforeEach(() => {
@@ -73,23 +72,29 @@ describe('interaction aggregator', () => {
     dbQueryMock
       .mockResolvedValueOnce({ rows: [], rowCount: 0 }) // daily stats rollup
       .mockResolvedValueOnce({ rows: [{ id: 3 }], rowCount: 1 }) // active epoch
-      .mockResolvedValueOnce({ // feed request stats
-        rows: [{
-          total_feed_loads: '100',
-          unique_viewers: '25',
-          avg_scroll_depth: '75.5',
-          returning_viewer_pct: '40.0',
-          posts_served: '5000',
-        }],
+      .mockResolvedValueOnce({
+        // feed request stats
+        rows: [
+          {
+            total_feed_loads: '100',
+            unique_viewers: '25',
+            avg_scroll_depth: '75.5',
+            returning_viewer_pct: '40.0',
+            posts_served: '5000',
+          },
+        ],
         rowCount: 1,
       })
-      .mockResolvedValueOnce({ // engagement stats
-        rows: [{
-          total_attributions: '500',
-          engaged: '50',
-          engagement_rate: '0.1',
-          avg_engagement_position: '12.5',
-        }],
+      .mockResolvedValueOnce({
+        // engagement stats
+        rows: [
+          {
+            total_attributions: '500',
+            engaged: '50',
+            engagement_rate: '0.1',
+            avg_engagement_position: '12.5',
+          },
+        ],
         rowCount: 1,
       })
       .mockResolvedValue({ rows: [], rowCount: 0 }); // remaining calls
@@ -99,7 +104,9 @@ describe('interaction aggregator', () => {
 
     // Should have called epoch stats UPSERT
     const epochStatsCalls = dbQueryMock.mock.calls.filter(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('INSERT INTO epoch_engagement_stats')
+      (call: unknown[]) =>
+        typeof call[0] === 'string' &&
+        (call[0] as string).includes('INSERT INTO epoch_engagement_stats'),
     );
     expect(epochStatsCalls.length).toBeGreaterThanOrEqual(1);
 
@@ -124,7 +131,9 @@ describe('interaction aggregator', () => {
 
     // Should NOT have an INSERT into epoch_engagement_stats
     const epochStatsCalls = dbQueryMock.mock.calls.filter(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('INSERT INTO epoch_engagement_stats')
+      (call: unknown[]) =>
+        typeof call[0] === 'string' &&
+        (call[0] as string).includes('INSERT INTO epoch_engagement_stats'),
     );
     expect(epochStatsCalls).toHaveLength(0);
   });

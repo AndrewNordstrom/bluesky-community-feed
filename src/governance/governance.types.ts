@@ -7,7 +7,10 @@
  * - Epoch information
  * - Audit log entries
  */
-import { createDefaultGovernanceWeightRecord, GOVERNANCE_WEIGHT_KEYS } from '../config/votable-params.js';
+import {
+  createDefaultGovernanceWeightRecord,
+  GOVERNANCE_WEIGHT_KEYS,
+} from '../config/votable-params.js';
 import type { GovernanceWeights, ContentRules } from '../shared/api-types.js';
 
 export type { GovernanceWeights, ContentRules } from '../shared/api-types.js';
@@ -140,9 +143,7 @@ export function normalizeWeights(weights: GovernanceWeights): GovernanceWeights 
     return createDefaultGovernanceWeightRecord();
   }
 
-  const normalized = fromEntries(
-    WEIGHT_KEYS.map((key) => [key, weights[key] / total] as const)
-  );
+  const normalized = fromEntries(WEIGHT_KEYS.map((key) => [key, weights[key] / total] as const));
   const redistributed = redistributeNegativeDeficit(normalized);
   const clamped = clampWeights(redistributed);
   const clampedTotal = sumWeights(clamped);
@@ -152,7 +153,7 @@ export function normalizeWeights(weights: GovernanceWeights): GovernanceWeights 
   }
 
   const renormalized = fromEntries(
-    WEIGHT_KEYS.map((key) => [key, clamped[key] / clampedTotal] as const)
+    WEIGHT_KEYS.map((key) => [key, clamped[key] / clampedTotal] as const),
   );
   const rounded = roundToExactUnitSum(renormalized);
   assertNormalizedWeights(rounded);
@@ -170,7 +171,7 @@ export function validateWeightsSum(weights: GovernanceWeights): boolean {
 }
 
 function fromEntries(
-  entries: ReadonlyArray<readonly [keyof GovernanceWeights, number]>
+  entries: ReadonlyArray<readonly [keyof GovernanceWeights, number]>,
 ): GovernanceWeights {
   return Object.fromEntries(entries) as unknown as GovernanceWeights;
 }
@@ -181,7 +182,7 @@ function sumWeights(weights: GovernanceWeights): number {
 
 function clampWeights(weights: GovernanceWeights): GovernanceWeights {
   return fromEntries(
-    WEIGHT_KEYS.map((key) => [key, Math.min(1, Math.max(0, weights[key]))] as const)
+    WEIGHT_KEYS.map((key) => [key, Math.min(1, Math.max(0, weights[key]))] as const),
   );
 }
 
@@ -286,6 +287,10 @@ export interface ContentRulesRow {
   exclude_keywords?: string[];
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item): item is string => typeof item === 'string');
+}
+
 /**
  * Result of content filtering check.
  */
@@ -317,10 +322,18 @@ export function normalizeKeywords(keywords: string[]): string[] {
 /**
  * Convert database row to ContentRules.
  */
-export function toContentRules(row: ContentRulesRow | null): ContentRules {
+export function toContentRules(row: unknown): ContentRules {
+  if (!row || typeof row !== 'object') {
+    return {
+      includeKeywords: [],
+      excludeKeywords: [],
+    };
+  }
+
+  const candidate = row as Partial<ContentRulesRow>;
   return {
-    includeKeywords: row?.include_keywords ?? [],
-    excludeKeywords: row?.exclude_keywords ?? [],
+    includeKeywords: isStringArray(candidate.include_keywords) ? candidate.include_keywords : [],
+    excludeKeywords: isStringArray(candidate.exclude_keywords) ? candidate.exclude_keywords : [],
   };
 }
 

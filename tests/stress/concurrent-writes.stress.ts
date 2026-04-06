@@ -21,20 +21,22 @@ export async function runConcurrentWritesStress(): Promise<ScenarioResult> {
   try {
     const epochId = await ensureActiveEpoch();
 
-    await db.query('TRUNCATE TABLE likes, post_engagement, posts, engagement_attributions RESTART IDENTITY CASCADE');
+    await db.query(
+      'TRUNCATE TABLE likes, post_engagement, posts, engagement_attributions RESTART IDENTITY CASCADE',
+    );
 
     await db.query(
       `INSERT INTO posts (uri, cid, author_did, text, created_at, indexed_at, deleted)
        VALUES ($1, $2, $3, $4, NOW(), NOW(), FALSE)
        ON CONFLICT (uri) DO NOTHING`,
-      [postUri, 'cid-concurrent', 'did:plc:concurrent-author', 'concurrent write stress target']
+      [postUri, 'cid-concurrent', 'did:plc:concurrent-author', 'concurrent write stress target'],
     );
 
     await db.query(
       `INSERT INTO post_engagement (post_uri, like_count, repost_count, reply_count, updated_at)
        VALUES ($1, 0, 0, 0, NOW())
        ON CONFLICT (post_uri) DO UPDATE SET updated_at = NOW()`,
-      [postUri]
+      [postUri],
     );
 
     const attributionValues: string[] = [];
@@ -49,15 +51,14 @@ export async function runConcurrentWritesStress(): Promise<ScenarioResult> {
       `INSERT INTO engagement_attributions (post_uri, viewer_did, epoch_id, served_at, position_in_feed)
        VALUES ${attributionValues.join(', ')}
        ON CONFLICT (post_uri, viewer_did, epoch_id) DO NOTHING`,
-      attributionParams
+      attributionParams,
     );
 
     const likeOps = Array.from({ length: LIKE_CONCURRENCY }, (_, i) =>
-      handleLike(
-        `at://did:plc:liker${i}/app.bsky.feed.like/${i}`,
-        `did:plc:liker${i}`,
-        { subject: { uri: postUri }, createdAt: new Date().toISOString() }
-      )
+      handleLike(`at://did:plc:liker${i}/app.bsky.feed.like/${i}`, `did:plc:liker${i}`, {
+        subject: { uri: postUri },
+        createdAt: new Date().toISOString(),
+      }),
     );
 
     await Promise.all(likeOps);
@@ -79,7 +80,7 @@ export async function runConcurrentWritesStress(): Promise<ScenarioResult> {
          (SELECT COUNT(*)::text FROM engagement_attributions
           WHERE post_uri = $1 AND epoch_id = $2 AND engaged_at IS NOT NULL) AS engaged_total,
          (SELECT (COUNT(*) - COUNT(DISTINCT uri))::text FROM likes WHERE subject_uri = $1) AS duplicate_like_uris`,
-      [postUri, epochId]
+      [postUri, epochId],
     );
 
     const row = counts.rows[0];
@@ -144,7 +145,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       process.exit(result.success ? 0 : 1);
     })
     .catch((err) => {
-      process.stderr.write(`${err instanceof Error ? err.stack ?? err.message : String(err)}\n`);
+      process.stderr.write(`${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`);
       process.exit(1);
     });
 }

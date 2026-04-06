@@ -59,7 +59,7 @@ export async function startCleanup(): Promise<void> {
 
   logger.info(
     { intervalMs: CLEANUP_INTERVAL_MS, retentionHours: RETENTION_HOURS },
-    'Starting cleanup scheduler'
+    'Starting cleanup scheduler',
   );
 
   // Run immediately on start
@@ -150,7 +150,10 @@ async function runCleanupInternal(): Promise<CleanupResult> {
   try {
     feedUris = await redis.zrange('feed:current', 0, -1);
   } catch (err) {
-    logger.warn({ err }, 'Failed to read feed:current from Redis, proceeding with empty protection list');
+    logger.warn(
+      { err },
+      'Failed to read feed:current from Redis, proceeding with empty protection list',
+    );
   }
 
   // 2. Batch-delete old unscored posts
@@ -231,7 +234,7 @@ async function runCleanupInternal(): Promise<CleanupResult> {
       `INSERT INTO system_status (key, value, updated_at)
        VALUES ('last_cleanup_run', $1, NOW())
        ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
-      [JSON.stringify(result)]
+      [JSON.stringify(result)],
     );
   } catch (err) {
     logger.warn({ err }, 'Failed to store cleanup result in system_status');
@@ -247,7 +250,6 @@ async function batchDeleteOldPosts(feedUris: string[]): Promise<number> {
   try {
     await client.query("SET statement_timeout = '120s'");
 
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       if (isShuttingDown) break;
 
@@ -260,7 +262,7 @@ async function batchDeleteOldPosts(feedUris: string[]): Promise<number> {
              AND p.uri != ALL($2::text[])
            LIMIT $3
          )`,
-        [RETENTION_HOURS, feedUris, BATCH_SIZE]
+        [RETENTION_HOURS, feedUris, BATCH_SIZE],
       );
 
       const deleted = result.rowCount ?? 0;
@@ -287,7 +289,6 @@ async function batchDeleteOrphanedLikes(): Promise<number> {
   try {
     await client.query("SET statement_timeout = '120s'");
 
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       if (isShuttingDown) break;
 
@@ -299,7 +300,7 @@ async function batchDeleteOrphanedLikes(): Promise<number> {
              AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.uri = l.subject_uri)
            LIMIT $2
          )`,
-        [RETENTION_HOURS, BATCH_SIZE]
+        [RETENTION_HOURS, BATCH_SIZE],
       );
 
       const deleted = result.rowCount ?? 0;
@@ -326,7 +327,6 @@ async function batchDeleteOrphanedReposts(): Promise<number> {
   try {
     await client.query("SET statement_timeout = '120s'");
 
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       if (isShuttingDown) break;
 
@@ -338,7 +338,7 @@ async function batchDeleteOrphanedReposts(): Promise<number> {
              AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.uri = r.subject_uri)
            LIMIT $2
          )`,
-        [RETENTION_HOURS, BATCH_SIZE]
+        [RETENTION_HOURS, BATCH_SIZE],
       );
 
       const deleted = result.rowCount ?? 0;
@@ -365,7 +365,6 @@ async function batchDeleteStaleLikes(): Promise<number> {
   try {
     await client.query("SET statement_timeout = '120s'");
 
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       if (isShuttingDown) break;
 
@@ -377,7 +376,7 @@ async function batchDeleteStaleLikes(): Promise<number> {
              AND NOT EXISTS (SELECT 1 FROM post_scores ps WHERE ps.post_uri = l.subject_uri)
            LIMIT $2
          )`,
-        [INTERACTION_RETENTION_DAYS, BATCH_SIZE]
+        [INTERACTION_RETENTION_DAYS, BATCH_SIZE],
       );
 
       const deleted = result.rowCount ?? 0;
@@ -404,7 +403,6 @@ async function batchDeleteStaleReposts(): Promise<number> {
   try {
     await client.query("SET statement_timeout = '120s'");
 
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       if (isShuttingDown) break;
 
@@ -416,7 +414,7 @@ async function batchDeleteStaleReposts(): Promise<number> {
              AND NOT EXISTS (SELECT 1 FROM post_scores ps WHERE ps.post_uri = r.subject_uri)
            LIMIT $2
          )`,
-        [INTERACTION_RETENTION_DAYS, BATCH_SIZE]
+        [INTERACTION_RETENTION_DAYS, BATCH_SIZE],
       );
 
       const deleted = result.rowCount ?? 0;
@@ -443,7 +441,6 @@ async function batchDeleteOldFollows(): Promise<number> {
   try {
     await client.query("SET statement_timeout = '120s'");
 
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       if (isShuttingDown) break;
 
@@ -454,7 +451,7 @@ async function batchDeleteOldFollows(): Promise<number> {
            WHERE f.created_at < NOW() - ($1::int * INTERVAL '1 day')
            LIMIT $2
          )`,
-        [INTERACTION_RETENTION_DAYS, BATCH_SIZE]
+        [INTERACTION_RETENTION_DAYS, BATCH_SIZE],
       );
 
       const deleted = result.rowCount ?? 0;

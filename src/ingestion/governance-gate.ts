@@ -61,19 +61,19 @@ async function loadTopicWeights(): Promise<Record<string, number> | null> {
         }
         logger.warn(
           { reason: 'cache_parse_failed' },
-          'Cached topic weights had unexpected shape, falling back to database'
+          'Cached topic weights had unexpected shape, falling back to database',
         );
       } catch (error) {
         logger.warn(
           { error, reason: 'cache_parse_failed' },
-          'Failed to parse cached topic weights, falling back to database'
+          'Failed to parse cached topic weights, falling back to database',
         );
       }
     }
   } catch (error) {
     logger.warn(
       { error, reason: 'redis_read_failed' },
-      'Failed to read topic weights from Redis, falling back to database'
+      'Failed to read topic weights from Redis, falling back to database',
     );
   }
 
@@ -82,7 +82,7 @@ async function loadTopicWeights(): Promise<Record<string, number> | null> {
     const result = await db.query<{ topic_weights: Record<string, number> | null }>(
       `SELECT topic_weights FROM governance_epochs
        WHERE status IN ('active', 'voting')
-       ORDER BY id DESC LIMIT 1`
+       ORDER BY id DESC LIMIT 1`,
     );
 
     if (result.rows.length === 0 || !result.rows[0].topic_weights) {
@@ -98,21 +98,18 @@ async function loadTopicWeights(): Promise<Record<string, number> | null> {
     } catch (error) {
       logger.warn(
         { error, reason: 'redis_write_failed' },
-        'Failed to cache topic weights in Redis'
+        'Failed to cache topic weights in Redis',
       );
     }
 
     logger.debug(
       { topicCount: Object.keys(weights).length },
-      'Topic weights loaded from database for governance gate'
+      'Topic weights loaded from database for governance gate',
     );
 
     return weights;
   } catch (error) {
-    logger.error(
-      { error },
-      'Failed to load topic weights from database, gate will fail-open'
-    );
+    logger.error({ error }, 'Failed to load topic weights from database, gate will fail-open');
     return null;
   }
 }
@@ -127,7 +124,7 @@ export async function loadGovernanceGateWeights(): Promise<void> {
     gateReady = true;
     logger.info(
       { topicCount: Object.keys(weights).length },
-      'Governance gate initialized with topic weights'
+      'Governance gate initialized with topic weights',
     );
   }
 }
@@ -194,9 +191,8 @@ export async function checkGovernanceGate(topicVector: TopicVector): Promise<Gat
   const baseRelevance = weightedSum / scoreSum;
 
   // Confidence multiplier: dampen single weak keyword matches
-  const confidence = CONFIDENCE_THRESHOLD > 0
-    ? Math.min(1.0, scoreSum / CONFIDENCE_THRESHOLD)
-    : 1.0;
+  const confidence =
+    CONFIDENCE_THRESHOLD > 0 ? Math.min(1.0, scoreSum / CONFIDENCE_THRESHOLD) : 1.0;
 
   const relevance = Math.max(0, Math.min(1, baseRelevance * confidence));
 

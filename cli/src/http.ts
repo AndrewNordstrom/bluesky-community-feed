@@ -22,11 +22,7 @@ export async function apiGet<T>(path: string, config: CliConfig): Promise<T> {
 /**
  * Make a POST request to the feed server API.
  */
-export async function apiPost<T>(
-  path: string,
-  body: unknown,
-  config: CliConfig
-): Promise<T> {
+export async function apiPost<T>(path: string, body: unknown, config: CliConfig): Promise<T> {
   const cookie = getSessionCookie(config);
   const res = await fetch(`${config.serverUrl}${path}`, {
     method: 'POST',
@@ -42,11 +38,7 @@ export async function apiPost<T>(
 /**
  * Make a PATCH request to the feed server API.
  */
-export async function apiPatch<T>(
-  path: string,
-  body: unknown,
-  config: CliConfig
-): Promise<T> {
+export async function apiPatch<T>(path: string, body: unknown, config: CliConfig): Promise<T> {
   const cookie = getSessionCookie(config);
   const res = await fetch(`${config.serverUrl}${path}`, {
     method: 'PATCH',
@@ -62,10 +54,7 @@ export async function apiPatch<T>(
 /**
  * Make a DELETE request to the feed server API.
  */
-export async function apiDelete<T>(
-  path: string,
-  config: CliConfig
-): Promise<T> {
+export async function apiDelete<T>(path: string, config: CliConfig): Promise<T> {
   const cookie = getSessionCookie(config);
   const res = await fetch(`${config.serverUrl}${path}`, {
     method: 'DELETE',
@@ -79,7 +68,7 @@ export async function apiDelete<T>(
  */
 export async function apiStream(
   path: string,
-  config: CliConfig
+  config: CliConfig,
 ): Promise<ReadableStream<Uint8Array>> {
   const cookie = getSessionCookie(config);
   const res = await fetch(`${config.serverUrl}${path}`, {

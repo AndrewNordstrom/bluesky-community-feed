@@ -49,9 +49,13 @@ function formatWeightChanges(oldWeights: GovernanceWeights, newWeights: Governan
     if (Math.abs(diff) < 0.5) {
       changes.push(`${label}: ${newVal.toFixed(0)}% (unchanged)`);
     } else if (diff > 0) {
-      changes.push(`${label}: ${oldVal.toFixed(0)}% -> ${newVal.toFixed(0)}% (+${diff.toFixed(0)}%)`);
+      changes.push(
+        `${label}: ${oldVal.toFixed(0)}% -> ${newVal.toFixed(0)}% (+${diff.toFixed(0)}%)`,
+      );
     } else {
-      changes.push(`${label}: ${oldVal.toFixed(0)}% -> ${newVal.toFixed(0)}% (${diff.toFixed(0)}%)`);
+      changes.push(
+        `${label}: ${oldVal.toFixed(0)}% -> ${newVal.toFixed(0)}% (${diff.toFixed(0)}%)`,
+      );
     }
   }
 

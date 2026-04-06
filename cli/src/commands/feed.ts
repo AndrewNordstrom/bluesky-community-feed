@@ -11,9 +11,7 @@ import { printJson, printSummary, printError, printSuccess } from '../output.js'
 
 /** Register feed commands on the program. */
 export function registerFeedCommands(program: Command): void {
-  const feed = program
-    .command('feed')
-    .description('Feed operations');
+  const feed = program.command('feed').description('Feed operations');
 
   // ── Health ──
   feed
@@ -22,10 +20,7 @@ export function registerFeedCommands(program: Command): void {
     .action(async () => {
       try {
         const config = resolveConfig(program.opts());
-        const data = await apiGet<Record<string, unknown>>(
-          '/api/admin/feed-health',
-          config
-        );
+        const data = await apiGet<Record<string, unknown>>('/api/admin/feed-health', config);
 
         if (config.json) {
           printJson(data);
@@ -54,11 +49,7 @@ export function registerFeedCommands(program: Command): void {
     .action(async () => {
       try {
         const config = resolveConfig(program.opts());
-        const data = await apiPost<Record<string, unknown>>(
-          '/api/admin/feed/rescore',
-          {},
-          config
-        );
+        const data = await apiPost<Record<string, unknown>>('/api/admin/feed/rescore', {}, config);
 
         if (config.json) {
           printJson(data);
@@ -81,7 +72,7 @@ export function registerFeedCommands(program: Command): void {
         const data = await apiPost<Record<string, unknown>>(
           '/api/admin/jetstream/reconnect',
           {},
-          config
+          config,
         );
 
         if (config.json) {

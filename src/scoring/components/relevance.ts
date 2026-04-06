@@ -70,9 +70,8 @@ export function scoreRelevance(post: PostForScoring, context: ScoringContext): n
   // scoreSum reflects total topic signal strength from the classifier.
   // A single weak match (scoreSum ≈ 0.2) gets low confidence.
   // Multiple strong matches (scoreSum > threshold) get full confidence.
-  const confidence = CONFIDENCE_THRESHOLD > 0
-    ? Math.min(1.0, scoreSum / CONFIDENCE_THRESHOLD)
-    : 1.0; // Disabled when threshold = 0
+  const confidence =
+    CONFIDENCE_THRESHOLD > 0 ? Math.min(1.0, scoreSum / CONFIDENCE_THRESHOLD) : 1.0; // Disabled when threshold = 0
 
   return Math.max(0, Math.min(1, baseRelevance * confidence));
 }

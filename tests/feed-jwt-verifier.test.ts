@@ -29,7 +29,9 @@ function makeJwt(payload: Record<string, unknown>): string {
 describe('verifyFeedRequesterDid', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    resolveAtprotoKeyMock.mockResolvedValue('did:key:zQ3shokFTS3brHcDQrn82RUDfCZESWL1ZdCEJwekUDPQiYBme');
+    resolveAtprotoKeyMock.mockResolvedValue(
+      'did:key:zQ3shokFTS3brHcDQrn82RUDfCZESWL1ZdCEJwekUDPQiYBme',
+    );
   });
 
   it('returns null with missing authorization header', async () => {
@@ -125,7 +127,7 @@ describe('verifyFeedRequesterDid', () => {
       jwt,
       expectedAudience,
       'app.bsky.feed.getFeedSkeleton',
-      expect.any(Function)
+      expect.any(Function),
     );
   });
 });

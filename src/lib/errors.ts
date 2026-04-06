@@ -9,10 +9,10 @@
  * Standard API error response format.
  */
 export interface ApiErrorResponse {
-  error: string;         // Machine-readable error code
-  message: string;       // Human-readable message
+  error: string; // Machine-readable error code
+  message: string; // Human-readable message
   correlationId?: string; // Request correlation ID for debugging
-  details?: unknown;     // Optional additional details (e.g., validation errors)
+  details?: unknown; // Optional additional details (e.g., validation errors)
 }
 
 /**
@@ -23,7 +23,7 @@ export class AppError extends Error {
     public readonly statusCode: number,
     public readonly errorCode: string,
     message: string,
-    public readonly details?: unknown
+    public readonly details?: unknown,
   ) {
     super(message);
     this.name = 'AppError';
@@ -55,30 +55,25 @@ export const Errors = {
   VALIDATION_ERROR: (message: string, details?: unknown) =>
     new AppError(400, 'VALIDATION_ERROR', message, details),
 
-  BAD_REQUEST: (message: string) =>
-    new AppError(400, 'BAD_REQUEST', message),
+  BAD_REQUEST: (message: string) => new AppError(400, 'BAD_REQUEST', message),
 
   // 401 Unauthorized
-  UNAUTHORIZED: (message = 'Authentication required') =>
-    new AppError(401, 'UNAUTHORIZED', message),
+  UNAUTHORIZED: (message = 'Authentication required') => new AppError(401, 'UNAUTHORIZED', message),
 
   INVALID_TOKEN: (message = 'Invalid or expired token') =>
     new AppError(401, 'INVALID_TOKEN', message),
 
   // 403 Forbidden
-  FORBIDDEN: (message = 'Access denied') =>
-    new AppError(403, 'FORBIDDEN', message),
+  FORBIDDEN: (message = 'Access denied') => new AppError(403, 'FORBIDDEN', message),
 
   NOT_SUBSCRIBER: (message = 'Must be a feed subscriber to perform this action') =>
     new AppError(403, 'NOT_SUBSCRIBER', message),
 
   // 404 Not Found
-  NOT_FOUND: (resource: string) =>
-    new AppError(404, 'NOT_FOUND', `${resource} not found`),
+  NOT_FOUND: (resource: string) => new AppError(404, 'NOT_FOUND', `${resource} not found`),
 
   // 409 Conflict
-  CONFLICT: (message: string) =>
-    new AppError(409, 'CONFLICT', message),
+  CONFLICT: (message: string) => new AppError(409, 'CONFLICT', message),
 
   ALREADY_VOTED: (message = 'Already voted in this epoch') =>
     new AppError(409, 'ALREADY_VOTED', message),
@@ -91,8 +86,7 @@ export const Errors = {
   DATABASE_ERROR: (message = 'Database operation failed') =>
     new AppError(500, 'DATABASE_ERROR', message),
 
-  REDIS_ERROR: (message = 'Cache operation failed') =>
-    new AppError(500, 'REDIS_ERROR', message),
+  REDIS_ERROR: (message = 'Cache operation failed') => new AppError(500, 'REDIS_ERROR', message),
 
   INTERNAL_ERROR: (message = 'An unexpected error occurred') =>
     new AppError(500, 'INTERNAL_ERROR', message),

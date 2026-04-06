@@ -29,13 +29,12 @@ function extractBearerToken(request: FastifyRequest): string | null {
  * Validate the Bearer token: check session exists in Redis and DID is admin.
  * Returns the token if valid, or sends an error response and returns null.
  */
-async function validateAuth(
-  request: FastifyRequest,
-  reply: FastifyReply
-): Promise<string | null> {
+async function validateAuth(request: FastifyRequest, reply: FastifyReply): Promise<string | null> {
   const token = extractBearerToken(request);
   if (!token) {
-    reply.status(401).send({ error: 'Authentication required. Provide Authorization: Bearer <session-token>' });
+    reply
+      .status(401)
+      .send({ error: 'Authentication required. Provide Authorization: Bearer <session-token>' });
     return null;
   }
 

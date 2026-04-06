@@ -14,7 +14,7 @@ import { toGovernanceEpoch } from '../../scoring/score.types.js';
  */
 export async function getActiveEpoch(): Promise<GovernanceEpoch | null> {
   const result = await db.query(
-    `SELECT * FROM governance_epochs WHERE status = 'active' ORDER BY id DESC LIMIT 1`
+    `SELECT * FROM governance_epochs WHERE status = 'active' ORDER BY id DESC LIMIT 1`,
   );
 
   if (result.rows.length === 0) {

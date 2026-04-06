@@ -41,18 +41,17 @@ describe('like handler post-existence filter', () => {
     // Second call: UPDATE post_engagement (engagement counter)
     // Third call: UPDATE engagement_attributions (fire-and-forget)
     dbQueryMock
-      .mockResolvedValueOnce({ rows: [{ uri: 'at://did:plc:xyz/app.bsky.feed.like/1' }], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [{ uri: 'at://did:plc:xyz/app.bsky.feed.like/1' }],
+        rowCount: 1,
+      })
       .mockResolvedValueOnce({ rows: [], rowCount: 1 })
       .mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-    await handleLike(
-      'at://did:plc:xyz/app.bsky.feed.like/1',
-      'did:plc:xyz',
-      {
-        subject: { uri: 'at://did:plc:abc/app.bsky.feed.post/1', cid: 'cid123' },
-        createdAt: '2025-01-01T00:00:00.000Z',
-      }
-    );
+    await handleLike('at://did:plc:xyz/app.bsky.feed.like/1', 'did:plc:xyz', {
+      subject: { uri: 'at://did:plc:abc/app.bsky.feed.post/1', cid: 'cid123' },
+      createdAt: '2025-01-01T00:00:00.000Z',
+    });
 
     // Verify INSERT INTO likes was called with WHERE EXISTS
     const insertCall = dbQueryMock.mock.calls[0];
@@ -70,14 +69,10 @@ describe('like handler post-existence filter', () => {
     // INSERT returns rowCount=0 (WHERE EXISTS failed — post not in system)
     dbQueryMock.mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-    await handleLike(
-      'at://did:plc:xyz/app.bsky.feed.like/2',
-      'did:plc:xyz',
-      {
-        subject: { uri: 'at://did:plc:unknown/app.bsky.feed.post/999', cid: 'cid456' },
-        createdAt: '2025-01-01T00:00:00.000Z',
-      }
-    );
+    await handleLike('at://did:plc:xyz/app.bsky.feed.like/2', 'did:plc:xyz', {
+      subject: { uri: 'at://did:plc:unknown/app.bsky.feed.post/999', cid: 'cid456' },
+      createdAt: '2025-01-01T00:00:00.000Z',
+    });
 
     // INSERT was attempted (SQL handles the filtering)
     expect(dbQueryMock).toHaveBeenCalledTimes(1);
@@ -85,7 +80,8 @@ describe('like handler post-existence filter', () => {
 
     // No engagement update — rowCount was 0
     const engagementCalls = dbQueryMock.mock.calls.filter(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('UPDATE post_engagement')
+      (call: unknown[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('UPDATE post_engagement'),
     );
     expect(engagementCalls.length).toBe(0);
   });
@@ -94,25 +90,19 @@ describe('like handler post-existence filter', () => {
     // ON CONFLICT DO NOTHING returns rowCount=0
     dbQueryMock.mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-    await handleLike(
-      'at://did:plc:xyz/app.bsky.feed.like/1',
-      'did:plc:xyz',
-      {
-        subject: { uri: 'at://did:plc:abc/app.bsky.feed.post/1', cid: 'cid123' },
-        createdAt: '2025-01-01T00:00:00.000Z',
-      }
-    );
+    await handleLike('at://did:plc:xyz/app.bsky.feed.like/1', 'did:plc:xyz', {
+      subject: { uri: 'at://did:plc:abc/app.bsky.feed.post/1', cid: 'cid123' },
+      createdAt: '2025-01-01T00:00:00.000Z',
+    });
 
     // Only the INSERT was called, no engagement update
     expect(dbQueryMock).toHaveBeenCalledTimes(1);
   });
 
   it('skips likes missing subject URI', async () => {
-    await handleLike(
-      'at://did:plc:xyz/app.bsky.feed.like/3',
-      'did:plc:xyz',
-      { createdAt: '2025-01-01T00:00:00.000Z' }
-    );
+    await handleLike('at://did:plc:xyz/app.bsky.feed.like/3', 'did:plc:xyz', {
+      createdAt: '2025-01-01T00:00:00.000Z',
+    });
 
     // No DB calls at all — early return
     expect(dbQueryMock).not.toHaveBeenCalled();
@@ -123,14 +113,10 @@ describe('like handler post-existence filter', () => {
 
     // Should not throw
     await expect(
-      handleLike(
-        'at://did:plc:xyz/app.bsky.feed.like/4',
-        'did:plc:xyz',
-        {
-          subject: { uri: 'at://did:plc:abc/app.bsky.feed.post/1', cid: 'cid123' },
-          createdAt: '2025-01-01T00:00:00.000Z',
-        }
-      )
+      handleLike('at://did:plc:xyz/app.bsky.feed.like/4', 'did:plc:xyz', {
+        subject: { uri: 'at://did:plc:abc/app.bsky.feed.post/1', cid: 'cid123' },
+        createdAt: '2025-01-01T00:00:00.000Z',
+      }),
     ).resolves.toBeUndefined();
   });
 });
@@ -142,18 +128,17 @@ describe('repost handler post-existence filter', () => {
 
   it('inserts repost and increments engagement when post exists', async () => {
     dbQueryMock
-      .mockResolvedValueOnce({ rows: [{ uri: 'at://did:plc:xyz/app.bsky.feed.repost/1' }], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [{ uri: 'at://did:plc:xyz/app.bsky.feed.repost/1' }],
+        rowCount: 1,
+      })
       .mockResolvedValueOnce({ rows: [], rowCount: 1 })
       .mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-    await handleRepost(
-      'at://did:plc:xyz/app.bsky.feed.repost/1',
-      'did:plc:xyz',
-      {
-        subject: { uri: 'at://did:plc:abc/app.bsky.feed.post/1', cid: 'cid123' },
-        createdAt: '2025-01-01T00:00:00.000Z',
-      }
-    );
+    await handleRepost('at://did:plc:xyz/app.bsky.feed.repost/1', 'did:plc:xyz', {
+      subject: { uri: 'at://did:plc:abc/app.bsky.feed.post/1', cid: 'cid123' },
+      createdAt: '2025-01-01T00:00:00.000Z',
+    });
 
     // Verify INSERT INTO reposts was called with WHERE EXISTS
     const insertCall = dbQueryMock.mock.calls[0];
@@ -170,14 +155,10 @@ describe('repost handler post-existence filter', () => {
   it('skips engagement update when post does not exist', async () => {
     dbQueryMock.mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-    await handleRepost(
-      'at://did:plc:xyz/app.bsky.feed.repost/2',
-      'did:plc:xyz',
-      {
-        subject: { uri: 'at://did:plc:unknown/app.bsky.feed.post/999', cid: 'cid456' },
-        createdAt: '2025-01-01T00:00:00.000Z',
-      }
-    );
+    await handleRepost('at://did:plc:xyz/app.bsky.feed.repost/2', 'did:plc:xyz', {
+      subject: { uri: 'at://did:plc:unknown/app.bsky.feed.post/999', cid: 'cid456' },
+      createdAt: '2025-01-01T00:00:00.000Z',
+    });
 
     // INSERT was attempted
     expect(dbQueryMock).toHaveBeenCalledTimes(1);
@@ -185,7 +166,8 @@ describe('repost handler post-existence filter', () => {
 
     // No engagement update
     const engagementCalls = dbQueryMock.mock.calls.filter(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('UPDATE post_engagement')
+      (call: unknown[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('UPDATE post_engagement'),
     );
     expect(engagementCalls.length).toBe(0);
   });
@@ -193,24 +175,18 @@ describe('repost handler post-existence filter', () => {
   it('handles duplicate repost gracefully', async () => {
     dbQueryMock.mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-    await handleRepost(
-      'at://did:plc:xyz/app.bsky.feed.repost/1',
-      'did:plc:xyz',
-      {
-        subject: { uri: 'at://did:plc:abc/app.bsky.feed.post/1', cid: 'cid123' },
-        createdAt: '2025-01-01T00:00:00.000Z',
-      }
-    );
+    await handleRepost('at://did:plc:xyz/app.bsky.feed.repost/1', 'did:plc:xyz', {
+      subject: { uri: 'at://did:plc:abc/app.bsky.feed.post/1', cid: 'cid123' },
+      createdAt: '2025-01-01T00:00:00.000Z',
+    });
 
     expect(dbQueryMock).toHaveBeenCalledTimes(1);
   });
 
   it('skips reposts missing subject URI', async () => {
-    await handleRepost(
-      'at://did:plc:xyz/app.bsky.feed.repost/3',
-      'did:plc:xyz',
-      { createdAt: '2025-01-01T00:00:00.000Z' }
-    );
+    await handleRepost('at://did:plc:xyz/app.bsky.feed.repost/3', 'did:plc:xyz', {
+      createdAt: '2025-01-01T00:00:00.000Z',
+    });
 
     expect(dbQueryMock).not.toHaveBeenCalled();
   });
@@ -219,14 +195,10 @@ describe('repost handler post-existence filter', () => {
     dbQueryMock.mockRejectedValueOnce(new Error('connection refused'));
 
     await expect(
-      handleRepost(
-        'at://did:plc:xyz/app.bsky.feed.repost/4',
-        'did:plc:xyz',
-        {
-          subject: { uri: 'at://did:plc:abc/app.bsky.feed.post/1', cid: 'cid123' },
-          createdAt: '2025-01-01T00:00:00.000Z',
-        }
-      )
+      handleRepost('at://did:plc:xyz/app.bsky.feed.repost/4', 'did:plc:xyz', {
+        subject: { uri: 'at://did:plc:abc/app.bsky.feed.post/1', cid: 'cid123' },
+        createdAt: '2025-01-01T00:00:00.000Z',
+      }),
     ).resolves.toBeUndefined();
   });
 });

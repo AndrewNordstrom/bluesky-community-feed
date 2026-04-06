@@ -224,7 +224,7 @@ function checkDisk(): DiskHealth {
  * Check feed freshness via Redis.
  */
 async function checkFeedFreshness(): Promise<FeedFreshnessHealth> {
-  const withinGracePeriod = (Date.now() - startupTime) < STARTUP_GRACE_MS;
+  const withinGracePeriod = Date.now() - startupTime < STARTUP_GRACE_MS;
 
   try {
     const [feedSize, feedUpdatedAt] = await Promise.all([
@@ -241,7 +241,7 @@ async function checkFeedFreshness(): Promise<FeedFreshnessHealth> {
     let scoringAgeMs: number | undefined;
     try {
       const result = await db.query(
-        `SELECT value->>'timestamp' as ts FROM system_status WHERE key = 'current_scoring_run'`
+        `SELECT value->>'timestamp' as ts FROM system_status WHERE key = 'current_scoring_run'`,
       );
       if (result.rows.length > 0 && result.rows[0].ts) {
         scoringAgeMs = Date.now() - new Date(result.rows[0].ts).getTime();
@@ -267,7 +267,8 @@ async function checkFeedFreshness(): Promise<FeedFreshnessHealth> {
 
     // Unhealthy if feed is empty or BOTH feed and scoring are stale
     // (single staleness = degraded, caught at component level)
-    const isUnhealthy = isFeedEmpty || (isFeedStale && isScoringStale) || isFeedStale || isScoringStale;
+    const isUnhealthy =
+      isFeedEmpty || (isFeedStale && isScoringStale) || isFeedStale || isScoringStale;
 
     return {
       status: isUnhealthy ? 'unhealthy' : 'healthy',
@@ -311,18 +312,14 @@ export async function getHealthStatus(): Promise<HealthStatus> {
   };
 
   // Critical components (block readiness)
-  const criticalUnhealthy = [
-    databaseHealth,
-    redisHealth,
-    diskHealth,
-  ].filter((c) => c.status === 'unhealthy').length;
+  const criticalUnhealthy = [databaseHealth, redisHealth, diskHealth].filter(
+    (c) => c.status === 'unhealthy',
+  ).length;
 
   // Non-critical components (degrade but don't block)
-  const nonCriticalUnhealthy = [
-    jetstreamHealth,
-    scoringHealth,
-    feedFreshnessHealth,
-  ].filter((c) => c.status === 'unhealthy').length;
+  const nonCriticalUnhealthy = [jetstreamHealth, scoringHealth, feedFreshnessHealth].filter(
+    (c) => c.status === 'unhealthy',
+  ).length;
 
   let status: 'healthy' | 'degraded' | 'unhealthy';
   if (criticalUnhealthy > 0) {
@@ -361,7 +358,6 @@ export async function isReady(): Promise<boolean> {
   const health = await getHealthStatus();
   // Ready only if database and Redis are healthy
   return (
-    health.components.database.status === 'healthy' &&
-    health.components.redis.status === 'healthy'
+    health.components.database.status === 'healthy' && health.components.redis.status === 'healthy'
   );
 }

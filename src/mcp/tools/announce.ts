@@ -14,7 +14,7 @@ export function registerAnnounceTools(
   server: McpServer,
   app: FastifyInstance,
   token: string,
-  cookieName: string
+  cookieName: string,
 ): void {
   const cookie = `${cookieName}=${token}`;
 
@@ -24,9 +24,13 @@ export function registerAnnounceTools(
       description: 'List recent bot announcements with their text, post URI, and creation date',
     },
     async () => {
-      const res = await app.inject({ method: 'GET', url: '/api/admin/announcements', headers: { cookie } });
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/admin/announcements',
+        headers: { cookie },
+      });
       return formatInjectResponse(res);
-    }
+    },
   );
 
   server.registerTool(
@@ -45,6 +49,6 @@ export function registerAnnounceTools(
         payload: { text },
       });
       return formatInjectResponse(res);
-    }
+    },
   );
 }

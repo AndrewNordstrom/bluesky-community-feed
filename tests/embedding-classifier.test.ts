@@ -106,9 +106,7 @@ describe('classifyPostsBatch', () => {
   it('returns empty map when no topic embeddings are available', async () => {
     getTopicsWithEmbeddingsMock.mockReturnValue(null);
 
-    const result = await classifyPostsBatch([
-      { uri: 'at://test/post/1', text: 'hello world' },
-    ]);
+    const result = await classifyPostsBatch([{ uri: 'at://test/post/1', text: 'hello world' }]);
 
     expect(result.size).toBe(0);
     expect(embedTextsMock).not.toHaveBeenCalled();
@@ -117,9 +115,7 @@ describe('classifyPostsBatch', () => {
   it('returns empty map when topic embeddings array is empty', async () => {
     getTopicsWithEmbeddingsMock.mockReturnValue([]);
 
-    const result = await classifyPostsBatch([
-      { uri: 'at://test/post/1', text: 'hello world' },
-    ]);
+    const result = await classifyPostsBatch([{ uri: 'at://test/post/1', text: 'hello world' }]);
 
     expect(result.size).toBe(0);
   });
@@ -198,7 +194,7 @@ describe('classifyPostsBatch', () => {
   it('classifies multiple posts in a single batch', async () => {
     const techEmb = makeVector(384, [1, 0, 0]);
     const postEmb1 = makeVector(384, [0.95, 0.05, 0]); // similar to tech
-    const postEmb2 = makeVector(384, [0, 1, 0]);        // orthogonal to tech
+    const postEmb2 = makeVector(384, [0, 1, 0]); // orthogonal to tech
 
     getTopicsWithEmbeddingsMock.mockReturnValue([
       {
@@ -260,7 +256,7 @@ describe('classifyPostsBatch', () => {
   it('handles multiple topics per post', async () => {
     const techEmb = makeVector(384, [1, 0, 0]);
     const scienceEmb = makeVector(384, [0.9, 0.3, 0]); // similar direction to tech
-    const artEmb = makeVector(384, [0, 0, 1]);          // orthogonal
+    const artEmb = makeVector(384, [0, 0, 1]); // orthogonal
 
     // Post embedding close to both tech and science
     const postEmb = makeVector(384, [0.95, 0.15, 0]);

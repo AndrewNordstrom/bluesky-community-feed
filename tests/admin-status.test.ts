@@ -56,11 +56,16 @@ describe('admin status route', () => {
       .mockResolvedValueOnce({ rows: [{ total_posts: '100', posts_24h: '20' }] })
       .mockResolvedValueOnce({ rows: [{ count: '7' }] })
       .mockResolvedValueOnce({
-        rows: [{ value: { timestamp: '2026-02-09T01:00:00.000Z', duration_ms: 1200, posts_scored: 8 } }],
+        rows: [
+          { value: { timestamp: '2026-02-09T01:00:00.000Z', duration_ms: 1200, posts_scored: 8 } },
+        ],
       });
 
     redisZCardMock.mockResolvedValue(12);
-    getCurrentContentRulesMock.mockResolvedValue({ includeKeywords: ['atproto'], excludeKeywords: [] });
+    getCurrentContentRulesMock.mockResolvedValue({
+      includeKeywords: ['atproto'],
+      excludeKeywords: [],
+    });
 
     const app = Fastify();
     registerStatusRoutes(app);

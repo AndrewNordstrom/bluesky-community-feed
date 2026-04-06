@@ -52,8 +52,8 @@ async function checkDiskUsage(): Promise<DiskStatus> {
       const availableBytes = stats.bavail * stats.bsize;
       const usedBytes = totalBytes - availableBytes;
       const usedPercent = Math.round((usedBytes / totalBytes) * 100);
-      const availableGb = Math.round((availableBytes / (1024 ** 3)) * 100) / 100;
-      const totalGb = Math.round((totalBytes / (1024 ** 3)) * 100) / 100;
+      const availableGb = Math.round((availableBytes / 1024 ** 3) * 100) / 100;
+      const totalGb = Math.round((totalBytes / 1024 ** 3) * 100) / 100;
 
       let level: DiskStatus['level'] = 'ok';
       if (usedPercent >= config.DISK_EMERGENCY_PERCENT) {
@@ -111,23 +111,17 @@ async function runEmergencyVacuumFull(): Promise<void> {
     await client.query("SET statement_timeout = '600s'");
 
     for (const table of tables) {
-      const before = await client.query(
-        `SELECT pg_total_relation_size($1) as size_bytes`,
-        [table]
-      );
+      const before = await client.query(`SELECT pg_total_relation_size($1) as size_bytes`, [table]);
       const sizeMb = Math.round(Number(before.rows[0].size_bytes) / (1024 * 1024));
       logger.info({ table, size_mb: sizeMb }, 'Running VACUUM FULL');
 
       await client.query(`VACUUM FULL ${table}`);
 
-      const after = await client.query(
-        `SELECT pg_total_relation_size($1) as size_bytes`,
-        [table]
-      );
+      const after = await client.query(`SELECT pg_total_relation_size($1) as size_bytes`, [table]);
       const afterMb = Math.round(Number(after.rows[0].size_bytes) / (1024 * 1024));
       logger.info(
         { table, before_mb: sizeMb, after_mb: afterMb, freed_mb: sizeMb - afterMb },
-        'VACUUM FULL complete'
+        'VACUUM FULL complete',
       );
     }
 
@@ -140,7 +134,7 @@ async function runEmergencyVacuumFull(): Promise<void> {
       `INSERT INTO system_status (key, value, updated_at)
        VALUES ('last_emergency_vacuum', $1::jsonb, NOW())
        ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
-      [JSON.stringify({ timestamp: new Date().toISOString(), tables })]
+      [JSON.stringify({ timestamp: new Date().toISOString(), tables })],
     );
   } catch (err) {
     logger.error({ err }, 'Emergency VACUUM FULL failed');
@@ -162,7 +156,7 @@ async function checkWalSize(): Promise<void> {
   try {
     client = await db.connect();
     const result = await client.query(
-      `SELECT COALESCE(SUM(size), 0) as wal_bytes FROM pg_ls_waldir()`
+      `SELECT COALESCE(SUM(size), 0) as wal_bytes FROM pg_ls_waldir()`,
     );
     const walMb = Math.round(Number(result.rows[0].wal_bytes) / (1024 * 1024));
 
@@ -191,25 +185,35 @@ async function runDiskCheck(): Promise<void> {
     lastStatus = await checkDiskUsage();
 
     logger.debug(
-      { used_percent: lastStatus.used_percent, level: lastStatus.level, available_gb: lastStatus.available_gb },
-      'Disk check'
+      {
+        used_percent: lastStatus.used_percent,
+        level: lastStatus.level,
+        available_gb: lastStatus.available_gb,
+      },
+      'Disk check',
     );
 
     // Store status in system_status
-    await db.query(
-      `INSERT INTO system_status (key, value, updated_at)
+    await db
+      .query(
+        `INSERT INTO system_status (key, value, updated_at)
        VALUES ('disk_status', $1::jsonb, NOW())
        ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
-      [JSON.stringify(lastStatus)]
-    ).catch((err: unknown) => {
-      logger.warn({ err }, 'Failed to store disk status');
-    });
+        [JSON.stringify(lastStatus)],
+      )
+      .catch((err: unknown) => {
+        logger.warn({ err }, 'Failed to store disk status');
+      });
 
     if (lastStatus.level === 'emergency') {
       consecutiveCriticalChecks++;
       logger.error(
-        { used_percent: lastStatus.used_percent, available_gb: lastStatus.available_gb, consecutive: consecutiveCriticalChecks },
-        'EMERGENCY: Disk usage critical — running cleanup then VACUUM FULL'
+        {
+          used_percent: lastStatus.used_percent,
+          available_gb: lastStatus.available_gb,
+          consecutive: consecutiveCriticalChecks,
+        },
+        'EMERGENCY: Disk usage critical — running cleanup then VACUUM FULL',
       );
 
       // Run cleanup first and wait for it to finish (frees rows for VACUUM FULL)
@@ -221,8 +225,12 @@ async function runDiskCheck(): Promise<void> {
     } else if (lastStatus.level === 'critical') {
       consecutiveCriticalChecks++;
       logger.warn(
-        { used_percent: lastStatus.used_percent, available_gb: lastStatus.available_gb, consecutive: consecutiveCriticalChecks },
-        'CRITICAL: Disk usage high — triggering cleanup + journal truncation'
+        {
+          used_percent: lastStatus.used_percent,
+          available_gb: lastStatus.available_gb,
+          consecutive: consecutiveCriticalChecks,
+        },
+        'CRITICAL: Disk usage high — triggering cleanup + journal truncation',
       );
 
       await triggerManualCleanup();
@@ -232,7 +240,7 @@ async function runDiskCheck(): Promise<void> {
       consecutiveCriticalChecks = 0;
       logger.warn(
         { used_percent: lastStatus.used_percent, available_gb: lastStatus.available_gb },
-        'WARNING: Disk usage approaching critical'
+        'WARNING: Disk usage approaching critical',
       );
       await checkWalSize();
     } else {
@@ -265,7 +273,7 @@ export async function startDiskMonitor(): Promise<void> {
       criticalPct: config.DISK_CRITICAL_PERCENT,
       emergencyPct: config.DISK_EMERGENCY_PERCENT,
     },
-    'Starting disk monitor'
+    'Starting disk monitor',
   );
 
   // Run immediately

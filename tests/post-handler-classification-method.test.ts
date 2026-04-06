@@ -66,7 +66,15 @@ vi.mock('../src/scoring/topics/classifier.js', () => ({
 
 vi.mock('../src/scoring/topics/taxonomy.js', () => ({
   getTaxonomy: vi.fn().mockReturnValue([
-    { slug: 'ai-machine-learning', name: 'AI & Machine Learning', description: null, parentSlug: null, terms: ['neural network'], contextTerms: [], antiTerms: [] },
+    {
+      slug: 'ai-machine-learning',
+      name: 'AI & Machine Learning',
+      description: null,
+      parentSlug: null,
+      terms: ['neural network'],
+      contextTerms: [],
+      antiTerms: [],
+    },
   ]),
 }));
 
@@ -91,7 +99,8 @@ import { handlePost } from '../src/ingestion/handlers/post-handler.js';
 /** Get the classification_method parameter ($12) from INSERT INTO posts. */
 function getInsertedClassificationMethod(): string | undefined {
   const insertCall = dbQueryMock.mock.calls.find(
-    (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('INSERT INTO posts')
+    (call: unknown[]) =>
+      typeof call[0] === 'string' && (call[0] as string).includes('INSERT INTO posts'),
   );
   if (!insertCall) return undefined;
   // classification_method is the 12th parameter (index 11)
@@ -103,9 +112,7 @@ describe('classification_method tracking in post handler', () => {
     vi.clearAllMocks();
     dbQueryMock.mockResolvedValue({ rows: [], rowCount: 1 });
     redisSetMock.mockResolvedValue('OK');
-    redisGetMock.mockResolvedValue(
-      JSON.stringify({ includeKeywords: [], excludeKeywords: [] })
-    );
+    redisGetMock.mockResolvedValue(JSON.stringify({ includeKeywords: [], excludeKeywords: [] }));
     isGovernanceGateReadyMock.mockReturnValue(true);
     checkGovernanceGateMock.mockResolvedValue({
       passes: true,
@@ -125,15 +132,10 @@ describe('classification_method tracking in post handler', () => {
   });
 
   it('stores keyword when embedding is disabled', async () => {
-    await handlePost(
-      'at://did:plc:abc/app.bsky.feed.post/1',
-      'did:plc:abc',
-      'cid123',
-      {
-        text: 'Training a neural network model for classification',
-        createdAt: new Date().toISOString(),
-      }
-    );
+    await handlePost('at://did:plc:abc/app.bsky.feed.post/1', 'did:plc:abc', 'cid123', {
+      text: 'Training a neural network model for classification',
+      createdAt: new Date().toISOString(),
+    });
 
     expect(getInsertedClassificationMethod()).toBe('keyword');
   });
@@ -146,15 +148,10 @@ describe('classification_method tracking in post handler', () => {
       method: 'embedding',
     });
 
-    await handlePost(
-      'at://did:plc:abc/app.bsky.feed.post/2',
-      'did:plc:abc',
-      'cid456',
-      {
-        text: 'Training a neural network model for classification',
-        createdAt: new Date().toISOString(),
-      }
-    );
+    await handlePost('at://did:plc:abc/app.bsky.feed.post/2', 'did:plc:abc', 'cid456', {
+      text: 'Training a neural network model for classification',
+      createdAt: new Date().toISOString(),
+    });
 
     expect(getInsertedClassificationMethod()).toBe('embedding');
   });
@@ -167,15 +164,10 @@ describe('classification_method tracking in post handler', () => {
       method: 'keyword_fallback',
     });
 
-    await handlePost(
-      'at://did:plc:abc/app.bsky.feed.post/3',
-      'did:plc:abc',
-      'cid789',
-      {
-        text: 'Walking my dog through the neighborhood today',
-        createdAt: new Date().toISOString(),
-      }
-    );
+    await handlePost('at://did:plc:abc/app.bsky.feed.post/3', 'did:plc:abc', 'cid789', {
+      text: 'Walking my dog through the neighborhood today',
+      createdAt: new Date().toISOString(),
+    });
 
     expect(getInsertedClassificationMethod()).toBe('keyword');
   });
@@ -184,15 +176,10 @@ describe('classification_method tracking in post handler', () => {
     configMock.TOPIC_EMBEDDING_ENABLED = true;
     isEmbedderReadyMock.mockReturnValue(false);
 
-    await handlePost(
-      'at://did:plc:abc/app.bsky.feed.post/4',
-      'did:plc:abc',
-      'cidabc',
-      {
-        text: 'Deep learning frameworks for neural networks',
-        createdAt: new Date().toISOString(),
-      }
-    );
+    await handlePost('at://did:plc:abc/app.bsky.feed.post/4', 'did:plc:abc', 'cidabc', {
+      text: 'Deep learning frameworks for neural networks',
+      createdAt: new Date().toISOString(),
+    });
 
     expect(getInsertedClassificationMethod()).toBe('keyword');
   });
@@ -202,36 +189,27 @@ describe('classification_method tracking in post handler', () => {
     isEmbedderReadyMock.mockReturnValue(true);
     classifyPostByEmbeddingMock.mockRejectedValue(new Error('ONNX runtime error'));
 
-    await handlePost(
-      'at://did:plc:abc/app.bsky.feed.post/5',
-      'did:plc:abc',
-      'ciddef',
-      {
-        text: 'Machine learning pipeline for neural network training',
-        createdAt: new Date().toISOString(),
-      }
-    );
+    await handlePost('at://did:plc:abc/app.bsky.feed.post/5', 'did:plc:abc', 'ciddef', {
+      text: 'Machine learning pipeline for neural network training',
+      createdAt: new Date().toISOString(),
+    });
 
     // Should fall back to keyword on error
     expect(getInsertedClassificationMethod()).toBe('keyword');
   });
 
   it('INSERT query includes classification_method column', async () => {
-    await handlePost(
-      'at://did:plc:abc/app.bsky.feed.post/6',
-      'did:plc:abc',
-      'cidghi',
-      {
-        text: 'Building a neural network for classification tasks',
-        createdAt: new Date().toISOString(),
-      }
-    );
+    await handlePost('at://did:plc:abc/app.bsky.feed.post/6', 'did:plc:abc', 'cidghi', {
+      text: 'Building a neural network for classification tasks',
+      createdAt: new Date().toISOString(),
+    });
 
     const insertCall = dbQueryMock.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('INSERT INTO posts')
+      (call: unknown[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('INSERT INTO posts'),
     );
     expect(insertCall).toBeDefined();
-    expect((insertCall![0] as string)).toContain('classification_method');
-    expect((insertCall![0] as string)).toContain('$12');
+    expect(insertCall![0] as string).toContain('classification_method');
+    expect(insertCall![0] as string).toContain('$12');
   });
 });

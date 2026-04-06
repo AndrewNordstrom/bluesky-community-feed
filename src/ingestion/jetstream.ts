@@ -139,7 +139,7 @@ export async function startJetstream(): Promise<void> {
     if (droppedEventCount > 0) {
       logger.warn(
         { droppedEvents: droppedEventCount, ...state },
-        `Dropped ${droppedEventCount} events in last 60s (queue full)`
+        `Dropped ${droppedEventCount} events in last 60s (queue full)`,
       );
       droppedEventCount = 0;
     } else {
@@ -251,7 +251,7 @@ function connect(cursor?: bigint): void {
       // DO NOT crash on individual event errors. Log and continue.
       logger.error(
         { err, data: data.toString().substring(0, 200) },
-        'Failed to process Jetstream event'
+        'Failed to process Jetstream event',
       );
     } finally {
       releaseSlot();
@@ -290,7 +290,7 @@ function handleQueueOverload(): void {
       activeEventCount,
       maxConcurrentEvents: MAX_CONCURRENT_EVENTS,
     },
-    'Jetstream ingestion queue saturated; forcing reconnect for recovery'
+    'Jetstream ingestion queue saturated; forcing reconnect for recovery',
   );
 
   // Drop queued-but-not-started handlers; active handlers continue and release naturally.
@@ -317,10 +317,7 @@ function scheduleReconnect(): void {
 
   // Check if we should switch to fallback
   if (consecutiveFailures >= FALLBACK_THRESHOLD && !useFallback) {
-    logger.warn(
-      { failures: consecutiveFailures },
-      'Switching to fallback Jetstream instance'
-    );
+    logger.warn({ failures: consecutiveFailures }, 'Switching to fallback Jetstream instance');
     useFallback = true;
     consecutiveFailures = 0; // Reset counter for fallback
   }
@@ -362,7 +359,7 @@ async function saveCursor(cursorUs: bigint): Promise<void> {
       `INSERT INTO jetstream_cursor (id, cursor_us, updated_at)
        VALUES (1, $1, NOW())
        ON CONFLICT (id) DO UPDATE SET cursor_us = $1, updated_at = NOW()`,
-      [cursorUs.toString()]
+      [cursorUs.toString()],
     );
   } catch (err) {
     logger.error({ err }, 'Failed to save cursor');

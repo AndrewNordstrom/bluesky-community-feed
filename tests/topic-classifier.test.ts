@@ -11,14 +11,44 @@ const testTaxonomy: Topic[] = [
     description: null,
     parentSlug: null,
     terms: [
-      'programming', 'coding', 'software', 'developer', 'debug',
-      'refactor', 'git', 'github', 'gitlab', 'pull request', 'merge', 'commit',
-      'IDE', 'vscode', 'compiler', 'interpreter', 'algorithm', 'data structure',
-      'API', 'SDK', 'framework', 'library', 'dependency', 'package manager',
+      'programming',
+      'coding',
+      'software',
+      'developer',
+      'debug',
+      'refactor',
+      'git',
+      'github',
+      'gitlab',
+      'pull request',
+      'merge',
+      'commit',
+      'IDE',
+      'vscode',
+      'compiler',
+      'interpreter',
+      'algorithm',
+      'data structure',
+      'API',
+      'SDK',
+      'framework',
+      'library',
+      'dependency',
+      'package manager',
     ],
     contextTerms: [
-      'python', 'javascript', 'typescript', 'java', 'csharp', 'golang',
-      'repository', 'branch', 'deploy', 'CI/CD', 'lint', 'test suite',
+      'python',
+      'javascript',
+      'typescript',
+      'java',
+      'csharp',
+      'golang',
+      'repository',
+      'branch',
+      'deploy',
+      'CI/CD',
+      'lint',
+      'test suite',
     ],
     antiTerms: ['television', 'tv show', 'episode', 'schedule', 'channel'],
   },
@@ -28,15 +58,41 @@ const testTaxonomy: Topic[] = [
     description: null,
     parentSlug: null,
     terms: [
-      'AI', 'artificial intelligence', 'machine learning', 'deep learning', 'neural network',
-      'LLM', 'GPT', 'transformer', 'inference', 'fine-tune',
-      'prompt engineering', 'embedding', 'vector', 'classification', 'NLP',
-      'computer vision', 'reinforcement learning', 'generative', 'diffusion',
+      'AI',
+      'artificial intelligence',
+      'machine learning',
+      'deep learning',
+      'neural network',
+      'LLM',
+      'GPT',
+      'transformer',
+      'inference',
+      'fine-tune',
+      'prompt engineering',
+      'embedding',
+      'vector',
+      'classification',
+      'NLP',
+      'computer vision',
+      'reinforcement learning',
+      'generative',
+      'diffusion',
     ],
     contextTerms: [
-      'dataset', 'epoch', 'loss function', 'gradient', 'tensor', 'pytorch',
-      'tensorflow', 'huggingface', 'benchmark', 'evaluation', 'hallucination',
-      'alignment', 'safety', 'weights',
+      'dataset',
+      'epoch',
+      'loss function',
+      'gradient',
+      'tensor',
+      'pytorch',
+      'tensorflow',
+      'huggingface',
+      'benchmark',
+      'evaluation',
+      'hallucination',
+      'alignment',
+      'safety',
+      'weights',
     ],
     antiTerms: ['artificial turf', 'artificial flavor'],
   },
@@ -46,14 +102,42 @@ const testTaxonomy: Topic[] = [
     description: null,
     parentSlug: null,
     terms: [
-      'devops', 'docker', 'kubernetes', 'k8s', 'CI/CD', 'terraform',
-      'ansible', 'AWS', 'Azure', 'GCP', 'cloud', 'serverless', 'lambda',
-      'container', 'orchestration', 'monitoring', 'observability', 'prometheus',
-      'grafana', 'nginx', 'load balancer', 'CDN', 'infrastructure as code',
+      'devops',
+      'docker',
+      'kubernetes',
+      'k8s',
+      'CI/CD',
+      'terraform',
+      'ansible',
+      'AWS',
+      'Azure',
+      'GCP',
+      'cloud',
+      'serverless',
+      'lambda',
+      'container',
+      'orchestration',
+      'monitoring',
+      'observability',
+      'prometheus',
+      'grafana',
+      'nginx',
+      'load balancer',
+      'CDN',
+      'infrastructure as code',
     ],
     contextTerms: [
-      'deploy', 'pipeline', 'staging', 'production', 'rollback', 'uptime',
-      'SLA', 'horizontal scaling', 'microservices', 'service mesh', 'helm',
+      'deploy',
+      'pipeline',
+      'staging',
+      'production',
+      'rollback',
+      'uptime',
+      'SLA',
+      'horizontal scaling',
+      'microservices',
+      'service mesh',
+      'helm',
     ],
     antiTerms: ['weather cloud', 'cloud nine'],
   },
@@ -63,14 +147,43 @@ const testTaxonomy: Topic[] = [
     description: null,
     parentSlug: null,
     terms: [
-      'dog', 'puppy', 'corgi', 'pet', 'rescue', 'adoption', 'shelter',
-      'veterinarian', 'vet', 'breed', 'good boy', 'good girl', 'pupper',
-      'doggo', 'cat', 'kitten', 'bird', 'hamster', 'ferret', 'rabbit',
-      'pet owner', 'animal welfare', 'spay', 'neuter',
+      'dog',
+      'puppy',
+      'corgi',
+      'pet',
+      'rescue',
+      'adoption',
+      'shelter',
+      'veterinarian',
+      'vet',
+      'breed',
+      'good boy',
+      'good girl',
+      'pupper',
+      'doggo',
+      'cat',
+      'kitten',
+      'bird',
+      'hamster',
+      'ferret',
+      'rabbit',
+      'pet owner',
+      'animal welfare',
+      'spay',
+      'neuter',
     ],
     contextTerms: [
-      'walk', 'treat', 'fetch', 'leash', 'collar', 'grooming', 'training',
-      'obedience', 'agility', 'kibble', 'raw diet',
+      'walk',
+      'treat',
+      'fetch',
+      'leash',
+      'collar',
+      'grooming',
+      'training',
+      'obedience',
+      'agility',
+      'kibble',
+      'raw diet',
     ],
     antiTerms: ['pet peeve', "teacher's pet", 'pet project'],
   },
@@ -80,14 +193,34 @@ const testTaxonomy: Topic[] = [
     description: null,
     parentSlug: null,
     terms: [
-      'atproto', 'AT Protocol', 'fediverse', 'mastodon', 'activitypub',
-      'decentralized', 'federation', 'PDS', 'relay', 'appview', 'firehose',
-      'DID', 'custom feed', 'labeler', 'moderation service',
-      'self-hosting', 'nostr', 'threads federation',
+      'atproto',
+      'AT Protocol',
+      'fediverse',
+      'mastodon',
+      'activitypub',
+      'decentralized',
+      'federation',
+      'PDS',
+      'relay',
+      'appview',
+      'firehose',
+      'DID',
+      'custom feed',
+      'labeler',
+      'moderation service',
+      'self-hosting',
+      'nostr',
+      'threads federation',
     ],
     contextTerms: [
-      'social media', 'protocol', 'identity', 'interoperability', 'data portability',
-      'algorithm transparency', 'content moderation', 'user control',
+      'social media',
+      'protocol',
+      'identity',
+      'interoperability',
+      'data portability',
+      'algorithm transparency',
+      'content moderation',
+      'user control',
     ],
     antiTerms: ['decentralized finance', 'DeFi', 'cryptocurrency'],
   },
@@ -97,13 +230,33 @@ const testTaxonomy: Topic[] = [
     description: null,
     parentSlug: null,
     terms: [
-      'open source', 'FOSS', 'OSS', 'free software', 'MIT license', 'GPL',
-      'Apache license', 'BSD', 'copyleft', 'permissive license', 'maintainer',
-      'contributor', 'upstream', 'downstream', 'community project',
+      'open source',
+      'FOSS',
+      'OSS',
+      'free software',
+      'MIT license',
+      'GPL',
+      'Apache license',
+      'BSD',
+      'copyleft',
+      'permissive license',
+      'maintainer',
+      'contributor',
+      'upstream',
+      'downstream',
+      'community project',
     ],
     contextTerms: [
-      'github', 'gitlab', 'sourceforge', 'contribution', 'issue tracker',
-      'release', 'changelog', 'roadmap', 'governance', 'foundation',
+      'github',
+      'gitlab',
+      'sourceforge',
+      'contribution',
+      'issue tracker',
+      'release',
+      'changelog',
+      'roadmap',
+      'governance',
+      'foundation',
     ],
     antiTerms: ['open source of income', 'open source of water'],
   },
@@ -115,7 +268,7 @@ describe('topic classifier', () => {
     it('classifies a Python/Docker post as software-development and devops', () => {
       const result = classifyPost(
         'Just deployed my Python API to production using Docker',
-        testTaxonomy
+        testTaxonomy,
       );
       expect(result.matchedTopics).toContain('software-development');
       expect(result.matchedTopics).toContain('devops-infrastructure');
@@ -124,37 +277,25 @@ describe('topic classifier', () => {
     });
 
     it('classifies a corgi post as dogs-pets', () => {
-      const result = classifyPost(
-        'Check out this cute corgi puppy!',
-        testTaxonomy
-      );
+      const result = classifyPost('Check out this cute corgi puppy!', testTaxonomy);
       expect(result.matchedTopics).toContain('dogs-pets');
       expect(result.vector['dogs-pets']).toBeGreaterThan(0);
     });
 
     it('classifies a transformer paper as ai-machine-learning', () => {
-      const result = classifyPost(
-        'New paper on transformer architecture for NLP',
-        testTaxonomy
-      );
+      const result = classifyPost('New paper on transformer architecture for NLP', testTaxonomy);
       expect(result.matchedTopics).toContain('ai-machine-learning');
       expect(result.vector['ai-machine-learning']).toBeGreaterThan(0);
     });
 
     it('classifies an AT Protocol post as decentralized-social', () => {
-      const result = classifyPost(
-        "Bluesky's AT Protocol feed generator is awesome",
-        testTaxonomy
-      );
+      const result = classifyPost("Bluesky's AT Protocol feed generator is awesome", testTaxonomy);
       expect(result.matchedTopics).toContain('decentralized-social');
       expect(result.vector['decentralized-social']).toBeGreaterThan(0);
     });
 
     it('does NOT classify a casual bluesky mention as decentralized-social', () => {
-      const result = classifyPost(
-        'Just posted on bluesky for the first time',
-        testTaxonomy
-      );
+      const result = classifyPost('Just posted on bluesky for the first time', testTaxonomy);
       // "bluesky" is no longer a primary term — casual platform mentions
       // should not be classified as decentralized social technology
       expect(result.matchedTopics).not.toContain('decentralized-social');
@@ -163,7 +304,7 @@ describe('topic classifier', () => {
     it('classifies AT Protocol specifics without mentioning bluesky', () => {
       const result = classifyPost(
         'Setting up my own PDS and connecting to the firehose relay',
-        testTaxonomy
+        testTaxonomy,
       );
       // PDS, firehose, relay = 3 primary hits → strong match (Rule 5: bonus)
       expect(result.matchedTopics).toContain('decentralized-social');
@@ -181,10 +322,7 @@ describe('topic classifier', () => {
     });
 
     it('gives strong match when context terms confirm topic', () => {
-      const result = classifyPost(
-        'I love programming in Python and JavaScript',
-        testTaxonomy
-      );
+      const result = classifyPost('I love programming in Python and JavaScript', testTaxonomy);
       expect(result.matchedTopics).toContain('software-development');
       // Should be significantly stronger than the 0.2 weak match
       expect(result.vector['software-development']).toBeGreaterThan(0.5);
@@ -192,8 +330,8 @@ describe('topic classifier', () => {
 
     it('does NOT match software-development when anti-terms are present', () => {
       const result = classifyPost(
-        'Programming schedule for tonight\'s television lineup',
-        testTaxonomy
+        "Programming schedule for tonight's television lineup",
+        testTaxonomy,
       );
       // Anti-terms "television" and "schedule" should disqualify with only 1 primary hit
       expect(result.matchedTopics).not.toContain('software-development');
@@ -203,23 +341,17 @@ describe('topic classifier', () => {
   // --- E.3 Multi-word terms ---
   describe('multi-word terms', () => {
     it('matches multi-word term "machine learning"', () => {
-      const result = classifyPost(
-        "I'm working on a machine learning model",
-        testTaxonomy
-      );
+      const result = classifyPost("I'm working on a machine learning model", testTaxonomy);
       expect(result.matchedTopics).toContain('ai-machine-learning');
     });
 
     it('matches "pull request" as multi-word term', () => {
-      const result = classifyPost(
-        'Just submitted a pull request on GitHub',
-        testTaxonomy
-      );
+      const result = classifyPost('Just submitted a pull request on GitHub', testTaxonomy);
       // Should match software-development or open-source (both have github/pull request)
       const matched = result.matchedTopics;
-      expect(
-        matched.includes('software-development') || matched.includes('open-source')
-      ).toBe(true);
+      expect(matched.includes('software-development') || matched.includes('open-source')).toBe(
+        true,
+      );
     });
   });
 
@@ -233,23 +365,19 @@ describe('topic classifier', () => {
     });
 
     it('returns empty vector for URLs and mentions only', () => {
-      const result = classifyPost(
-        'https://example.com @user.bsky.social',
-        testTaxonomy
-      );
+      const result = classifyPost('https://example.com @user.bsky.social', testTaxonomy);
       expect(result.matchedTopics).toEqual([]);
     });
 
     it('returns empty vector for non-English text', () => {
-      const result = classifyPost(
-        '今日はとても良い天気ですね',
-        testTaxonomy
-      );
+      const result = classifyPost('今日はとても良い天気ですね', testTaxonomy);
       expect(result.matchedTopics).toEqual([]);
     });
 
     it('handles long post (300 chars) correctly', () => {
-      const longPost = 'This is a post about programming and coding with Python and JavaScript. '.repeat(4).trim();
+      const longPost = 'This is a post about programming and coding with Python and JavaScript. '
+        .repeat(4)
+        .trim();
       const result = classifyPost(longPost, testTaxonomy);
       expect(result.matchedTopics).toContain('software-development');
       expect(result.tokenCount).toBeGreaterThan(0);
@@ -258,7 +386,7 @@ describe('topic classifier', () => {
     it('returns empty vector when no topics match', () => {
       const result = classifyPost(
         'The weather is nice today and I had a lovely breakfast',
-        testTaxonomy
+        testTaxonomy,
       );
       expect(result.matchedTopics).toEqual([]);
       expect(result.vector).toEqual({});
@@ -304,7 +432,7 @@ describe('topic classifier', () => {
       // A post strongly matching one topic and weakly matching another
       const result = classifyPost(
         'Deploying Docker containers to Kubernetes with Terraform on AWS',
-        testTaxonomy
+        testTaxonomy,
       );
       // devops should be the strongest match
       expect(result.matchedTopics).toContain('devops-infrastructure');

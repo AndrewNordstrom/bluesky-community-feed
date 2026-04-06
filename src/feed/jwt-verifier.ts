@@ -33,8 +33,7 @@ const didResolver = new DidResolver({
   didCache: new BoundedMemoryCache(DID_CACHE_MAX_ENTRIES),
 });
 
-const allowedIssuerPrefixes = config.FEED_JWT_ALLOWED_ISSUER_PREFIXES
-  .split(',')
+const allowedIssuerPrefixes = config.FEED_JWT_ALLOWED_ISSUER_PREFIXES.split(',')
   .map((prefix) => prefix.trim())
   .filter((prefix) => prefix.length > 0);
 
@@ -86,7 +85,9 @@ async function resolveIssuerSigningKey(issuerDid: string, forceRefresh: boolean)
   return didResolver.resolveAtprotoKey(issuerDid, forceRefresh);
 }
 
-export async function verifyFeedRequesterDid(authHeader: string | undefined): Promise<string | null> {
+export async function verifyFeedRequesterDid(
+  authHeader: string | undefined,
+): Promise<string | null> {
   const token = extractBearerToken(authHeader);
   if (!token) {
     return null;
@@ -97,7 +98,7 @@ export async function verifyFeedRequesterDid(authHeader: string | undefined): Pr
       token,
       config.FEED_JWT_AUDIENCE.length > 0 ? config.FEED_JWT_AUDIENCE : config.FEEDGEN_SERVICE_DID,
       FEED_REQUESTER_JWT_LXM,
-      resolveIssuerSigningKey
+      resolveIssuerSigningKey,
     );
 
     if (!isDid(verified.iss) || !isAllowedIssuerDid(verified.iss)) {

@@ -82,8 +82,8 @@ describe('classifyPostByEmbedding', () => {
 
   it('returns embedding-based topic vector for on-topic text', async () => {
     cosineSimilarityMock
-      .mockReturnValueOnce(0.72)  // ai-ml
-      .mockReturnValueOnce(0.41)  // sw-dev
+      .mockReturnValueOnce(0.72) // ai-ml
+      .mockReturnValueOnce(0.41) // sw-dev
       .mockReturnValueOnce(0.15); // cybersecurity
 
     const result = await classifyPostByEmbedding('training a neural network model');
@@ -115,11 +115,11 @@ describe('classifyPostByEmbedding', () => {
   });
 
   it('respects TOPIC_EMBEDDING_MIN_SIMILARITY threshold', async () => {
-    configMock.TOPIC_EMBEDDING_MIN_SIMILARITY = 0.50;
+    configMock.TOPIC_EMBEDDING_MIN_SIMILARITY = 0.5;
     cosineSimilarityMock
-      .mockReturnValueOnce(0.55)  // ai-ml: above
-      .mockReturnValueOnce(0.49)  // sw-dev: below
-      .mockReturnValueOnce(0.50); // cybersecurity: at threshold (included)
+      .mockReturnValueOnce(0.55) // ai-ml: above
+      .mockReturnValueOnce(0.49) // sw-dev: below
+      .mockReturnValueOnce(0.5); // cybersecurity: at threshold (included)
 
     const result = await classifyPostByEmbedding('machine learning project');
 
@@ -130,8 +130,8 @@ describe('classifyPostByEmbedding', () => {
 
   it('matches multiple topics when text is relevant to several', async () => {
     cosineSimilarityMock
-      .mockReturnValueOnce(0.65)  // ai-ml
-      .mockReturnValueOnce(0.58)  // sw-dev
+      .mockReturnValueOnce(0.65) // ai-ml
+      .mockReturnValueOnce(0.58) // sw-dev
       .mockReturnValueOnce(0.42); // cybersecurity
 
     const result = await classifyPostByEmbedding('building an AI-powered security tool');

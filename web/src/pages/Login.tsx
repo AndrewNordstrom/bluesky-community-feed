@@ -38,7 +38,7 @@ export function Login() {
       // Check if user needs to complete research consent
       try {
         const consentResponse = await api.get<{ consent: boolean | null }>(
-          '/api/governance/research-consent'
+          '/api/governance/research-consent',
         );
         if (consentResponse.data.consent === null) {
           navigate('/research-consent');
@@ -60,14 +60,23 @@ export function Login() {
     <div className="login-page">
       <div className="login-container">
         <div className="login-logo">
-          <svg width="40" height="40" viewBox="0 0 600 530" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M135.72 44.03c66.496 49.921 138.02 151.14 164.28 205.46 26.262-54.316 97.782-155.54 164.28-205.46 47.98-36.021 125.72-63.892 125.72 24.795 0 17.712-10.155 148.79-16.111 170.07-20.703 73.984-96.144 92.854-163.25 81.433 117.3 19.964 147.14 86.092 82.697 152.22-122.39 125.59-175.91-31.511-189.63-71.766-2.514-7.3797-3.6904-10.832-3.7077-7.8964-0.0174-2.9357-1.1937 0.51669-3.7077 7.8964-13.714 40.255-67.233 197.36-189.63 71.766-64.444-66.128-34.605-132.26 82.697-152.22-67.108 11.421-142.55-7.4491-163.25-81.433-5.9562-21.282-16.111-152.36-16.111-170.07 0-88.687 77.742-60.816 125.72-24.795z" fill="currentColor"/>
+          <svg
+            width="40"
+            height="40"
+            viewBox="0 0 600 530"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M135.72 44.03c66.496 49.921 138.02 151.14 164.28 205.46 26.262-54.316 97.782-155.54 164.28-205.46 47.98-36.021 125.72-63.892 125.72 24.795 0 17.712-10.155 148.79-16.111 170.07-20.703 73.984-96.144 92.854-163.25 81.433 117.3 19.964 147.14 86.092 82.697 152.22-122.39 125.59-175.91-31.511-189.63-71.766-2.514-7.3797-3.6904-10.832-3.7077-7.8964-0.0174-2.9357-1.1937 0.51669-3.7077 7.8964-13.714 40.255-67.233 197.36-189.63 71.766-64.444-66.128-34.605-132.26 82.697-152.22-67.108 11.421-142.55-7.4491-163.25-81.433-5.9562-21.282-16.111-152.36-16.111-170.07 0-88.687 77.742-60.816 125.72-24.795z"
+              fill="currentColor"
+            />
           </svg>
         </div>
         <h1>Sign in to vote</h1>
         <p className="login-description">
-          Connect your Bluesky account to participate in feed governance.
-          You'll need an app password from your Bluesky settings.
+          Connect your Bluesky account to participate in feed governance. You'll need an app
+          password from your Bluesky settings.
         </p>
 
         {error && <div className="error-message">{error}</div>}
@@ -129,9 +138,8 @@ export function Login() {
         <div className="login-info">
           <h3>Why app password?</h3>
           <p>
-            App passwords are separate from your main password and can be revoked
-            at any time. They provide secure access without exposing your main
-            credentials.
+            App passwords are separate from your main password and can be revoked at any time. They
+            provide secure access without exposing your main credentials.
           </p>
         </div>
       </div>

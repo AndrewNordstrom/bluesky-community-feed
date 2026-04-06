@@ -29,7 +29,15 @@ function validateKeyword(keyword: string): string | null {
   return null;
 }
 
-function KeywordPill({ keyword, type, onRemove }: { keyword: string; type: KeywordType; onRemove: () => void }) {
+function KeywordPill({
+  keyword,
+  type,
+  onRemove,
+}: {
+  keyword: string;
+  type: KeywordType;
+  onRemove: () => void;
+}) {
   return (
     <span className={`pill pill-${type}`}>
       {keyword}
@@ -52,7 +60,9 @@ export function ContentFiltersCard({
   const [keywordInput, setKeywordInput] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [pendingRemove, setPendingRemove] = useState<{ type: KeywordType; keyword: string } | null>(null);
+  const [pendingRemove, setPendingRemove] = useState<{ type: KeywordType; keyword: string } | null>(
+    null,
+  );
 
   useEffect(() => {
     setLocalInclude(includeKeywords);
@@ -122,7 +132,11 @@ export function ContentFiltersCard({
     }
 
     try {
-      await adminApi.removeKeyword(type, keyword, type === 'include' && previousInclude.length === 1);
+      await adminApi.removeKeyword(
+        type,
+        keyword,
+        type === 'include' && previousInclude.length === 1,
+      );
       onNotify('success', 'Keyword removed');
       setPendingRemove(null);
       await onUpdate();
@@ -199,7 +213,11 @@ export function ContentFiltersCard({
               </button>
             </div>
           ) : (
-            <button type="button" className="btn-secondary" onClick={() => setActiveForm('include')}>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setActiveForm('include')}
+            >
               + Add Include Keyword
             </button>
           )}
@@ -258,7 +276,11 @@ export function ContentFiltersCard({
               </button>
             </div>
           ) : (
-            <button type="button" className="btn-secondary" onClick={() => setActiveForm('exclude')}>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setActiveForm('exclude')}
+            >
               + Add Exclude Keyword
             </button>
           )}
@@ -269,7 +291,8 @@ export function ContentFiltersCard({
         <p className="help-text">
           <span className="help-text-icon">i</span>
           <span>
-            Posts must match at least one include keyword (when set) and must not match any exclude keyword.
+            Posts must match at least one include keyword (when set) and must not match any exclude
+            keyword.
           </span>
         </p>
       </div>

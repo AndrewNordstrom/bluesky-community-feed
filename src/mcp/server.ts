@@ -17,11 +17,11 @@ const MCP_SERVER_VERSION = '1.0.0';
 export function createMcpServer(
   app: FastifyInstance,
   sessionToken: string,
-  cookieName: string
+  cookieName: string,
 ): McpServer {
   const server = new McpServer(
     { name: MCP_SERVER_NAME, version: MCP_SERVER_VERSION },
-    { capabilities: { tools: {} } }
+    { capabilities: { tools: {} } },
   );
 
   registerAllTools(server, app, sessionToken, cookieName);

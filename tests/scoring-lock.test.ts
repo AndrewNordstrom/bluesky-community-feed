@@ -54,13 +54,7 @@ describe('scoring Redis distributed lock', () => {
     const triggered = await tryTriggerManualScoringRun();
 
     expect(triggered).toBe(true);
-    expect(redisSetMock).toHaveBeenCalledWith(
-      'lock:scoring',
-      expect.any(String),
-      'EX',
-      300,
-      'NX'
-    );
+    expect(redisSetMock).toHaveBeenCalledWith('lock:scoring', expect.any(String), 'EX', 300, 'NX');
   });
 
   it('returns false when Redis SET NX returns null (lock held)', async () => {
@@ -117,7 +111,10 @@ describe('scoring Redis distributed lock', () => {
     // Create a long-running pipeline to check isScoring mid-run
     let resolvePipeline: () => void;
     runScoringPipelineMock.mockImplementation(
-      () => new Promise<void>((resolve) => { resolvePipeline = resolve; })
+      () =>
+        new Promise<void>((resolve) => {
+          resolvePipeline = resolve;
+        }),
     );
 
     await tryTriggerManualScoringRun();

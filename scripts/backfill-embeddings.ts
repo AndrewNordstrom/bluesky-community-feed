@@ -18,7 +18,11 @@
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
 import { initEmbedder, embedTexts, cosineSimilarity } from '../src/scoring/topics/embedder.js';
-import { loadTaxonomy, loadTopicEmbeddings, getTopicsWithEmbeddings } from '../src/scoring/topics/taxonomy.js';
+import {
+  loadTaxonomy,
+  loadTopicEmbeddings,
+  getTopicsWithEmbeddings,
+} from '../src/scoring/topics/taxonomy.js';
 
 dotenv.config();
 
@@ -54,7 +58,9 @@ function parseArgs(): { batchSize: number; dryRun: boolean; hours: number; minSi
 async function main() {
   const { batchSize, dryRun, hours, minSimilarity } = parseArgs();
 
-  console.log(`Backfill embeddings: batchSize=${batchSize}, hours=${hours}, minSimilarity=${minSimilarity}, dryRun=${dryRun}`);
+  console.log(
+    `Backfill embeddings: batchSize=${batchSize}, hours=${hours}, minSimilarity=${minSimilarity}, dryRun=${dryRun}`,
+  );
 
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -84,7 +90,7 @@ async function main() {
          AND text IS NOT NULL
          AND LENGTH(text) > 0
          AND topic_vector IS NOT NULL
-         AND topic_vector::text != '{}'`
+         AND topic_vector::text != '{}'`,
     );
     const totalCandidates = parseInt(countResult.rows[0].cnt, 10);
     console.log(`Found ${totalCandidates} candidate posts in ${hours}-hour window`);
@@ -103,7 +109,7 @@ async function main() {
          AND LENGTH(text) > 0
          AND topic_vector IS NOT NULL
          AND topic_vector::text != '{}'
-       ORDER BY created_at DESC`
+       ORDER BY created_at DESC`,
     );
 
     const posts = postsResult.rows as Array<{ uri: string; text: string }>;
@@ -117,7 +123,7 @@ async function main() {
     // Process in batches
     for (let offset = 0; offset < posts.length; offset += batchSize) {
       const batch = posts.slice(offset, offset + batchSize);
-      const texts = batch.map(p => p.text);
+      const texts = batch.map((p) => p.text);
 
       // Embed all texts in this batch
       const embeddings = await embedTexts(texts);
@@ -157,21 +163,21 @@ async function main() {
           const rate = (totalProcessed / ((Date.now() - startTime) / 1000)).toFixed(0);
           console.log(
             `Progress: ${totalProcessed}/${posts.length} (${elapsed}s, ${rate} posts/s) — ` +
-            `replaced=${totalReplaced}, kept=${totalKept}`
+              `replaced=${totalReplaced}, kept=${totalKept}`,
           );
         }
       }
 
       // Batch UPDATE
       if (!dryRun && updates.length > 0) {
-        const uris = updates.map(u => u.uri);
-        const vectors = updates.map(u => u.vector);
+        const uris = updates.map((u) => u.uri);
+        const vectors = updates.map((u) => u.vector);
 
         await pool.query(
           `UPDATE posts AS p SET topic_vector = v.vector::jsonb
            FROM (SELECT unnest($1::text[]) AS uri, unnest($2::text[]) AS vector) AS v
            WHERE p.uri = v.uri`,
-          [uris, vectors]
+          [uris, vectors],
         );
       }
     }

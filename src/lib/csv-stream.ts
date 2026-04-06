@@ -20,7 +20,7 @@ export interface CsvWriter {
 export function startCsvStream(
   reply: FastifyReply,
   filename: string,
-  columns: string[]
+  columns: string[],
 ): CsvWriter {
   reply.raw.writeHead(200, {
     'Content-Type': 'text/csv; charset=utf-8',

@@ -50,9 +50,17 @@ export function GovernancePanel() {
     <div className="governance-panel content-loaded">
       {message ? <div className={`alert alert-${message.type}`}>{message.text}</div> : null}
 
-      <CurrentRoundCard round={data.currentRound} onAction={fetchGovernanceStatus} onNotify={handleNotify} />
+      <CurrentRoundCard
+        round={data.currentRound}
+        onAction={fetchGovernanceStatus}
+        onNotify={handleNotify}
+      />
 
-      <WeightsCard weights={data.weights} onUpdate={fetchGovernanceStatus} onNotify={handleNotify} />
+      <WeightsCard
+        weights={data.weights}
+        onUpdate={fetchGovernanceStatus}
+        onNotify={handleNotify}
+      />
 
       <ContentFiltersCard
         includeKeywords={data.includeKeywords}
@@ -61,7 +69,11 @@ export function GovernancePanel() {
         onNotify={handleNotify}
       />
 
-      <SchedulingCard round={data.currentRound} onUpdate={fetchGovernanceStatus} onNotify={handleNotify} />
+      <SchedulingCard
+        round={data.currentRound}
+        onUpdate={fetchGovernanceStatus}
+        onNotify={handleNotify}
+      />
 
       <RoundHistoryCard rounds={data.rounds} />
     </div>

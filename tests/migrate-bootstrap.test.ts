@@ -34,7 +34,11 @@ describe('migration bootstrap for legacy schemas', () => {
     });
 
     const files = ['001_initial_schema.sql', '002_scoring_tables.sql'];
-    const applied = await bootstrapLegacyMigrations(asClient(queryMock as Client['query']), files, new Set());
+    const applied = await bootstrapLegacyMigrations(
+      asClient(queryMock as Client['query']),
+      files,
+      new Set(),
+    );
 
     expect(applied.has('001_initial_schema.sql')).toBe(true);
     expect(applied.has('002_scoring_tables.sql')).toBe(false);
@@ -52,7 +56,11 @@ describe('migration bootstrap for legacy schemas', () => {
     });
 
     const files = ['001_initial_schema.sql', '002_scoring_tables.sql'];
-    const applied = await bootstrapLegacyMigrations(asClient(queryMock as Client['query']), files, new Set());
+    const applied = await bootstrapLegacyMigrations(
+      asClient(queryMock as Client['query']),
+      files,
+      new Set(),
+    );
 
     expect(applied.size).toBe(0);
     expect(queryMock).toHaveBeenCalledTimes(3);

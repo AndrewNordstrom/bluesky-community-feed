@@ -131,11 +131,11 @@ function setupSinglePostRun(
   const epochRow = makeEpochRow(epochId);
 
   dbQueryMock
-    .mockResolvedValueOnce({ rows: [epochRow] })   // getActiveEpoch
-    .mockResolvedValueOnce({ rows: [postRow] })     // getPostsForScoring
-    .mockResolvedValueOnce({ rows: [] })             // storeScore INSERT
-    .mockResolvedValueOnce({ rows: [] })             // writeToRedisFromDb
-    .mockResolvedValueOnce({ rows: [] });            // updateCurrentRunScope
+    .mockResolvedValueOnce({ rows: [epochRow] }) // getActiveEpoch
+    .mockResolvedValueOnce({ rows: [postRow] }) // getPostsForScoring
+    .mockResolvedValueOnce({ rows: [] }) // storeScore INSERT
+    .mockResolvedValueOnce({ rows: [] }) // writeToRedisFromDb
+    .mockResolvedValueOnce({ rows: [] }); // updateCurrentRunScope
 }
 
 /** Extract the classification_method stored in post_scores via storeScore. */
@@ -216,19 +216,23 @@ describe('scoring pipeline classification method tracking', () => {
 
     await runScoringPipeline();
 
-    const storeCall = dbQueryMock.mock.calls.find(
-      (c: unknown[]) => String(c[0]).includes('INSERT INTO post_scores')
+    const storeCall = dbQueryMock.mock.calls.find((c: unknown[]) =>
+      String(c[0]).includes('INSERT INTO post_scores'),
     );
     expect(storeCall).toBeDefined();
   });
 
   it('posts with embedding-style vectors score correctly', async () => {
-    setupSinglePostRun(1, { 'software-development': 0.62, 'devops-infrastructure': 0.38 }, 'embedding');
+    setupSinglePostRun(
+      1,
+      { 'software-development': 0.62, 'devops-infrastructure': 0.38 },
+      'embedding',
+    );
 
     await runScoringPipeline();
 
-    const storeCall = dbQueryMock.mock.calls.find(
-      (c: unknown[]) => String(c[0]).includes('INSERT INTO post_scores')
+    const storeCall = dbQueryMock.mock.calls.find((c: unknown[]) =>
+      String(c[0]).includes('INSERT INTO post_scores'),
     );
     expect(storeCall).toBeDefined();
     expect(getStoredClassificationMethod()).toBe('embedding');
@@ -237,9 +241,9 @@ describe('scoring pipeline classification method tracking', () => {
   it('completes scoring run when no posts to score', async () => {
     dbQueryMock
       .mockResolvedValueOnce({ rows: [makeEpochRow()] }) // getActiveEpoch
-      .mockResolvedValueOnce({ rows: [] })                // getPostsForScoring (empty)
-      .mockResolvedValueOnce({ rows: [] })                // writeToRedisFromDb
-      .mockResolvedValueOnce({ rows: [] });               // updateCurrentRunScope
+      .mockResolvedValueOnce({ rows: [] }) // getPostsForScoring (empty)
+      .mockResolvedValueOnce({ rows: [] }) // writeToRedisFromDb
+      .mockResolvedValueOnce({ rows: [] }); // updateCurrentRunScope
 
     await expect(runScoringPipeline()).resolves.not.toThrow();
   });

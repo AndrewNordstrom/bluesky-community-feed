@@ -75,16 +75,19 @@ export function WeightImpactPanel() {
     <div className="admin-card">
       <div className="weight-impact-header">
         <h2>Weight Impact Analysis</h2>
-        <button type="button" className="btn-secondary" onClick={() => void fetchImpact()} disabled={isLoading}>
+        <button
+          type="button"
+          className="btn-secondary"
+          onClick={() => void fetchImpact()}
+          disabled={isLoading}
+        >
           {isLoading ? 'Refreshing...' : 'Refresh'}
         </button>
       </div>
 
       {message ? <div className={`alert alert-${message.type}`}>{message.text}</div> : null}
 
-      {isLoading && !data ? (
-        <p className="empty-state">Loading weight impact analysis...</p>
-      ) : null}
+      {isLoading && !data ? <p className="empty-state">Loading weight impact analysis...</p> : null}
 
       {!isLoading && data ? (
         <>
@@ -92,9 +95,11 @@ export function WeightImpactPanel() {
             <div className="stat-row">
               <span>Current weights</span>
               <strong>
-                {formatPercent(data.currentWeights.recency)} recency, {formatPercent(data.currentWeights.engagement)}
-                {' '}engagement, {formatPercent(data.currentWeights.bridging)} bridging,{' '}
-                {formatPercent(data.currentWeights.sourceDiversity)} diversity, {formatPercent(data.currentWeights.relevance)} relevance
+                {formatPercent(data.currentWeights.recency)} recency,{' '}
+                {formatPercent(data.currentWeights.engagement)} engagement,{' '}
+                {formatPercent(data.currentWeights.bridging)} bridging,{' '}
+                {formatPercent(data.currentWeights.sourceDiversity)} diversity,{' '}
+                {formatPercent(data.currentWeights.relevance)} relevance
               </strong>
             </div>
             <div className="stat-row">
@@ -108,7 +113,8 @@ export function WeightImpactPanel() {
               <h3>Why Is This Post #1?</h3>
               <p className="impact-post-title">{topPost.textPreview ?? topPost.uri}</p>
               <p className="impact-post-meta">
-                Dominant factor: <strong>{COMPONENT_LABELS[topPost.dominantFactor]}</strong>. With equal weights this would rank #{topPost.wouldRankWithEqualWeights}.
+                Dominant factor: <strong>{COMPONENT_LABELS[topPost.dominantFactor]}</strong>. With
+                equal weights this would rank #{topPost.wouldRankWithEqualWeights}.
               </p>
             </div>
           ) : null}
@@ -125,12 +131,16 @@ export function WeightImpactPanel() {
                   <p className="impact-post-title">{post.textPreview ?? post.uri}</p>
 
                   {rows.map((row) => {
-                    const contribution = post.totalScore > 0 ? (row.weighted / post.totalScore) * 100 : 0;
+                    const contribution =
+                      post.totalScore > 0 ? (row.weighted / post.totalScore) * 100 : 0;
                     return (
                       <div key={`${post.uri}-${row.key}`} className="impact-row">
                         <span className="impact-label">{COMPONENT_LABELS[row.key]}</span>
                         <div className="impact-bar-container">
-                          <div className="impact-bar" style={{ width: `${Math.max(0, Math.min(100, contribution))}%` }} />
+                          <div
+                            className="impact-bar"
+                            style={{ width: `${Math.max(0, Math.min(100, contribution))}%` }}
+                          />
                         </div>
                         <span className="impact-value">{Math.round(contribution)}%</span>
                       </div>

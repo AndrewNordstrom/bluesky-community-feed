@@ -65,7 +65,7 @@ export async function postAnnouncement(payload: AnnouncementPayload): Promise<An
     `INSERT INTO bot_announcements (uri, cid, type, epoch_id, content)
      VALUES ($1, $2, $3, $4, $5)
      RETURNING id, uri, cid, type, epoch_id, content, created_at, deleted`,
-    [response.uri, response.cid, payload.type, epochId, text]
+    [response.uri, response.cid, payload.type, epochId, text],
   );
 
   const row = result.rows[0];
@@ -92,7 +92,7 @@ export async function postAnnouncement(payload: AnnouncementPayload): Promise<An
 
   logger.info(
     { announcementId: announcement.id, uri: announcement.uri, ttlHours: config.BOT_PIN_TTL_HOURS },
-    'Announcement pinned to feed'
+    'Announcement pinned to feed',
   );
 
   // 8. Log to audit trail
@@ -106,7 +106,7 @@ export async function postAnnouncement(payload: AnnouncementPayload): Promise<An
         type: announcement.type,
         epoch_id: announcement.epochId,
       }),
-    ]
+    ],
   );
 
   return announcement;
@@ -151,7 +151,7 @@ export async function getRecentAnnouncements(limit: number = 10): Promise<Announ
      WHERE deleted = FALSE
      ORDER BY created_at DESC
      LIMIT $1`,
-    [limit]
+    [limit],
   );
 
   return result.rows.map((row) => ({

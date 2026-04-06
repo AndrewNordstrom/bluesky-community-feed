@@ -28,10 +28,7 @@ export function resolveConfig(opts: {
 }): CliConfig {
   const direct = opts.direct || !!process.env.DATABASE_URL;
   return {
-    serverUrl:
-      opts.server ||
-      process.env.FEED_CLI_SERVER ||
-      'https://feed.corgi.network',
+    serverUrl: opts.server || process.env.FEED_CLI_SERVER || 'https://feed.corgi.network',
     sessionPath: join(homedir(), '.feed-cli', 'session.json'),
     direct,
     databaseUrl: process.env.DATABASE_URL,

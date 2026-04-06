@@ -25,18 +25,6 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const PLC_DIRECTORY = 'https://plc.directory';
-
-interface PlcOperation {
-  type: 'plc_operation';
-  rotationKeys: string[];
-  verificationMethods: Record<string, string>;
-  alsoKnownAs: string[];
-  services: Record<string, { type: string; endpoint: string }>;
-  prev: string | null;
-  sig: string;
-}
-
 async function createDidPlc() {
   console.log('=== DID:PLC Generator for Feed Generator ===\n');
   const shouldPrintPrivateKey = process.argv.includes('--print-private-key');

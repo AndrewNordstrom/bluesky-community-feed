@@ -16,7 +16,7 @@ export function formatDate(dateStr: string | null | undefined): string {
     day: 'numeric',
     year: 'numeric',
     hour: 'numeric',
-    minute: '2-digit'
+    minute: '2-digit',
   });
 }
 
@@ -74,6 +74,6 @@ export function formatActionName(action: string | null | undefined): string {
   if (!action) return 'Unknown';
   return action
     .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
 }

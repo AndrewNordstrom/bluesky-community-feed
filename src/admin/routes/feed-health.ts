@@ -131,7 +131,7 @@ export function registerFeedHealthRoutes(app: FastifyInstance): void {
     await db.query(
       `INSERT INTO governance_audit_log (action, actor_did, details)
        VALUES ('admin_jetstream_reconnect', $1, $2)`,
-      [adminDid, JSON.stringify({ triggeredAt: new Date().toISOString() })]
+      [adminDid, JSON.stringify({ triggeredAt: new Date().toISOString() })],
     );
 
     logger.info({ adminDid }, 'Manual Jetstream reconnect triggered by admin');
@@ -161,7 +161,7 @@ export function registerFeedHealthRoutes(app: FastifyInstance): void {
     await db.query(
       `INSERT INTO governance_audit_log (action, actor_did, details)
        VALUES ('manual_rescore', $1, $2)`,
-      [adminDid, JSON.stringify({ triggeredAt: new Date().toISOString() })]
+      [adminDid, JSON.stringify({ triggeredAt: new Date().toISOString() })],
     );
 
     logger.info({ adminDid }, 'Manual rescore triggered by admin');

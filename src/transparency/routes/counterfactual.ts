@@ -28,7 +28,9 @@ const CounterfactualQuerySchema = z.object({
 });
 
 /** JSON Schema for OpenAPI documentation. */
-const CounterfactualQueryJsonSchema = zodToJsonSchema(CounterfactualQuerySchema, { target: 'jsonSchema7' });
+const CounterfactualQueryJsonSchema = zodToJsonSchema(CounterfactualQuerySchema, {
+  target: 'jsonSchema7',
+});
 
 interface CurrentScoringRunValue {
   run_id?: unknown;
@@ -39,7 +41,7 @@ async function getCurrentScoringRunScope(): Promise<{ runId: string; epochId: nu
   const result = await db.query<{ value: CurrentScoringRunValue }>(
     `SELECT value
      FROM system_status
-     WHERE key = 'current_scoring_run'`
+     WHERE key = 'current_scoring_run'`,
   );
 
   const value = result.rows[0]?.value;
@@ -102,7 +104,10 @@ export function registerCounterfactualRoute(app: FastifyInstance): void {
                     original_rank: { type: 'integer' },
                     counterfactual_score: { type: 'number' },
                     counterfactual_rank: { type: 'integer' },
-                    rank_delta: { type: 'integer', description: 'Positive = moved up with alternate weights' },
+                    rank_delta: {
+                      type: 'integer',
+                      description: 'Positive = moved up with alternate weights',
+                    },
                   },
                 },
               },
@@ -152,7 +157,7 @@ export function registerCounterfactualRoute(app: FastifyInstance): void {
       try {
         // Get current epoch
         const epochResult = await db.query(
-          `SELECT * FROM governance_epochs WHERE status = 'active' ORDER BY id DESC LIMIT 1`
+          `SELECT * FROM governance_epochs WHERE status = 'active' ORDER BY id DESC LIMIT 1`,
         );
 
         if (epochResult.rows.length === 0) {
@@ -194,7 +199,7 @@ export function registerCounterfactualRoute(app: FastifyInstance): void {
           ORDER BY total_score DESC
           LIMIT $${postsParams.length}
           `,
-          postsParams
+          postsParams,
         );
 
         if (postsResult.rows.length === 0) {
@@ -234,7 +239,7 @@ export function registerCounterfactualRoute(app: FastifyInstance): void {
 
         // Sort by counterfactual score to get new ranking
         const sortedByCounterfactual = [...postsWithCounterfactual].sort(
-          (a, b) => b.counterfactual_score - a.counterfactual_score
+          (a, b) => b.counterfactual_score - a.counterfactual_score,
         );
 
         // Assign counterfactual ranks
@@ -244,19 +249,17 @@ export function registerCounterfactualRoute(app: FastifyInstance): void {
         });
 
         // Build result with rank deltas
-        const posts: CounterfactualPost[] = postsWithCounterfactual
-          .slice(0, limit)
-          .map((post) => {
-            const counterfactual_rank = counterfactualRankMap.get(post.post_uri)!;
-            return {
-              post_uri: post.post_uri,
-              original_score: post.original_score,
-              original_rank: post.original_rank,
-              counterfactual_score: post.counterfactual_score,
-              counterfactual_rank,
-              rank_delta: post.original_rank - counterfactual_rank,
-            };
-          });
+        const posts: CounterfactualPost[] = postsWithCounterfactual.slice(0, limit).map((post) => {
+          const counterfactual_rank = counterfactualRankMap.get(post.post_uri)!;
+          return {
+            post_uri: post.post_uri,
+            original_score: post.original_score,
+            original_rank: post.original_rank,
+            counterfactual_score: post.counterfactual_score,
+            counterfactual_rank,
+            rank_delta: post.original_rank - counterfactual_rank,
+          };
+        });
 
         // Calculate summary statistics
         let movedUp = 0;
@@ -303,6 +306,6 @@ export function registerCounterfactualRoute(app: FastifyInstance): void {
           message: 'An error occurred while calculating counterfactual rankings',
         });
       }
-    }
+    },
   );
 }

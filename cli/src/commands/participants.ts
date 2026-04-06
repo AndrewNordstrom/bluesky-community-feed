@@ -11,9 +11,7 @@ import { printJson, printTable, printSuccess, printError } from '../output.js';
 
 /** Register participant commands on the program. */
 export function registerParticipantCommands(program: Command): void {
-  const participants = program
-    .command('participants')
-    .description('Manage approved participants');
+  const participants = program.command('participants').description('Manage approved participants');
 
   // ── List ──
   participants
@@ -24,7 +22,7 @@ export function registerParticipantCommands(program: Command): void {
         const config = resolveConfig(program.opts());
         const data = await apiGet<{ participants: Record<string, unknown>[] }>(
           '/api/admin/participants',
-          config
+          config,
         );
 
         if (config.json) {
@@ -37,14 +35,9 @@ export function registerParticipantCommands(program: Command): void {
           const rows = data.participants.map((p) => [
             p.did,
             p.handle ?? '',
-            p.approved_at
-              ? new Date(p.approved_at as string).toLocaleDateString()
-              : '',
+            p.approved_at ? new Date(p.approved_at as string).toLocaleDateString() : '',
           ]);
-          printTable(
-            ['DID', 'Handle', 'Approved'],
-            rows as (string | number | null)[][]
-          );
+          printTable(['DID', 'Handle', 'Approved'], rows as (string | number | null)[][]);
         }
       } catch (err) {
         printError((err as Error).message);
@@ -61,14 +54,12 @@ export function registerParticipantCommands(program: Command): void {
       try {
         const config = resolveConfig(program.opts());
 
-        const body = identifier.startsWith('did:')
-          ? { did: identifier }
-          : { handle: identifier };
+        const body = identifier.startsWith('did:') ? { did: identifier } : { handle: identifier };
 
         const data = await apiPost<Record<string, unknown>>(
           '/api/admin/participants',
           body,
-          config
+          config,
         );
 
         if (config.json) {
@@ -92,7 +83,7 @@ export function registerParticipantCommands(program: Command): void {
         const config = resolveConfig(program.opts());
         const data = await apiDelete<Record<string, unknown>>(
           `/api/admin/participants/${encodeURIComponent(did)}`,
-          config
+          config,
         );
 
         if (config.json) {

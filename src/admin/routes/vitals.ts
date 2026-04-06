@@ -45,14 +45,14 @@ export function registerVitalsRoutes(app: FastifyInstance): void {
     ] = await Promise.all([
       getHealthStatus(),
       safeQuery<{ size_bytes: string }>(
-        `SELECT pg_database_size(current_database()) as size_bytes`
+        `SELECT pg_database_size(current_database()) as size_bytes`,
       ),
       safeQuery<{ table_name: string; size_bytes: string }>(
         `SELECT relname as table_name, pg_total_relation_size(relid) as size_bytes
-         FROM pg_stat_user_tables ORDER BY pg_total_relation_size(relid) DESC LIMIT 10`
+         FROM pg_stat_user_tables ORDER BY pg_total_relation_size(relid) DESC LIMIT 10`,
       ),
       safeQuery<{ wal_bytes: string }>(
-        `SELECT COALESCE(SUM(size), 0) as wal_bytes FROM pg_ls_waldir()`
+        `SELECT COALESCE(SUM(size), 0) as wal_bytes FROM pg_ls_waldir()`,
       ),
       redis.zcard('feed:current').catch(() => 0),
       redis.get('feed:updated_at').catch(() => null),
@@ -60,18 +60,23 @@ export function registerVitalsRoutes(app: FastifyInstance): void {
       redis.info('memory').catch(() => ''),
       safeQuery<{ key: string; value: Record<string, unknown>; updated_at: string }>(
         `SELECT key, value, updated_at::text FROM system_status
-         WHERE key IN ('current_scoring_run', 'last_cleanup_run', 'disk_status', 'last_emergency_vacuum', 'engagement_alert')`
+         WHERE key IN ('current_scoring_run', 'last_cleanup_run', 'disk_status', 'last_emergency_vacuum', 'engagement_alert')`,
       ),
       safeQuery<{ total: string; active_24h: string; active_7d: string }>(
         `SELECT
            COUNT(*) as total,
            COUNT(*) FILTER (WHERE last_seen > NOW() - INTERVAL '24 hours') as active_24h,
            COUNT(*) FILTER (WHERE last_seen > NOW() - INTERVAL '7 days') as active_7d
-         FROM subscribers WHERE is_active = TRUE`
+         FROM subscribers WHERE is_active = TRUE`,
       ),
-      safeQuery<{ epoch_id: string; engagement_rate: string; viewer_count: string; computed_at: string }>(
+      safeQuery<{
+        epoch_id: string;
+        engagement_rate: string;
+        viewer_count: string;
+        computed_at: string;
+      }>(
         `SELECT epoch_id::text, engagement_rate::text, viewer_count::text, computed_at::text
-         FROM epoch_engagement_stats ORDER BY computed_at DESC LIMIT 7`
+         FROM epoch_engagement_stats ORDER BY computed_at DESC LIMIT 7`,
       ),
       safeQuery<{ dead_count: string; total_scored: string }>(
         `SELECT
@@ -83,7 +88,7 @@ export function registerVitalsRoutes(app: FastifyInstance): void {
            COUNT(*) as total_scored
          FROM posts p
          JOIN post_scores ps ON ps.uri = p.uri
-         WHERE p.indexed_at > NOW() - INTERVAL '24 hours' AND p.deleted = FALSE`
+         WHERE p.indexed_at > NOW() - INTERVAL '24 hours' AND p.deleted = FALSE`,
       ),
     ]);
 
@@ -119,8 +124,11 @@ export function registerVitalsRoutes(app: FastifyInstance): void {
 
     // Feed quality
     const deadCount = feedQualityResult ? parseInt(feedQualityResult[0]?.dead_count ?? '0', 10) : 0;
-    const totalScored = feedQualityResult ? parseInt(feedQualityResult[0]?.total_scored ?? '0', 10) : 0;
-    const deadContentRatio = totalScored > 0 ? Math.round((deadCount / totalScored) * 100) / 100 : 0;
+    const totalScored = feedQualityResult
+      ? parseInt(feedQualityResult[0]?.total_scored ?? '0', 10)
+      : 0;
+    const deadContentRatio =
+      totalScored > 0 ? Math.round((deadCount / totalScored) * 100) / 100 : 0;
 
     const vitals = {
       overall: healthStatus.status,
@@ -251,6 +259,7 @@ function parseRedisMemory(info: string): { usedMb: number | null; maxMb: number 
 
   return {
     usedMb: usedMatch ? Math.round(Number(usedMatch[1]) / (1024 * 1024)) : null,
-    maxMb: maxMatch && Number(maxMatch[1]) > 0 ? Math.round(Number(maxMatch[1]) / (1024 * 1024)) : null,
+    maxMb:
+      maxMatch && Number(maxMatch[1]) > 0 ? Math.round(Number(maxMatch[1]) / (1024 * 1024)) : null,
   };
 }

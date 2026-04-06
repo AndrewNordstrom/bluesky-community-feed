@@ -46,8 +46,11 @@ vi.mock('../src/admin/status-tracker.js', () => ({
   updateScoringStatus: updateScoringStatusMock,
 }));
 
-
-import { runScoringPipeline, getLastScoringRunAt, __resetPipelineState } from '../src/scoring/pipeline.js';
+import {
+  runScoringPipeline,
+  getLastScoringRunAt,
+  __resetPipelineState,
+} from '../src/scoring/pipeline.js';
 import { buildEpochRow, buildPostRow } from './helpers/index.js';
 
 function makeEpochRow(id = 2) {
@@ -86,10 +89,10 @@ describe('incremental scoring pipeline', () => {
     // First run ever: lastSuccessfulRunAt is null → full rescore
     // Call sequence: epoch query, full posts query, writeToRedisFromDb, updateCurrentRunScope
     dbQueryMock
-      .mockResolvedValueOnce({ rows: [makeEpochRow()] })   // getActiveEpoch
-      .mockResolvedValueOnce({ rows: [] })                   // getPostsForScoring (full)
-      .mockResolvedValueOnce({ rows: [] })                   // writeToRedisFromDb
-      .mockResolvedValueOnce({ rows: [] });                  // updateCurrentRunScope
+      .mockResolvedValueOnce({ rows: [makeEpochRow()] }) // getActiveEpoch
+      .mockResolvedValueOnce({ rows: [] }) // getPostsForScoring (full)
+      .mockResolvedValueOnce({ rows: [] }) // writeToRedisFromDb
+      .mockResolvedValueOnce({ rows: [] }); // updateCurrentRunScope
 
     await runScoringPipeline();
 
@@ -112,17 +115,17 @@ describe('incremental scoring pipeline', () => {
     dbQueryMock.mockReset();
     setupDefaultMocks();
     dbQueryMock
-      .mockResolvedValueOnce({ rows: [makeEpochRow()] })       // getActiveEpoch
-      .mockResolvedValueOnce({ rows: [] })                       // getPostsForIncrementalScoring
-      .mockResolvedValueOnce({ rows: [] })                       // writeToRedisFromDb
-      .mockResolvedValueOnce({ rows: [] });                      // updateCurrentRunScope
+      .mockResolvedValueOnce({ rows: [makeEpochRow()] }) // getActiveEpoch
+      .mockResolvedValueOnce({ rows: [] }) // getPostsForIncrementalScoring
+      .mockResolvedValueOnce({ rows: [] }) // writeToRedisFromDb
+      .mockResolvedValueOnce({ rows: [] }); // updateCurrentRunScope
 
     await runScoringPipeline();
 
     // The second call should be the incremental query (has UNION ALL)
     const postsQuery = String(dbQueryMock.mock.calls[1][0]);
     expect(postsQuery).toContain('UNION ALL');
-    expect(postsQuery).toContain('ps.post_uri IS NULL');       // Part A: new posts
+    expect(postsQuery).toContain('ps.post_uri IS NULL'); // Part A: new posts
     expect(postsQuery).toContain('pe.updated_at > ps.scored_at'); // Part B: changed engagement
   });
 
@@ -139,8 +142,8 @@ describe('incremental scoring pipeline', () => {
     dbQueryMock.mockReset();
     setupDefaultMocks();
     dbQueryMock
-      .mockResolvedValueOnce({ rows: [makeEpochRow(3)] })  // Different epoch!
-      .mockResolvedValueOnce({ rows: [] })                   // Should be full query
+      .mockResolvedValueOnce({ rows: [makeEpochRow(3)] }) // Different epoch!
+      .mockResolvedValueOnce({ rows: [] }) // Should be full query
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });
     await runScoringPipeline();
@@ -152,8 +155,8 @@ describe('incremental scoring pipeline', () => {
   it('writeToRedisFromDb reads scores from DB for complete feed', async () => {
     const postRow = makePostRow();
     dbQueryMock
-      .mockResolvedValueOnce({ rows: [makeEpochRow()] })   // getActiveEpoch
-      .mockResolvedValueOnce({ rows: [postRow] })           // getPostsForScoring (full)
+      .mockResolvedValueOnce({ rows: [makeEpochRow()] }) // getActiveEpoch
+      .mockResolvedValueOnce({ rows: [postRow] }) // getPostsForScoring (full)
       // scoreBridging engager query (for the scored post)
       .mockResolvedValueOnce({ rows: [] })
       // storeScore upsert
@@ -169,7 +172,8 @@ describe('incremental scoring pipeline', () => {
 
     // Find the writeToRedisFromDb call (query with post_scores and total_score)
     const writeCall = dbQueryMock.mock.calls.find(
-      (call: unknown[]) => String(call[0]).includes('post_scores ps') && String(call[0]).includes('total_score')
+      (call: unknown[]) =>
+        String(call[0]).includes('post_scores ps') && String(call[0]).includes('total_score'),
     );
     expect(writeCall).toBeDefined();
 

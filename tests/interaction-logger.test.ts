@@ -35,9 +35,8 @@ vi.mock('../src/lib/logger.js', () => ({
 }));
 
 // Import AFTER mocks are set up
-const { startInteractionLogger, stopInteractionLogger } = await import(
-  '../src/maintenance/interaction-logger.js'
-);
+const { startInteractionLogger, stopInteractionLogger } =
+  await import('../src/maintenance/interaction-logger.js');
 const { logger } = await import('../src/lib/logger.js');
 
 function makeLogEntry(overrides: Record<string, unknown> = {}) {
@@ -65,9 +64,7 @@ describe('interaction logger', () => {
 
   it('drains queue entries and inserts into feed_requests', async () => {
     // Return one entry then null (queue empty)
-    redisMock.lpop
-      .mockResolvedValueOnce(makeLogEntry())
-      .mockResolvedValueOnce(null);
+    redisMock.lpop.mockResolvedValueOnce(makeLogEntry()).mockResolvedValueOnce(null);
 
     // Start will run immediately then we stop
     await startInteractionLogger();
@@ -75,7 +72,7 @@ describe('interaction logger', () => {
 
     // Should have called db.query with INSERT INTO feed_requests
     const feedRequestCalls = dbQueryMock.mock.calls.filter(
-      (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('feed_requests')
+      (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('feed_requests'),
     );
     expect(feedRequestCalls.length).toBeGreaterThanOrEqual(1);
 
@@ -95,7 +92,8 @@ describe('interaction logger', () => {
     await stopInteractionLogger();
 
     const attributionCalls = dbQueryMock.mock.calls.filter(
-      (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('engagement_attributions')
+      (call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('engagement_attributions'),
     );
     expect(attributionCalls.length).toBeGreaterThanOrEqual(1);
 
@@ -115,13 +113,14 @@ describe('interaction logger', () => {
 
     // Should still insert feed_requests
     const feedRequestCalls = dbQueryMock.mock.calls.filter(
-      (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('feed_requests')
+      (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('feed_requests'),
     );
     expect(feedRequestCalls.length).toBeGreaterThanOrEqual(1);
 
     // But NOT engagement_attributions
     const attributionCalls = dbQueryMock.mock.calls.filter(
-      (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('engagement_attributions')
+      (call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('engagement_attributions'),
     );
     expect(attributionCalls).toHaveLength(0);
   });
@@ -134,7 +133,7 @@ describe('interaction logger', () => {
 
     // No INSERT calls should happen
     const insertCalls = dbQueryMock.mock.calls.filter(
-      (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('INSERT')
+      (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('INSERT'),
     );
     expect(insertCalls).toHaveLength(0);
   });
@@ -150,7 +149,7 @@ describe('interaction logger', () => {
 
     // Should still process the valid entry
     const feedRequestCalls = dbQueryMock.mock.calls.filter(
-      (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('feed_requests')
+      (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('feed_requests'),
     );
     expect(feedRequestCalls.length).toBeGreaterThanOrEqual(1);
   });
@@ -167,7 +166,8 @@ describe('interaction logger', () => {
 
     // Should batch all 3 into a single INSERT
     const feedRequestCalls = dbQueryMock.mock.calls.filter(
-      (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('INSERT INTO feed_requests')
+      (call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('INSERT INTO feed_requests'),
     );
     expect(feedRequestCalls.length).toBeGreaterThanOrEqual(1);
 
@@ -189,11 +189,11 @@ describe('interaction logger', () => {
 
     expect(logger.info).toHaveBeenCalledWith(
       { queueDepth: 51001 },
-      'Interaction logger queue depth'
+      'Interaction logger queue depth',
     );
     expect(logger.warn).toHaveBeenCalledWith(
       { queueDepth: 51001, threshold: 50000 },
-      'Interaction logger queue depth is above warning threshold'
+      'Interaction logger queue depth is above warning threshold',
     );
 
     vi.useRealTimers();

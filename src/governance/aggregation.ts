@@ -8,7 +8,7 @@
 import { db } from '../db/client.js';
 import { GOVERNANCE_WEIGHT_VOTE_FIELDS, VOTABLE_WEIGHT_PARAMS } from '../config/votable-params.js';
 import { logger } from '../lib/logger.js';
-import { GovernanceWeights, normalizeWeights, ContentRules, emptyContentRules } from './governance.types.js';
+import { GovernanceWeights, normalizeWeights, ContentRules } from './governance.types.js';
 
 /**
  * Weight component names for iteration.
@@ -46,7 +46,7 @@ export async function aggregateVotes(epochId: number): Promise<GovernanceWeights
          OR
          (exclude_keywords IS NOT NULL AND array_length(exclude_keywords, 1) > 0)
        )`,
-    [epochId]
+    [epochId],
   );
 
   const votes = await db.query(
@@ -60,7 +60,7 @@ export async function aggregateVotes(epochId: number): Promise<GovernanceWeights
        AND source_diversity_weight IS NOT NULL
        AND relevance_weight IS NOT NULL
      ORDER BY voted_at`,
-    [epochId]
+    [epochId],
   );
 
   const n = votes.rows.length;
@@ -69,7 +69,7 @@ export async function aggregateVotes(epochId: number): Promise<GovernanceWeights
   if (keywordOnlyVoteCount > 0) {
     logger.warn(
       { epochId, keywordOnlyVoteCount, weightVoteCount: n },
-      'Keyword-only votes excluded from weight aggregation'
+      'Keyword-only votes excluded from weight aggregation',
     );
   }
 
@@ -88,7 +88,7 @@ export async function aggregateVotes(epochId: number): Promise<GovernanceWeights
   const effectiveTrimCount = n >= 10 ? trimCount : 0;
 
   const aggregated = Object.fromEntries(
-    WEIGHT_COMPONENTS.map((component) => [component, 0] as const)
+    WEIGHT_COMPONENTS.map((component) => [component, 0] as const),
   ) as Record<WeightComponent, number>;
 
   for (const component of WEIGHT_COMPONENTS) {
@@ -98,9 +98,7 @@ export async function aggregateVotes(epochId: number): Promise<GovernanceWeights
 
     // Trim extremes
     const trimmed =
-      effectiveTrimCount > 0
-        ? values.slice(effectiveTrimCount, n - effectiveTrimCount)
-        : values;
+      effectiveTrimCount > 0 ? values.slice(effectiveTrimCount, n - effectiveTrimCount) : values;
 
     // Calculate mean
     const mean = trimmed.reduce((sum: number, v: number) => sum + v, 0) / trimmed.length;
@@ -108,13 +106,13 @@ export async function aggregateVotes(epochId: number): Promise<GovernanceWeights
 
     logger.debug(
       { component, original: values.length, trimmed: trimmed.length, mean },
-      'Component aggregation'
+      'Component aggregation',
     );
   }
 
   // Convert to GovernanceWeights
   const weights = Object.fromEntries(
-    VOTABLE_WEIGHT_PARAMS.map((param) => [param.key, aggregated[param.voteField]] as const)
+    VOTABLE_WEIGHT_PARAMS.map((param) => [param.key, aggregated[param.voteField]] as const),
   ) as unknown as GovernanceWeights;
 
   // Normalize to ensure exact sum of 1.0
@@ -224,7 +222,7 @@ export async function getVoteStatistics(epochId: number): Promise<{
       ) as std_relevance
      FROM governance_votes
      WHERE epoch_id = $1`,
-    [epochId]
+    [epochId],
   );
 
   const row = result.rows[0];
@@ -246,14 +244,14 @@ export async function getVoteStatistics(epochId: number): Promise<{
        AND bridging_weight IS NOT NULL
        AND source_diversity_weight IS NOT NULL
        AND relevance_weight IS NOT NULL`,
-    [epochId]
+    [epochId],
   );
 
   const median = Object.fromEntries(
     VOTABLE_WEIGHT_PARAMS.map((param) => [
       param.key,
       calculateMedian(votes.rows.map((v: Record<string, number>) => v[param.voteField])),
-    ])
+    ]),
   ) as unknown as GovernanceWeights;
 
   return {
@@ -317,7 +315,7 @@ const TOPIC_TRIM_PERCENT = 0.1;
  */
 export async function aggregateTopicWeights(
   epochId: number,
-  trimPercent: number = TOPIC_TRIM_PERCENT
+  trimPercent: number = TOPIC_TRIM_PERCENT,
 ): Promise<Record<string, number>> {
   // 1. Get all votes with topic_weight_votes
   const votes = await db.query(
@@ -325,7 +323,7 @@ export async function aggregateTopicWeights(
      WHERE epoch_id = $1
        AND topic_weight_votes IS NOT NULL
        AND topic_weight_votes != '{}'::jsonb`,
-    [epochId]
+    [epochId],
   );
 
   if (votes.rows.length === 0) {
@@ -334,9 +332,7 @@ export async function aggregateTopicWeights(
   }
 
   // 2. Get active topic slugs
-  const slugResult = await db.query(
-    'SELECT slug FROM topic_catalog WHERE is_active = TRUE'
-  );
+  const slugResult = await db.query('SELECT slug FROM topic_catalog WHERE is_active = TRUE');
   const activeSlugs = slugResult.rows.map((r: Record<string, unknown>) => r.slug as string);
 
   // 3. For each active topic, collect votes, trim, and average
@@ -353,13 +349,10 @@ export async function aggregateTopicWeights(
 
     if (values.length === 0) continue; // Unvoted = excluded, defaults to 0.5 at scoring time
 
-    const effectiveTrim = values.length >= 10
-      ? Math.floor(values.length * trimPercent)
-      : 0;
+    const effectiveTrim = values.length >= 10 ? Math.floor(values.length * trimPercent) : 0;
 
-    const trimmed = effectiveTrim > 0
-      ? values.slice(effectiveTrim, values.length - effectiveTrim)
-      : values;
+    const trimmed =
+      effectiveTrim > 0 ? values.slice(effectiveTrim, values.length - effectiveTrim) : values;
 
     const mean = trimmed.reduce((sum, v) => sum + v, 0) / trimmed.length;
     result[slug] = Math.round(mean * 1000) / 1000; // 3 decimal places
@@ -372,7 +365,7 @@ export async function aggregateTopicWeights(
       topicsWithVotes: Object.keys(result).length,
       activeSlugs: activeSlugs.length,
     },
-    'Topic weight votes aggregated'
+    'Topic weight votes aggregated',
   );
 
   return result;
@@ -401,7 +394,7 @@ export async function aggregateContentVotes(epochId: number): Promise<ContentRul
          include_keywords IS NOT NULL AND array_length(include_keywords, 1) > 0
          OR exclude_keywords IS NOT NULL AND array_length(exclude_keywords, 1) > 0
        )`,
-    [epochId]
+    [epochId],
   );
 
   const n = votes.rows.length;
@@ -451,7 +444,7 @@ export async function aggregateContentVotes(epochId: number): Promise<ContentRul
       totalIncludeCandidates: includeCounts.size,
       totalExcludeCandidates: excludeCounts.size,
     },
-    'Content votes aggregated'
+    'Content votes aggregated',
   );
 
   return { includeKeywords, excludeKeywords };
@@ -474,7 +467,7 @@ export async function getContentVoteStatistics(epochId: number): Promise<{
          include_keywords IS NOT NULL AND array_length(include_keywords, 1) > 0
          OR exclude_keywords IS NOT NULL AND array_length(exclude_keywords, 1) > 0
        )`,
-    [epochId]
+    [epochId],
   );
 
   const includeKeywordVotes: Record<string, number> = {};

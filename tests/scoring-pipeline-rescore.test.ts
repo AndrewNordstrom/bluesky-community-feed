@@ -72,9 +72,9 @@ function setupDefaultMocks() {
 async function runEmptyCycle(epochId = 2) {
   dbQueryMock
     .mockResolvedValueOnce({ rows: [makeEpochRow(epochId)] }) // getActiveEpoch
-    .mockResolvedValueOnce({ rows: [] })                       // posts query
-    .mockResolvedValueOnce({ rows: [] })                       // writeToRedisFromDb
-    .mockResolvedValueOnce({ rows: [] });                      // updateCurrentRunScope
+    .mockResolvedValueOnce({ rows: [] }) // posts query
+    .mockResolvedValueOnce({ rows: [] }) // writeToRedisFromDb
+    .mockResolvedValueOnce({ rows: [] }); // updateCurrentRunScope
   await runScoringPipeline();
 }
 

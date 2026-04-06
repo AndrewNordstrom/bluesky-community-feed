@@ -44,10 +44,7 @@ export async function runStartupChecks(): Promise<void> {
  */
 async function checkPostgres(): Promise<void> {
   const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(
-      () => reject(new Error('PostgreSQL connection timed out')),
-      STARTUP_CHECK_TIMEOUT
-    );
+    setTimeout(() => reject(new Error('PostgreSQL connection timed out')), STARTUP_CHECK_TIMEOUT);
   });
 
   const queryPromise = db.query('SELECT 1 as ok');
@@ -68,10 +65,7 @@ async function checkPostgres(): Promise<void> {
  */
 async function checkRedis(): Promise<void> {
   const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(
-      () => reject(new Error('Redis connection timed out')),
-      STARTUP_CHECK_TIMEOUT
-    );
+    setTimeout(() => reject(new Error('Redis connection timed out')), STARTUP_CHECK_TIMEOUT);
   });
 
   const pingPromise = redis.ping();
@@ -94,13 +88,13 @@ async function checkMigrationVersion(): Promise<void> {
   try {
     const result = await db.query<{ max_migration: number | null }>(
       `SELECT MAX((substring(filename FROM '^([0-9]+)'))::int) AS max_migration
-       FROM schema_migrations`
+       FROM schema_migrations`,
     );
 
     const maxMigration = result.rows[0]?.max_migration ?? 0;
     if (maxMigration < MIN_REQUIRED_MIGRATION) {
       throw new Error(
-        `database migrations are behind (max=${maxMigration}, required=${MIN_REQUIRED_MIGRATION})`
+        `database migrations are behind (max=${maxMigration}, required=${MIN_REQUIRED_MIGRATION})`,
       );
     }
   } catch (err) {

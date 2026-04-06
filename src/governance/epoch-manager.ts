@@ -11,7 +11,7 @@ import { db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
 import { config } from '../config.js';
 import { aggregateVotes, aggregateContentVotes, aggregateTopicWeights } from './aggregation.js';
-import { GovernanceWeights, weightsToVotePayload, ContentRules } from './governance.types.js';
+import { GovernanceWeights, weightsToVotePayload } from './governance.types.js';
 import { postAnnouncementSafe } from '../bot/safe-poster.js';
 import { invalidateContentRulesCache } from './content-filter.js';
 import { runScoringPipeline } from '../scoring/pipeline.js';
@@ -59,14 +59,17 @@ function toFiniteNumber(value: unknown): number {
   return 0;
 }
 
-async function getVoteCountsForEpoch(queryable: SqlQueryable, epochId: number): Promise<VoteCounts> {
+async function getVoteCountsForEpoch(
+  queryable: SqlQueryable,
+  epochId: number,
+): Promise<VoteCounts> {
   const result = await queryable.query<{ total: string; weight_eligible: string }>(
     `SELECT
       COUNT(*)::int AS total,
       COUNT(*) FILTER (WHERE ${WEIGHT_VOTE_ELIGIBILITY_FILTER})::int AS weight_eligible
      FROM governance_votes
      WHERE epoch_id = $1`,
-    [epochId]
+    [epochId],
   );
 
   return {
@@ -78,7 +81,7 @@ async function getVoteCountsForEpoch(queryable: SqlQueryable, epochId: number): 
 async function fetchTopRankedPosts(
   queryable: SqlQueryable,
   epochId: number,
-  limit: number
+  limit: number,
 ): Promise<RankedPost[]> {
   const result = await queryable.query<{ post_uri: string; total_score: number | string }>(
     `SELECT post_uri, total_score
@@ -86,7 +89,7 @@ async function fetchTopRankedPosts(
      WHERE epoch_id = $1
      ORDER BY total_score DESC
      LIMIT $2`,
-    [epochId, limit]
+    [epochId, limit],
   );
 
   return result.rows.map((row, index) => ({
@@ -120,11 +123,16 @@ function computeRankImpact(before: RankedPost[], after: RankedPost[]) {
     };
   });
 
-  const changedCount = rankChanges.filter((change) => change.change === null || change.change !== 0).length;
-  const numericChanges = rankChanges.filter((change): change is RankChange & { change: number } => change.change !== null);
+  const changedCount = rankChanges.filter(
+    (change) => change.change === null || change.change !== 0,
+  ).length;
+  const numericChanges = rankChanges.filter(
+    (change): change is RankChange & { change: number } => change.change !== null,
+  );
   const avgRankChange =
     numericChanges.length > 0
-      ? numericChanges.reduce((sum, change) => sum + Math.abs(change.change), 0) / numericChanges.length
+      ? numericChanges.reduce((sum, change) => sum + Math.abs(change.change), 0) /
+        numericChanges.length
       : 0;
 
   const topGainers = numericChanges
@@ -137,9 +145,7 @@ function computeRankImpact(before: RankedPost[], after: RankedPost[]) {
     .sort((a, b) => b.change - a.change)
     .slice(0, 5);
 
-  const droppedPosts = rankChanges
-    .filter((change) => change.newRank === null)
-    .slice(0, 5);
+  const droppedPosts = rankChanges.filter((change) => change.newRank === null).slice(0, 5);
 
   const newEntrants = after
     .filter((post) => !beforeMap.has(post.uri))
@@ -177,7 +183,10 @@ async function logTransitionImpact(options: {
     await runScoringPipeline();
   } catch (error) {
     scoringError = error instanceof Error ? error.message : String(error);
-    logger.error({ error, oldEpochId, newEpochId }, 'Failed to run immediate scoring for transition impact audit');
+    logger.error(
+      { error, oldEpochId, newEpochId },
+      'Failed to run immediate scoring for transition impact audit',
+    );
   }
 
   const afterRanking = await fetchTopRankedPosts(db, newEpochId, 100);
@@ -201,11 +210,19 @@ async function logTransitionImpact(options: {
         topLosers: impact.topLosers,
         droppedPosts: impact.droppedPosts,
         newEntrants: impact.newEntrants,
-        beforeTopPosts: beforeRanking.map((post) => ({ uri: post.uri, rank: post.rank, totalScore: post.totalScore })),
-        afterTopPosts: afterRanking.map((post) => ({ uri: post.uri, rank: post.rank, totalScore: post.totalScore })),
+        beforeTopPosts: beforeRanking.map((post) => ({
+          uri: post.uri,
+          rank: post.rank,
+          totalScore: post.totalScore,
+        })),
+        afterTopPosts: afterRanking.map((post) => ({
+          uri: post.uri,
+          rank: post.rank,
+          totalScore: post.totalScore,
+        })),
         scoringError,
       }),
-    ]
+    ],
   );
 
   logger.info(
@@ -218,7 +235,7 @@ async function logTransitionImpact(options: {
       forced,
       scoringError,
     },
-    'Epoch transition impact audit logged'
+    'Epoch transition impact audit logged',
   );
 }
 
@@ -231,7 +248,7 @@ export async function openVotingPeriod(): Promise<void> {
     `UPDATE governance_epochs
      SET status = 'voting'
      WHERE status = 'active'
-     RETURNING id`
+     RETURNING id`,
   );
 
   if (result.rows.length === 0) {
@@ -244,7 +261,7 @@ export async function openVotingPeriod(): Promise<void> {
   await db.query(
     `INSERT INTO governance_audit_log (action, epoch_id, details)
      VALUES ('voting_opened', $1, $2)`,
-    [epochId, JSON.stringify({ opened_at: new Date().toISOString() })]
+    [epochId, JSON.stringify({ opened_at: new Date().toISOString() })],
   );
 
   logger.info({ epochId }, 'Voting period opened');
@@ -270,7 +287,7 @@ export async function closeCurrentEpochAndCreateNext(): Promise<number> {
       `SELECT * FROM governance_epochs
        WHERE status IN ('active', 'voting')
        ORDER BY id DESC LIMIT 1
-       FOR UPDATE`
+       FOR UPDATE`,
     );
 
     if (!current.rows[0]) {
@@ -287,7 +304,7 @@ export async function closeCurrentEpochAndCreateNext(): Promise<number> {
 
     if (weightVoteCount < config.GOVERNANCE_MIN_VOTES) {
       throw new Error(
-        `Insufficient weight votes: ${weightVoteCount} < ${config.GOVERNANCE_MIN_VOTES} required`
+        `Insufficient weight votes: ${weightVoteCount} < ${config.GOVERNANCE_MIN_VOTES} required`,
       );
     }
 
@@ -313,7 +330,7 @@ export async function closeCurrentEpochAndCreateNext(): Promise<number> {
       `UPDATE governance_epochs
        SET status = 'closed', closed_at = NOW()
        WHERE id = $1`,
-      [currentEpochId]
+      [currentEpochId],
     );
 
     // 5. Create new epoch with aggregated weights, content rules, and topic weights
@@ -338,7 +355,7 @@ export async function closeCurrentEpochAndCreateNext(): Promise<number> {
         JSON.stringify(topicWeights),
         weightVoteCount,
         `Weights updated from epoch ${currentEpochId} based on ${weightVoteCount} weight votes (${voteCount} total votes).`,
-      ]
+      ],
     );
 
     const newEpochId = newEpoch.rows[0].id;
@@ -365,7 +382,7 @@ export async function closeCurrentEpochAndCreateNext(): Promise<number> {
           total_vote_count: voteCount,
           new_epoch_id: newEpochId,
         }),
-      ]
+      ],
     );
 
     // 7. Audit log - epoch created
@@ -382,7 +399,7 @@ export async function closeCurrentEpochAndCreateNext(): Promise<number> {
           vote_count: weightVoteCount,
           total_vote_count: voteCount,
         }),
-      ]
+      ],
     );
 
     await client.query('COMMIT');
@@ -399,7 +416,10 @@ export async function closeCurrentEpochAndCreateNext(): Promise<number> {
         beforeRanking,
       });
     } catch (error) {
-      logger.error({ error, oldEpochId: currentEpochId, newEpochId }, 'Failed to log epoch transition impact');
+      logger.error(
+        { error, oldEpochId: currentEpochId, newEpochId },
+        'Failed to log epoch transition impact',
+      );
     }
 
     logger.info(
@@ -416,7 +436,7 @@ export async function closeCurrentEpochAndCreateNext(): Promise<number> {
           excludeKeywords: contentRules.excludeKeywords.length,
         },
       },
-      'Governance epoch transition complete'
+      'Governance epoch transition complete',
     );
 
     // Post announcement (fire-and-forget)
@@ -453,7 +473,7 @@ export async function getCurrentEpochStatus(): Promise<{
   const result = await db.query(
     `SELECT * FROM governance_epochs
      WHERE status IN ('active', 'voting')
-     ORDER BY id DESC LIMIT 1`
+     ORDER BY id DESC LIMIT 1`,
   );
 
   if (result.rows.length === 0) {
@@ -479,7 +499,11 @@ export async function getCurrentEpochStatus(): Promise<{
  * Manually trigger epoch transition (admin function).
  * Only works if minimum votes met.
  */
-export async function triggerEpochTransition(): Promise<{ success: boolean; newEpochId?: number; error?: string }> {
+export async function triggerEpochTransition(): Promise<{
+  success: boolean;
+  newEpochId?: number;
+  error?: string;
+}> {
   try {
     const status = await getCurrentEpochStatus();
 
@@ -519,7 +543,7 @@ export async function forceEpochTransition(): Promise<number> {
       `SELECT * FROM governance_epochs
        WHERE status IN ('active', 'voting')
        ORDER BY id DESC LIMIT 1
-       FOR UPDATE`
+       FOR UPDATE`,
     );
 
     if (!current.rows[0]) {
@@ -565,7 +589,7 @@ export async function forceEpochTransition(): Promise<number> {
       `UPDATE governance_epochs
        SET status = 'closed', closed_at = NOW()
        WHERE id = $1`,
-      [currentEpochId]
+      [currentEpochId],
     );
 
     // 5. Create new epoch with aggregated weights, content rules, and topic weights
@@ -590,7 +614,7 @@ export async function forceEpochTransition(): Promise<number> {
         JSON.stringify(topicWeights),
         weightVoteCount,
         `FORCED transition from epoch ${currentEpochId} with ${weightVoteCount} weight votes (${voteCount} total votes).`,
-      ]
+      ],
     );
 
     const newEpochId = newEpoch.rows[0].id;
@@ -618,7 +642,7 @@ export async function forceEpochTransition(): Promise<number> {
           new_epoch_id: newEpochId,
           forced: true,
         }),
-      ]
+      ],
     );
 
     // 7. Audit log - epoch created
@@ -636,7 +660,7 @@ export async function forceEpochTransition(): Promise<number> {
           total_vote_count: voteCount,
           forced: true,
         }),
-      ]
+      ],
     );
 
     await client.query('COMMIT');
@@ -656,7 +680,7 @@ export async function forceEpochTransition(): Promise<number> {
     } catch (error) {
       logger.error(
         { error, oldEpochId: currentEpochId, newEpochId },
-        'Failed to log forced epoch transition impact'
+        'Failed to log forced epoch transition impact',
       );
     }
 
@@ -674,7 +698,7 @@ export async function forceEpochTransition(): Promise<number> {
           excludeKeywords: contentRules.excludeKeywords,
         },
       },
-      'FORCED governance epoch transition complete'
+      'FORCED governance epoch transition complete',
     );
 
     return newEpochId;

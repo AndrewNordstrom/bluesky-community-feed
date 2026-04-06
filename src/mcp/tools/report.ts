@@ -28,7 +28,7 @@ export function registerReportTools(
   server: McpServer,
   app: FastifyInstance,
   token: string,
-  cookieName: string
+  cookieName: string,
 ): void {
   const cookie = `${cookieName}=${token}`;
 
@@ -49,7 +49,13 @@ export function registerReportTools(
           .describe('If true, print data summary without generating docx'),
       },
     },
-    async ({ date_label, dry_run }: { date_label?: string; dry_run?: boolean }): Promise<CallToolResult> => {
+    async ({
+      date_label,
+      dry_run,
+    }: {
+      date_label?: string;
+      dry_run?: boolean;
+    }): Promise<CallToolResult> => {
       const args: string[] = [];
       if (date_label) args.push('--date', date_label);
       if (dry_run) args.push('--dry-run');
@@ -66,21 +72,21 @@ export function registerReportTools(
         };
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
-        const stderr =
-          err && typeof err === 'object' && 'stderr' in err ? String(err.stderr) : '';
+        const stderr = err && typeof err === 'object' && 'stderr' in err ? String(err.stderr) : '';
         return {
-          content: [{ type: 'text', text: `Report generation failed: ${message}\n${stderr}`.trim() }],
+          content: [
+            { type: 'text', text: `Report generation failed: ${message}\n${stderr}`.trim() },
+          ],
           isError: true,
         };
       }
-    }
+    },
   );
 
   server.registerTool(
     'get_feed_snapshot',
     {
-      description:
-        'Get a JSON summary of current feed metrics without generating a full report',
+      description: 'Get a JSON summary of current feed metrics without generating a full report',
     },
     async (): Promise<CallToolResult> => {
       const [statusRes, feedHealthRes] = await Promise.all([
@@ -105,6 +111,6 @@ export function registerReportTools(
         content: [{ type: 'text', text }],
         ...(isError ? { isError: true } : {}),
       };
-    }
+    },
   );
 }

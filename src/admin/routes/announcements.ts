@@ -84,7 +84,7 @@ export function registerAnnouncementRoutes(app: FastifyInstance): void {
       `SELECT created_at FROM bot_announcements
        WHERE type = 'manual'
        ORDER BY created_at DESC
-       LIMIT 1`
+       LIMIT 1`,
     );
 
     if (recent.rows.length > 0) {
@@ -122,7 +122,7 @@ export function registerAnnouncementRoutes(app: FastifyInstance): void {
             postUri: result.uri,
             announcementId: result.id,
           }),
-        ]
+        ],
       );
 
       logger.info({ postUri: result.uri, adminDid }, 'Custom announcement posted via admin API');

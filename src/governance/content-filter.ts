@@ -61,10 +61,7 @@ function getKeywordMatcher(keyword: string, prefixMatch?: boolean): (text: strin
   // Prefix mode: match "kink" → "kinks", "kinky", "kinkier".
   // Strict mode: exact word boundaries on both sides.
   const trailingBoundary = prefixMatch ? '' : `(?=$|[^${UNICODE_WORD_CLASS}])`;
-  const regex = new RegExp(
-    `(^|[^${UNICODE_WORD_CLASS}])${phrasePattern}${trailingBoundary}`,
-    'u'
-  );
+  const regex = new RegExp(`(^|[^${UNICODE_WORD_CLASS}])${phrasePattern}${trailingBoundary}`, 'u');
   const matcher = (text: string) => regex.test(text);
   keywordMatcherCache.set(cacheKey, matcher);
   return matcher;
@@ -106,19 +103,19 @@ export async function getCurrentContentRules(): Promise<ContentRules> {
         }
         logger.warn(
           { reason: 'cache_parse_failed' },
-          'Cached content rules had unexpected shape, falling back to database'
+          'Cached content rules had unexpected shape, falling back to database',
         );
       } catch (error) {
         logger.warn(
           { error, reason: 'cache_parse_failed' },
-          'Failed to parse cached content rules, falling back to database'
+          'Failed to parse cached content rules, falling back to database',
         );
       }
     }
   } catch (error) {
     logger.warn(
       { error, reason: 'redis_read_failed' },
-      'Failed to read content rules from Redis, falling back to database'
+      'Failed to read content rules from Redis, falling back to database',
     );
   }
 
@@ -136,7 +133,7 @@ export async function getCurrentContentRules(): Promise<ContentRules> {
     } catch (error) {
       logger.warn(
         { error, reason: 'redis_write_failed' },
-        'Failed to cache content rules in Redis'
+        'Failed to cache content rules in Redis',
       );
     }
 
@@ -145,7 +142,7 @@ export async function getCurrentContentRules(): Promise<ContentRules> {
         includeCount: contentRules.includeKeywords.length,
         excludeCount: contentRules.excludeKeywords.length,
       },
-      'Content rules loaded from database'
+      'Content rules loaded from database',
     );
 
     return contentRules;
@@ -159,7 +156,7 @@ async function loadCurrentContentRulesFromDb(): Promise<ContentRules | null> {
   const result = await db.query<{ content_rules: ContentRulesRow | null }>(
     `SELECT content_rules FROM governance_epochs
      WHERE status IN ('active', 'voting')
-     ORDER BY id DESC LIMIT 1`
+     ORDER BY id DESC LIMIT 1`,
   );
 
   if (result.rows.length === 0) {
@@ -196,10 +193,7 @@ export async function invalidateContentRulesCache(): Promise<void> {
  * @param rules - Content rules to apply
  * @returns Result with pass/fail, reason, and matched keyword
  */
-export function checkContentRules(
-  text: string | null,
-  rules: ContentRules
-): ContentFilterResult {
+export function checkContentRules(text: string | null, rules: ContentRules): ContentFilterResult {
   // No rules = everything passes
   if (rules.includeKeywords.length === 0 && rules.excludeKeywords.length === 0) {
     return { passes: true };
@@ -276,7 +270,7 @@ export interface FilterResult<T extends FilterablePost> {
  */
 export function filterPosts<T extends FilterablePost>(
   posts: T[],
-  rules: ContentRules
+  rules: ContentRules,
 ): FilterResult<T> {
   const passed: T[] = [];
   const filtered: FilteredPost<T>[] = [];
@@ -307,7 +301,7 @@ export function filterPosts<T extends FilterablePost>(
       includeKeywords: rules.includeKeywords.length,
       excludeKeywords: rules.excludeKeywords.length,
     },
-    'Content filtering complete'
+    'Content filtering complete',
   );
 
   return { passed, filtered };

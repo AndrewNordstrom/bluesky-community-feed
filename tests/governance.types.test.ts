@@ -29,7 +29,7 @@ describe('normalizeWeights', () => {
         bridging: 0.25,
         sourceDiversity: 0.25,
         relevance: 0.25,
-      })
+      }),
     ).toThrow('Weights must be finite numbers');
   });
 });

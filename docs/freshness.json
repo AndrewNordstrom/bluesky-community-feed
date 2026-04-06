@@ -9,10 +9,7 @@
     "docs",
     ".github/PULL_REQUEST_TEMPLATE.md"
   ],
-  "ignoreFilesForLint": [
-    "docs/dev-journal.md",
-    "docs/SECURITY_AUDIT.md"
-  ],
+  "ignoreFilesForLint": ["docs/dev-journal.md", "docs/SECURITY_AUDIT.md"],
   "documents": [
     {
       "path": "README.md",

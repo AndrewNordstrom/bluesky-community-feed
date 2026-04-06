@@ -20,12 +20,12 @@ This is a small, open-source research project — not a commercial product. The 
 
 When Bluesky requests the feed on your behalf, the Service records:
 
-| Data | Purpose | Storage |
-|------|---------|---------|
-| Your Bluesky DID | Identify subscriber | PostgreSQL, indefinite |
-| First seen / last seen timestamps | Track subscriber activity | PostgreSQL, indefinite |
-| Feed request logs (timestamps, pagination depth, posts included in response) | Measure feed quality and governance outcomes | PostgreSQL, 30-day retention then aggregated |
-| Engagement attributions (which served posts you later liked or reposted) | Evaluate whether governance decisions improve the feed | PostgreSQL, 30-day retention then deleted |
+| Data                                                                         | Purpose                                                | Storage                                      |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------ | -------------------------------------------- |
+| Your Bluesky DID                                                             | Identify subscriber                                    | PostgreSQL, indefinite                       |
+| First seen / last seen timestamps                                            | Track subscriber activity                              | PostgreSQL, indefinite                       |
+| Feed request logs (timestamps, pagination depth, posts included in response) | Measure feed quality and governance outcomes           | PostgreSQL, 30-day retention then aggregated |
+| Engagement attributions (which served posts you later liked or reposted)     | Evaluate whether governance decisions improve the feed | PostgreSQL, 30-day retention then deleted    |
 
 Your DID is a public Bluesky identifier. No additional personal information is collected from feed subscribers.
 
@@ -33,26 +33,26 @@ Your DID is a public Bluesky identifier. No additional personal information is c
 
 When you log in to participate in governance, the Service additionally collects:
 
-| Data | Purpose | Storage |
-|------|---------|---------|
-| Bluesky handle | Display during session | Redis only, 24-hour expiry |
-| App password | Verify identity via Bluesky API | **Never stored** — used once and discarded |
-| Vote weights (5 numerical values) | Governance aggregation | PostgreSQL, indefinite |
-| Keyword preferences (include/exclude) | Content rule voting | PostgreSQL, indefinite |
-| Vote timestamp | Audit trail | PostgreSQL, indefinite |
-| Bluesky DID (as voter) | Link votes to identity | PostgreSQL, indefinite |
-| Governance actions | Append-only audit log | PostgreSQL, indefinite, immutable |
+| Data                                  | Purpose                         | Storage                                    |
+| ------------------------------------- | ------------------------------- | ------------------------------------------ |
+| Bluesky handle                        | Display during session          | Redis only, 24-hour expiry                 |
+| App password                          | Verify identity via Bluesky API | **Never stored** — used once and discarded |
+| Vote weights (5 numerical values)     | Governance aggregation          | PostgreSQL, indefinite                     |
+| Keyword preferences (include/exclude) | Content rule voting             | PostgreSQL, indefinite                     |
+| Vote timestamp                        | Audit trail                     | PostgreSQL, indefinite                     |
+| Bluesky DID (as voter)                | Link votes to identity          | PostgreSQL, indefinite                     |
+| Governance actions                    | Append-only audit log           | PostgreSQL, indefinite, immutable          |
 
 ### Public Bluesky Data Ingested
 
 The Service ingests public data from the Bluesky network via Jetstream to build the feed:
 
-| Data | Source |
-|------|--------|
-| Public posts (text, metadata, timestamps) | app.bsky.feed.post |
-| Public likes | app.bsky.feed.like |
-| Public reposts | app.bsky.feed.repost |
-| Public follows | app.bsky.graph.follow |
+| Data                                      | Source                |
+| ----------------------------------------- | --------------------- |
+| Public posts (text, metadata, timestamps) | app.bsky.feed.post    |
+| Public likes                              | app.bsky.feed.like    |
+| Public reposts                            | app.bsky.feed.repost  |
+| Public follows                            | app.bsky.graph.follow |
 
 This is all publicly available data on the AT Protocol network. The Service does not access private messages, muted/blocked lists, or any non-public data.
 
@@ -94,19 +94,19 @@ All scoring, ranking, aggregation, and data processing happens locally on the Op
 
 ## Data Retention
 
-| Data | Retention Period | Deletion Method |
-|------|-----------------|-----------------|
-| Session cookies (Redis) | 24 hours | Automatic expiry |
-| Feed ranking cache (Redis) | 5 minutes | Automatic expiry |
-| Content filter cache (Redis) | 5 minutes | Automatic expiry |
-| Subscriber records (PostgreSQL) | Indefinite | No automated purge |
-| Vote records (PostgreSQL) | Indefinite | No automated purge |
-| Audit log (PostgreSQL) | Indefinite | **Cannot be deleted** (append-only, database-enforced) |
-| Feed request logs (PostgreSQL) | 30 days | Automatic deletion + aggregation |
-| Engagement attributions (PostgreSQL) | 30 days | Automatic deletion |
-| Daily interaction stats (PostgreSQL) | Indefinite | One row per day (aggregated, no individual data) |
-| Epoch engagement stats (PostgreSQL) | Indefinite | One row per epoch (aggregated, no individual data) |
-| Ingested post/engagement data (PostgreSQL) | Indefinite | Soft delete only (marked as deleted, not erased) |
+| Data                                       | Retention Period | Deletion Method                                        |
+| ------------------------------------------ | ---------------- | ------------------------------------------------------ |
+| Session cookies (Redis)                    | 24 hours         | Automatic expiry                                       |
+| Feed ranking cache (Redis)                 | 5 minutes        | Automatic expiry                                       |
+| Content filter cache (Redis)               | 5 minutes        | Automatic expiry                                       |
+| Subscriber records (PostgreSQL)            | Indefinite       | No automated purge                                     |
+| Vote records (PostgreSQL)                  | Indefinite       | No automated purge                                     |
+| Audit log (PostgreSQL)                     | Indefinite       | **Cannot be deleted** (append-only, database-enforced) |
+| Feed request logs (PostgreSQL)             | 30 days          | Automatic deletion + aggregation                       |
+| Engagement attributions (PostgreSQL)       | 30 days          | Automatic deletion                                     |
+| Daily interaction stats (PostgreSQL)       | Indefinite       | One row per day (aggregated, no individual data)       |
+| Epoch engagement stats (PostgreSQL)        | Indefinite       | One row per epoch (aggregated, no individual data)     |
+| Ingested post/engagement data (PostgreSQL) | Indefinite       | Soft delete only (marked as deleted, not erased)       |
 
 When content is deleted on Bluesky, the Service marks it as deleted (soft delete) but retains the record for referential integrity. Soft-deleted content is never surfaced in the feed or displayed on the transparency dashboard. This is consistent with how the AT Protocol handles deletions.
 
@@ -172,8 +172,8 @@ The Service operates a public transparency dashboard. Data presented on the tran
 
 The Service uses a single cookie:
 
-| Cookie | Purpose | Type | Duration |
-|--------|---------|------|----------|
+| Cookie               | Purpose                        | Type                           | Duration |
+| -------------------- | ------------------------------ | ------------------------------ | -------- |
 | `governance_session` | Maintain authenticated session | HttpOnly, Secure, SameSite=lax | 24 hours |
 
 This cookie is strictly functional. It is not used for tracking, analytics, or advertising. No third-party cookies are set.

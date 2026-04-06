@@ -40,7 +40,7 @@ describe('startup migration checks', () => {
       .mockResolvedValueOnce({ rows: [{ max_migration: 1 }] }); // checkMigrationVersion
 
     await expect(runStartupChecks()).rejects.toThrow(
-      /Migration startup check failed: database migrations are behind \(max=1, required=14\)/
+      /Migration startup check failed: database migrations are behind \(max=1, required=14\)/,
     );
   });
 

@@ -11,14 +11,14 @@ const { redisMock, dbQueryMock, verifyFeedRequesterDidMock } = vi.hoisted(() => 
   }));
 
   return {
-  redisMock: {
-    zrevrange: vi.fn(),
-    setex: vi.fn(),
-    get: vi.fn(),
-    pipeline: pipelineMock,
-  },
-  dbQueryMock: vi.fn(),
-  verifyFeedRequesterDidMock: vi.fn(),
+    redisMock: {
+      zrevrange: vi.fn(),
+      setex: vi.fn(),
+      get: vi.fn(),
+      pipeline: pipelineMock,
+    },
+    dbQueryMock: vi.fn(),
+    verifyFeedRequesterDidMock: vi.fn(),
   };
 });
 
@@ -52,7 +52,7 @@ describe('getFeedSkeleton requester auth hot path', () => {
       return Promise.resolve(null);
     });
     verifyFeedRequesterDidMock.mockImplementation(
-      () => new Promise<string | null>(() => undefined)
+      () => new Promise<string | null>(() => undefined),
     );
 
     const feedUri = `at://${config.FEEDGEN_PUBLISHER_DID}/app.bsky.feed.generator/community-gov`;

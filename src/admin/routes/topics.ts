@@ -19,14 +19,22 @@ import { db } from '../../db/client.js';
 import { logger } from '../../lib/logger.js';
 import { Errors } from '../../lib/errors.js';
 import { getAdminDid } from '../../auth/admin.js';
-import { loadTaxonomy, invalidateTaxonomyCache, getTopicsWithEmbeddings } from '../../scoring/topics/taxonomy.js';
+import {
+  loadTaxonomy,
+  invalidateTaxonomyCache,
+  getTopicsWithEmbeddings,
+} from '../../scoring/topics/taxonomy.js';
 import { classifyPost } from '../../scoring/topics/classifier.js';
 import { classifyPostsBatch } from '../../scoring/topics/embedding-classifier.js';
 import { isEmbedderReady } from '../../scoring/topics/embedder.js';
 import { adminSecurity, ErrorResponseSchema } from '../../lib/openapi.js';
 
 const CreateTopicSchema = z.object({
-  slug: z.string().regex(/^[a-z0-9-]+$/).min(2).max(50),
+  slug: z
+    .string()
+    .regex(/^[a-z0-9-]+$/)
+    .min(2)
+    .max(50),
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
   parentSlug: z.string().optional(),
@@ -77,157 +85,176 @@ export function registerTopicRoutes(app: FastifyInstance): void {
    * GET /topics
    * List all topics with post counts and current community weights.
    */
-  app.get('/topics', {
-    schema: {
-      tags: ['Admin'],
-      summary: 'List all topics',
-      description: 'Returns all topics in the catalog with post counts and current community weights from the active epoch.',
-      security: adminSecurity,
-      response: {
-        200: {
-          type: 'array',
-          items: topicItemSchema,
+  app.get(
+    '/topics',
+    {
+      schema: {
+        tags: ['Admin'],
+        summary: 'List all topics',
+        description:
+          'Returns all topics in the catalog with post counts and current community weights from the active epoch.',
+        security: adminSecurity,
+        response: {
+          200: {
+            type: 'array',
+            items: topicItemSchema,
+          },
         },
       },
     },
-  }, async (_request: FastifyRequest, reply: FastifyReply) => {
-    // Get all topics
-    const topicsResult = await db.query(
-      `SELECT slug, name, description, parent_slug, terms, context_terms, anti_terms,
+    async (_request: FastifyRequest, reply: FastifyReply) => {
+      // Get all topics
+      const topicsResult = await db.query(
+        `SELECT slug, name, description, parent_slug, terms, context_terms, anti_terms,
               is_active, created_at
        FROM topic_catalog
-       ORDER BY slug`
-    );
+       ORDER BY slug`,
+      );
 
-    // Get post counts per topic using JSONB key existence
-    const countsResult = await db.query(
-      `SELECT key AS slug, count(*)::int AS post_count
+      // Get post counts per topic using JSONB key existence
+      const countsResult = await db.query(
+        `SELECT key AS slug, count(*)::int AS post_count
        FROM posts, jsonb_each(topic_vector) AS kv(key, value)
-       GROUP BY key`
-    );
-    const postCounts = new Map<string, number>();
-    for (const row of countsResult.rows) {
-      postCounts.set(row.slug, row.post_count);
-    }
+       GROUP BY key`,
+      );
+      const postCounts = new Map<string, number>();
+      for (const row of countsResult.rows) {
+        postCounts.set(row.slug, row.post_count);
+      }
 
-    // Get current epoch topic weights
-    const epochResult = await db.query(
-      `SELECT topic_weights FROM governance_epochs
+      // Get current epoch topic weights
+      const epochResult = await db.query(
+        `SELECT topic_weights FROM governance_epochs
        WHERE status = 'active'
-       ORDER BY id DESC LIMIT 1`
-    );
-    const topicWeights: Record<string, number> = epochResult.rows[0]?.topic_weights ?? {};
+       ORDER BY id DESC LIMIT 1`,
+      );
+      const topicWeights: Record<string, number> = epochResult.rows[0]?.topic_weights ?? {};
 
-    const topics = topicsResult.rows.map((row: Record<string, unknown>) => ({
-      slug: row.slug,
-      name: row.name,
-      description: row.description ?? null,
-      parentSlug: row.parent_slug ?? null,
-      terms: row.terms ?? [],
-      contextTerms: row.context_terms ?? [],
-      antiTerms: row.anti_terms ?? [],
-      isActive: row.is_active,
-      postCount: postCounts.get(row.slug as string) ?? 0,
-      currentWeight: topicWeights[row.slug as string] ?? null,
-      createdAt: row.created_at,
-    }));
+      const topics = topicsResult.rows.map((row: Record<string, unknown>) => ({
+        slug: row.slug,
+        name: row.name,
+        description: row.description ?? null,
+        parentSlug: row.parent_slug ?? null,
+        terms: row.terms ?? [],
+        contextTerms: row.context_terms ?? [],
+        antiTerms: row.anti_terms ?? [],
+        isActive: row.is_active,
+        postCount: postCounts.get(row.slug as string) ?? 0,
+        currentWeight: topicWeights[row.slug as string] ?? null,
+        createdAt: row.created_at,
+      }));
 
-    return reply.send(topics);
-  });
+      return reply.send(topics);
+    },
+  );
 
   /**
    * POST /topics
    * Create a new topic in the catalog.
    */
-  app.post('/topics', {
-    schema: {
-      tags: ['Admin'],
-      summary: 'Create topic',
-      description: 'Creates a new topic in the catalog with terms, context terms, and anti-terms for keyword classification.',
-      security: adminSecurity,
-      body: CreateTopicJsonSchema,
-      response: {
-        201: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            topic: {
-              type: 'object',
-              properties: {
-                slug: { type: 'string' },
-                name: { type: 'string' },
-                description: { type: 'string', nullable: true },
-                parentSlug: { type: 'string', nullable: true },
-                terms: { type: 'array', items: { type: 'string' } },
-                contextTerms: { type: 'array', items: { type: 'string' } },
-                antiTerms: { type: 'array', items: { type: 'string' } },
+  app.post(
+    '/topics',
+    {
+      schema: {
+        tags: ['Admin'],
+        summary: 'Create topic',
+        description:
+          'Creates a new topic in the catalog with terms, context terms, and anti-terms for keyword classification.',
+        security: adminSecurity,
+        body: CreateTopicJsonSchema,
+        response: {
+          201: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              topic: {
+                type: 'object',
+                properties: {
+                  slug: { type: 'string' },
+                  name: { type: 'string' },
+                  description: { type: 'string', nullable: true },
+                  parentSlug: { type: 'string', nullable: true },
+                  terms: { type: 'array', items: { type: 'string' } },
+                  contextTerms: { type: 'array', items: { type: 'string' } },
+                  antiTerms: { type: 'array', items: { type: 'string' } },
+                },
               },
             },
+            required: ['success'],
           },
-          required: ['success'],
+          400: ErrorResponseSchema,
+          409: ErrorResponseSchema,
         },
-        400: ErrorResponseSchema,
-        409: ErrorResponseSchema,
       },
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const parseResult = CreateTopicSchema.safeParse(request.body);
-    if (!parseResult.success) {
-      throw Errors.VALIDATION_ERROR('Invalid topic data', parseResult.error.issues);
-    }
-
-    const { slug, name, description, parentSlug, terms, contextTerms, antiTerms } = parseResult.data;
-    const adminDid = getAdminDid(request);
-
-    // Check for duplicate slug
-    const existing = await db.query(
-      `SELECT id FROM topic_catalog WHERE slug = $1`,
-      [slug]
-    );
-    if (existing.rows.length > 0) {
-      throw Errors.CONFLICT(`Topic with slug "${slug}" already exists`);
-    }
-
-    // Validate parentSlug exists if provided
-    if (parentSlug) {
-      const parent = await db.query(
-        `SELECT id FROM topic_catalog WHERE slug = $1`,
-        [parentSlug]
-      );
-      if (parent.rows.length === 0) {
-        throw Errors.VALIDATION_ERROR(`Parent topic "${parentSlug}" not found`);
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const parseResult = CreateTopicSchema.safeParse(request.body);
+      if (!parseResult.success) {
+        throw Errors.VALIDATION_ERROR('Invalid topic data', parseResult.error.issues);
       }
-    }
 
-    // Normalize terms to lowercase
-    const normalizedTerms = terms.map(t => t.toLowerCase());
-    const normalizedContextTerms = contextTerms.map(t => t.toLowerCase());
-    const normalizedAntiTerms = antiTerms.map(t => t.toLowerCase());
+      const { slug, name, description, parentSlug, terms, contextTerms, antiTerms } =
+        parseResult.data;
+      const adminDid = getAdminDid(request);
 
-    await db.query(
-      `INSERT INTO topic_catalog (slug, name, description, parent_slug, terms, context_terms, anti_terms)
+      // Check for duplicate slug
+      const existing = await db.query(`SELECT id FROM topic_catalog WHERE slug = $1`, [slug]);
+      if (existing.rows.length > 0) {
+        throw Errors.CONFLICT(`Topic with slug "${slug}" already exists`);
+      }
+
+      // Validate parentSlug exists if provided
+      if (parentSlug) {
+        const parent = await db.query(`SELECT id FROM topic_catalog WHERE slug = $1`, [parentSlug]);
+        if (parent.rows.length === 0) {
+          throw Errors.VALIDATION_ERROR(`Parent topic "${parentSlug}" not found`);
+        }
+      }
+
+      // Normalize terms to lowercase
+      const normalizedTerms = terms.map((t) => t.toLowerCase());
+      const normalizedContextTerms = contextTerms.map((t) => t.toLowerCase());
+      const normalizedAntiTerms = antiTerms.map((t) => t.toLowerCase());
+
+      await db.query(
+        `INSERT INTO topic_catalog (slug, name, description, parent_slug, terms, context_terms, anti_terms)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [slug, name, description ?? null, parentSlug ?? null,
-       normalizedTerms, normalizedContextTerms, normalizedAntiTerms]
-    );
+        [
+          slug,
+          name,
+          description ?? null,
+          parentSlug ?? null,
+          normalizedTerms,
+          normalizedContextTerms,
+          normalizedAntiTerms,
+        ],
+      );
 
-    // Audit log
-    await db.query(
-      `INSERT INTO governance_audit_log (action, actor_did, details)
+      // Audit log
+      await db.query(
+        `INSERT INTO governance_audit_log (action, actor_did, details)
        VALUES ($1, $2, $3)`,
-      ['topic_created', adminDid, JSON.stringify({ slug, name, terms: normalizedTerms })]
-    );
+        ['topic_created', adminDid, JSON.stringify({ slug, name, terms: normalizedTerms })],
+      );
 
-    invalidateTaxonomyCache();
+      invalidateTaxonomyCache();
 
-    logger.info({ slug, adminDid }, 'Topic created');
+      logger.info({ slug, adminDid }, 'Topic created');
 
-    return reply.code(201).send({
-      success: true,
-      topic: { slug, name, description, parentSlug, terms: normalizedTerms,
-               contextTerms: normalizedContextTerms, antiTerms: normalizedAntiTerms },
-    });
-  });
+      return reply.code(201).send({
+        success: true,
+        topic: {
+          slug,
+          name,
+          description,
+          parentSlug,
+          terms: normalizedTerms,
+          contextTerms: normalizedContextTerms,
+          antiTerms: normalizedAntiTerms,
+        },
+      });
+    },
+  );
 
   /**
    * POST /topics/classify
@@ -235,56 +262,65 @@ export function registerTopicRoutes(app: FastifyInstance): void {
    * Debug tool for verifying topic matching quality.
    * MUST be registered BEFORE /topics/:slug routes.
    */
-  app.post('/topics/classify', {
-    schema: {
-      tags: ['Admin'],
-      summary: 'Test-classify text',
-      description: 'Classifies text against the current taxonomy using keyword matching. If embedding classifier is available, includes a comparison result.',
-      security: adminSecurity,
-      body: ClassifyTextJsonSchema,
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            matchedTopics: { type: 'array', items: { type: 'string' } },
-            vector: { type: 'object', additionalProperties: { type: 'number' } },
-            embedding: { type: 'object', nullable: true, additionalProperties: { type: 'number' } },
-            embedding_available: { type: 'boolean' },
+  app.post(
+    '/topics/classify',
+    {
+      schema: {
+        tags: ['Admin'],
+        summary: 'Test-classify text',
+        description:
+          'Classifies text against the current taxonomy using keyword matching. If embedding classifier is available, includes a comparison result.',
+        security: adminSecurity,
+        body: ClassifyTextJsonSchema,
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              matchedTopics: { type: 'array', items: { type: 'string' } },
+              vector: { type: 'object', additionalProperties: { type: 'number' } },
+              embedding: {
+                type: 'object',
+                nullable: true,
+                additionalProperties: { type: 'number' },
+              },
+              embedding_available: { type: 'boolean' },
+            },
           },
+          400: ErrorResponseSchema,
         },
-        400: ErrorResponseSchema,
       },
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const parseResult = ClassifyTextSchema.safeParse(request.body);
-    if (!parseResult.success) {
-      throw Errors.VALIDATION_ERROR('Invalid input', parseResult.error.issues);
-    }
-
-    const { text } = parseResult.data;
-
-    // Force fresh taxonomy load to pick up any recent changes
-    const taxonomy = await loadTaxonomy();
-    const keywordResult = classifyPost(text, taxonomy);
-
-    // If embedding classifier is available, include a comparison
-    let embeddingResult = null;
-    if (isEmbedderReady() && getTopicsWithEmbeddings()) {
-      try {
-        const embeddingMap = await classifyPostsBatch([{ uri: '__classify_test__', text }]);
-        embeddingResult = embeddingMap.get('__classify_test__') ?? null;
-      } catch {
-        // Non-fatal: embedding comparison is supplementary
-        embeddingResult = null;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const parseResult = ClassifyTextSchema.safeParse(request.body);
+      if (!parseResult.success) {
+        throw Errors.VALIDATION_ERROR('Invalid input', parseResult.error.issues);
       }
-    }
 
-    return reply.send({
-      ...keywordResult,
-      embedding: embeddingResult,
-      embedding_available: isEmbedderReady() && getTopicsWithEmbeddings() !== null,
-    });
-  });
+      const { text } = parseResult.data;
+
+      // Force fresh taxonomy load to pick up any recent changes
+      const taxonomy = await loadTaxonomy();
+      const keywordResult = classifyPost(text, taxonomy);
+
+      // If embedding classifier is available, include a comparison
+      let embeddingResult = null;
+      if (isEmbedderReady() && getTopicsWithEmbeddings()) {
+        try {
+          const embeddingMap = await classifyPostsBatch([{ uri: '__classify_test__', text }]);
+          embeddingResult = embeddingMap.get('__classify_test__') ?? null;
+        } catch {
+          // Non-fatal: embedding comparison is supplementary
+          embeddingResult = null;
+        }
+      }
+
+      return reply.send({
+        ...keywordResult,
+        embedding: embeddingResult,
+        embedding_available: isEmbedderReady() && getTopicsWithEmbeddings() !== null,
+      });
+    },
+  );
 
   /**
    * POST /topics/:slug/backfill
@@ -297,7 +333,8 @@ export function registerTopicRoutes(app: FastifyInstance): void {
       schema: {
         tags: ['Admin'],
         summary: 'Backfill topic classification',
-        description: 'Re-classifies all existing posts for the given topic. Processes in batches of 500.',
+        description:
+          'Re-classifies all existing posts for the given topic. Processes in batches of 500.',
         security: adminSecurity,
         params: {
           type: 'object',
@@ -324,10 +361,7 @@ export function registerTopicRoutes(app: FastifyInstance): void {
       const adminDid = getAdminDid(request);
 
       // Verify topic exists
-      const topicCheck = await db.query(
-        `SELECT id FROM topic_catalog WHERE slug = $1`,
-        [slug]
-      );
+      const topicCheck = await db.query(`SELECT id FROM topic_catalog WHERE slug = $1`, [slug]);
       if (topicCheck.rows.length === 0) {
         throw Errors.NOT_FOUND('Topic');
       }
@@ -347,7 +381,7 @@ export function registerTopicRoutes(app: FastifyInstance): void {
           `SELECT uri, COALESCE(text, '') AS text FROM posts
            ORDER BY created_at DESC
            LIMIT $1 OFFSET $2`,
-          [BATCH_SIZE, offset]
+          [BATCH_SIZE, offset],
         );
 
         if (postsResult.rows.length === 0) break;
@@ -370,14 +404,14 @@ export function registerTopicRoutes(app: FastifyInstance): void {
 
         // Batch UPDATE using unnest
         if (updates.length > 0) {
-          const uris = updates.map(u => u.uri);
-          const vectors = updates.map(u => u.vector);
+          const uris = updates.map((u) => u.uri);
+          const vectors = updates.map((u) => u.vector);
 
           await db.query(
             `UPDATE posts AS p SET topic_vector = v.vector::jsonb
              FROM (SELECT unnest($1::text[]) AS uri, unnest($2::text[]) AS vector) AS v
              WHERE p.uri = v.uri`,
-            [uris, vectors]
+            [uris, vectors],
           );
         }
 
@@ -391,18 +425,29 @@ export function registerTopicRoutes(app: FastifyInstance): void {
       await db.query(
         `INSERT INTO governance_audit_log (action, actor_did, details)
          VALUES ($1, $2, $3)`,
-        ['topic_backfill', adminDid,
-         JSON.stringify({ slug, classified: totalClassified, matched: totalMatched, elapsed_ms: elapsedMs })]
+        [
+          'topic_backfill',
+          adminDid,
+          JSON.stringify({
+            slug,
+            classified: totalClassified,
+            matched: totalMatched,
+            elapsed_ms: elapsedMs,
+          }),
+        ],
       );
 
-      logger.info({ slug, classified: totalClassified, matched: totalMatched, elapsedMs }, 'Topic backfill complete');
+      logger.info(
+        { slug, classified: totalClassified, matched: totalMatched, elapsedMs },
+        'Topic backfill complete',
+      );
 
       return reply.send({
         classified: totalClassified,
         matched: totalMatched,
         elapsed_ms: elapsedMs,
       });
-    }
+    },
   );
 
   /**
@@ -415,7 +460,8 @@ export function registerTopicRoutes(app: FastifyInstance): void {
       schema: {
         tags: ['Admin'],
         summary: 'Update topic',
-        description: 'Updates a topic\'s fields. Only provided fields are changed. Terms are normalized to lowercase.',
+        description:
+          "Updates a topic's fields. Only provided fields are changed. Terms are normalized to lowercase.",
         security: adminSecurity,
         params: {
           type: 'object',
@@ -454,7 +500,7 @@ export function registerTopicRoutes(app: FastifyInstance): void {
       const current = await db.query(
         `SELECT name, description, terms, context_terms, anti_terms, is_active
          FROM topic_catalog WHERE slug = $1`,
-        [slug]
+        [slug],
       );
       if (current.rows.length === 0) {
         throw Errors.NOT_FOUND('Topic');
@@ -478,19 +524,19 @@ export function registerTopicRoutes(app: FastifyInstance): void {
         paramIdx++;
       }
       if (updates.terms !== undefined) {
-        const normalized = updates.terms.map(t => t.toLowerCase());
+        const normalized = updates.terms.map((t) => t.toLowerCase());
         setClauses.push(`terms = $${paramIdx}`);
         values.push(normalized);
         paramIdx++;
       }
       if (updates.contextTerms !== undefined) {
-        const normalized = updates.contextTerms.map(t => t.toLowerCase());
+        const normalized = updates.contextTerms.map((t) => t.toLowerCase());
         setClauses.push(`context_terms = $${paramIdx}`);
         values.push(normalized);
         paramIdx++;
       }
       if (updates.antiTerms !== undefined) {
-        const normalized = updates.antiTerms.map(t => t.toLowerCase());
+        const normalized = updates.antiTerms.map((t) => t.toLowerCase());
         setClauses.push(`anti_terms = $${paramIdx}`);
         values.push(normalized);
         paramIdx++;
@@ -511,11 +557,15 @@ export function registerTopicRoutes(app: FastifyInstance): void {
       await db.query(
         `INSERT INTO governance_audit_log (action, actor_did, details)
          VALUES ($1, $2, $3)`,
-        ['topic_updated', adminDid, JSON.stringify({
-          slug,
-          before: { name: before.name, terms: before.terms, is_active: before.is_active },
-          after: { name: after.name, terms: after.terms, is_active: after.is_active },
-        })]
+        [
+          'topic_updated',
+          adminDid,
+          JSON.stringify({
+            slug,
+            before: { name: before.name, terms: before.terms, is_active: before.is_active },
+            after: { name: after.name, terms: after.terms, is_active: after.is_active },
+          }),
+        ],
       );
 
       invalidateTaxonomyCache();
@@ -523,7 +573,7 @@ export function registerTopicRoutes(app: FastifyInstance): void {
       logger.info({ slug, adminDid }, 'Topic updated');
 
       return reply.send({ success: true, topic: after });
-    }
+    },
   );
 
   /**
@@ -537,7 +587,8 @@ export function registerTopicRoutes(app: FastifyInstance): void {
       schema: {
         tags: ['Admin'],
         summary: 'Deactivate topic',
-        description: 'Soft deactivates a topic (sets is_active = false). Does not delete from DB — topic vectors referencing it stay valid.',
+        description:
+          'Soft deactivates a topic (sets is_active = false). Does not delete from DB — topic vectors referencing it stay valid.',
         security: adminSecurity,
         params: {
           type: 'object',
@@ -566,7 +617,7 @@ export function registerTopicRoutes(app: FastifyInstance): void {
         `UPDATE topic_catalog SET is_active = FALSE, updated_at = NOW()
          WHERE slug = $1 AND is_active = TRUE
          RETURNING id, name`,
-        [slug]
+        [slug],
       );
 
       if (result.rows.length === 0) {
@@ -577,7 +628,7 @@ export function registerTopicRoutes(app: FastifyInstance): void {
       await db.query(
         `INSERT INTO governance_audit_log (action, actor_did, details)
          VALUES ($1, $2, $3)`,
-        ['topic_deactivated', adminDid, JSON.stringify({ slug, name: result.rows[0].name })]
+        ['topic_deactivated', adminDid, JSON.stringify({ slug, name: result.rows[0].name })],
       );
 
       invalidateTaxonomyCache();
@@ -585,6 +636,6 @@ export function registerTopicRoutes(app: FastifyInstance): void {
       logger.info({ slug, adminDid }, 'Topic deactivated');
 
       return reply.send({ success: true });
-    }
+    },
   );
 }

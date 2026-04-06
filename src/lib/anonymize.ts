@@ -12,8 +12,5 @@ import { createHash } from 'node:crypto';
  * @returns A deterministic 16-character hex string.
  */
 export function anonymizeDid(did: string, salt: string): string {
-  return createHash('sha256')
-    .update(`${did}${salt}`)
-    .digest('hex')
-    .slice(0, 16);
+  return createHash('sha256').update(`${did}${salt}`).digest('hex').slice(0, 16);
 }

@@ -14,19 +14,24 @@ export function registerGovernanceTools(
   server: McpServer,
   app: FastifyInstance,
   token: string,
-  cookieName: string
+  cookieName: string,
 ): void {
   const cookie = `${cookieName}=${token}`;
 
   server.registerTool(
     'get_status',
     {
-      description: 'Get overall system status including current epoch, scoring, and subscriber info',
+      description:
+        'Get overall system status including current epoch, scoring, and subscriber info',
     },
     async () => {
-      const res = await app.inject({ method: 'GET', url: '/api/admin/status', headers: { cookie } });
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/admin/status',
+        headers: { cookie },
+      });
       return formatInjectResponse(res);
-    }
+    },
   );
 
   server.registerTool(
@@ -35,29 +40,48 @@ export function registerGovernanceTools(
       description: 'List all governance epochs with their weights and metadata',
     },
     async () => {
-      const res = await app.inject({ method: 'GET', url: '/api/admin/epochs', headers: { cookie } });
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/admin/epochs',
+        headers: { cookie },
+      });
       return formatInjectResponse(res);
-    }
+    },
   );
 
   server.registerTool(
     'get_governance_status',
     {
-      description: 'Get current governance status including active weights, voting state, and content rules',
+      description:
+        'Get current governance status including active weights, voting state, and content rules',
     },
     async () => {
-      const res = await app.inject({ method: 'GET', url: '/api/admin/governance/status', headers: { cookie } });
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/admin/governance/status',
+        headers: { cookie },
+      });
       return formatInjectResponse(res);
-    }
+    },
   );
 
   server.registerTool(
     'start_voting',
     {
-      description: 'Open a voting period for the current epoch. Subscribers can then cast weight preferences.',
+      description:
+        'Open a voting period for the current epoch. Subscribers can then cast weight preferences.',
       inputSchema: {
-        durationHours: z.number().int().min(1).max(168).optional().describe('Voting duration in hours (1-168, default 72)'),
-        announce: z.boolean().optional().describe('Post a bot announcement about voting opening (default true)'),
+        durationHours: z
+          .number()
+          .int()
+          .min(1)
+          .max(168)
+          .optional()
+          .describe('Voting duration in hours (1-168, default 72)'),
+        announce: z
+          .boolean()
+          .optional()
+          .describe('Post a bot announcement about voting opening (default true)'),
       },
     },
     async ({ durationHours, announce }: { durationHours?: number; announce?: boolean }) => {
@@ -72,7 +96,7 @@ export function registerGovernanceTools(
         payload,
       });
       return formatInjectResponse(res);
-    }
+    },
   );
 
   server.registerTool(
@@ -80,7 +104,10 @@ export function registerGovernanceTools(
     {
       description: 'Close the active voting period and apply aggregated weights to the next epoch.',
       inputSchema: {
-        announce: z.boolean().optional().describe('Post a bot announcement about voting closing (default true)'),
+        announce: z
+          .boolean()
+          .optional()
+          .describe('Post a bot announcement about voting closing (default true)'),
       },
     },
     async ({ announce }: { announce?: boolean }) => {
@@ -94,13 +121,14 @@ export function registerGovernanceTools(
         payload,
       });
       return formatInjectResponse(res);
-    }
+    },
   );
 
   server.registerTool(
     'trigger_epoch_transition',
     {
-      description: 'Force an epoch transition to create a new epoch with current aggregated weights',
+      description:
+        'Force an epoch transition to create a new epoch with current aggregated weights',
     },
     async () => {
       const res = await app.inject({
@@ -110,7 +138,7 @@ export function registerGovernanceTools(
         payload: {},
       });
       return formatInjectResponse(res);
-    }
+    },
   );
 
   server.registerTool(
@@ -119,7 +147,11 @@ export function registerGovernanceTools(
       description: 'Get current content filtering rules (include/exclude keywords)',
     },
     async () => {
-      const res = await app.inject({ method: 'GET', url: '/api/admin/governance/status', headers: { cookie } });
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/admin/governance/status',
+        headers: { cookie },
+      });
       if (res.statusCode >= 400) return formatInjectResponse(res);
 
       try {
@@ -132,19 +164,32 @@ export function registerGovernanceTools(
       } catch {
         return formatInjectResponse(res);
       }
-    }
+    },
   );
 
   server.registerTool(
     'update_content_rules',
     {
-      description: 'Update content filtering rules. Keywords are used to include/exclude posts from the feed.',
+      description:
+        'Update content filtering rules. Keywords are used to include/exclude posts from the feed.',
       inputSchema: {
-        includeKeywords: z.array(z.string()).optional().describe('Keywords that posts must contain to be included'),
-        excludeKeywords: z.array(z.string()).optional().describe('Keywords that cause posts to be excluded'),
+        includeKeywords: z
+          .array(z.string())
+          .optional()
+          .describe('Keywords that posts must contain to be included'),
+        excludeKeywords: z
+          .array(z.string())
+          .optional()
+          .describe('Keywords that cause posts to be excluded'),
       },
     },
-    async ({ includeKeywords, excludeKeywords }: { includeKeywords?: string[]; excludeKeywords?: string[] }) => {
+    async ({
+      includeKeywords,
+      excludeKeywords,
+    }: {
+      includeKeywords?: string[];
+      excludeKeywords?: string[];
+    }) => {
       const payload: Record<string, unknown> = {};
       if (includeKeywords !== undefined) payload.includeKeywords = includeKeywords;
       if (excludeKeywords !== undefined) payload.excludeKeywords = excludeKeywords;
@@ -156,7 +201,7 @@ export function registerGovernanceTools(
         payload,
       });
       return formatInjectResponse(res);
-    }
+    },
   );
 
   server.registerTool(
@@ -174,13 +219,14 @@ export function registerGovernanceTools(
         headers: { cookie },
       });
       return formatInjectResponse(res);
-    }
+    },
   );
 
   server.registerTool(
     'preview_aggregation',
     {
-      description: 'Preview what the aggregated weights would be if voting closed now (trimmed mean calculation)',
+      description:
+        'Preview what the aggregated weights would be if voting closed now (trimmed mean calculation)',
     },
     async () => {
       const res = await app.inject({
@@ -189,6 +235,6 @@ export function registerGovernanceTools(
         headers: { cookie },
       });
       return formatInjectResponse(res);
-    }
+    },
   );
 }

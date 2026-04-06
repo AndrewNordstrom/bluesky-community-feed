@@ -24,24 +24,21 @@ const REPO_GUARD_SCAN_PATHS = [
   'docs',
   '.github/ISSUE_TEMPLATE/config.yml',
 ];
-const REPO_GUARD_EXCLUDES = new Set([
-  'docs/dev-journal.md',
-  'docs/SECURITY_AUDIT.md',
-]);
-const REPO_GUARD_EXTENSIONS = new Set([
-  '.md',
-  '.json',
-  '.html',
-  '.yml',
-  '.yaml',
-]);
+const REPO_GUARD_EXCLUDES = new Set(['docs/dev-journal.md', 'docs/SECURITY_AUDIT.md']);
+const REPO_GUARD_EXTENSIONS = new Set(['.md', '.json', '.html', '.yml', '.yaml']);
 
 const LINK_REGEX = /!?\[[^\]]*]\(([^)]+)\)/g;
 const NPM_RUN_REGEX = /\bnpm run ([a-zA-Z0-9:_-]+)\b/g;
 
 const DEPRECATED_PATTERNS = [
-  { regex: /\b(epoch:status|votes:summary|feed:stats|topics:list|export:votes|scoring:trigger)\b/, message: 'Legacy colon-style CLI syntax found' },
-  { regex: /\bdocker-compose(?:\s+[a-zA-Z]|$)/, message: 'Use "docker compose" (space) instead of "docker-compose"' },
+  {
+    regex: /\b(epoch:status|votes:summary|feed:stats|topics:list|export:votes|scoring:trigger)\b/,
+    message: 'Legacy colon-style CLI syntax found',
+  },
+  {
+    regex: /\bdocker-compose(?:\s+[a-zA-Z]|$)/,
+    message: 'Use "docker compose" (space) instead of "docker-compose"',
+  },
 ];
 
 const DEFAULT_SCAN_PATHS = [
@@ -63,7 +60,8 @@ function walkMarkdownFiles(rootDir) {
     for (const entry of readdirSync(current, { withFileTypes: true })) {
       const fullPath = path.join(current, entry.name);
       if (entry.isDirectory()) {
-        if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist') continue;
+        if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist')
+          continue;
         queue.push(fullPath);
       } else if (entry.isFile() && entry.name.endsWith('.md')) {
         files.push(fullPath);
@@ -82,7 +80,8 @@ function walkTextFiles(rootDir, extensions) {
     for (const entry of readdirSync(current, { withFileTypes: true })) {
       const fullPath = path.join(current, entry.name);
       if (entry.isDirectory()) {
-        if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist') continue;
+        if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist')
+          continue;
         queue.push(fullPath);
       } else if (entry.isFile() && extensions.has(path.extname(entry.name).toLowerCase())) {
         files.push(fullPath);
@@ -165,7 +164,7 @@ function resolveLink(baseFile, targetPath) {
 function getWorkflowCheckNames(ciPath) {
   const content = readFileSync(ciPath, 'utf8');
   const matches = [...content.matchAll(/^\s{2}([a-z0-9-]+):\s*$/gm)];
-  return matches.map(m => m[1]);
+  return matches.map((m) => m[1]);
 }
 
 function validateFreshness(config, problems) {
@@ -195,7 +194,7 @@ function validateFreshness(config, problems) {
     const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
     if (ageDays > maxAgeDays) {
       problems.push(
-        `freshness: ${doc.path} is ${ageDays} days old (> ${maxAgeDays}); update docs/freshness.json lastReviewed`
+        `freshness: ${doc.path} is ${ageDays} days old (> ${maxAgeDays}); update docs/freshness.json lastReviewed`,
       );
     }
   }
@@ -214,18 +213,22 @@ function validateMarkdownLinks(markdownFiles, problems) {
 
       const resolved = resolveLink(file, decodeURIComponent(pathPart));
       if (!existsSync(resolved)) {
-        problems.push(
-          `broken link: ${relative(file)} -> ${rawTarget}`
-        );
+        problems.push(`broken link: ${relative(file)} -> ${rawTarget}`);
       }
     }
   }
 }
 
 function validateNpmRunCommands(markdownFiles, problems) {
-  const rootScripts = new Set(Object.keys(readJson(path.join(repoRoot, 'package.json')).scripts ?? {}));
-  const webScripts = new Set(Object.keys(readJson(path.join(repoRoot, 'web', 'package.json')).scripts ?? {}));
-  const cliScripts = new Set(Object.keys(readJson(path.join(repoRoot, 'cli', 'package.json')).scripts ?? {}));
+  const rootScripts = new Set(
+    Object.keys(readJson(path.join(repoRoot, 'package.json')).scripts ?? {}),
+  );
+  const webScripts = new Set(
+    Object.keys(readJson(path.join(repoRoot, 'web', 'package.json')).scripts ?? {}),
+  );
+  const cliScripts = new Set(
+    Object.keys(readJson(path.join(repoRoot, 'cli', 'package.json')).scripts ?? {}),
+  );
 
   for (const file of markdownFiles) {
     const lines = readFileSync(file, 'utf8').split('\n');
@@ -241,9 +244,13 @@ function validateNpmRunCommands(markdownFiles, problems) {
             : rootScripts.has(scriptName);
 
         if (!valid) {
-          const scope = isWebContext ? 'web/package.json' : isCliContext ? 'cli/package.json' : 'package.json';
+          const scope = isWebContext
+            ? 'web/package.json'
+            : isCliContext
+              ? 'cli/package.json'
+              : 'package.json';
           problems.push(
-            `invalid npm script: ${relative(file)}:${idx + 1} -> "${scriptName}" not found in ${scope}`
+            `invalid npm script: ${relative(file)}:${idx + 1} -> "${scriptName}" not found in ${scope}`,
           );
         }
       }
@@ -274,8 +281,8 @@ function validateMcpToolCount(problems) {
 
   const documentedCount = Number(headingMatch[1]);
   const toolFiles = readdirSync(MCP_TOOL_SOURCE_DIR)
-    .filter(f => f.endsWith('.ts') && f !== 'index.ts' && f !== 'format.ts')
-    .map(f => path.join(MCP_TOOL_SOURCE_DIR, f));
+    .filter((f) => f.endsWith('.ts') && f !== 'index.ts' && f !== 'format.ts')
+    .map((f) => path.join(MCP_TOOL_SOURCE_DIR, f));
 
   let actualCount = 0;
   for (const file of toolFiles) {
@@ -286,7 +293,7 @@ function validateMcpToolCount(problems) {
 
   if (documentedCount !== actualCount) {
     problems.push(
-      `MCP tool count mismatch: docs/MCP_SETUP.md says ${documentedCount}, source registers ${actualCount}`
+      `MCP tool count mismatch: docs/MCP_SETUP.md says ${documentedCount}, source registers ${actualCount}`,
     );
   }
 }
@@ -307,7 +314,7 @@ function validateLegacyRepoReferences(files, problems) {
     const rel = relative(file);
     if (REPO_GUARD_EXCLUDES.has(rel)) continue;
     const content = readFileSync(file, 'utf8');
-    const hasLegacyReference = OLD_REPO_PATTERNS.some(pattern => pattern.test(content));
+    const hasLegacyReference = OLD_REPO_PATTERNS.some((pattern) => pattern.test(content));
     if (hasLegacyReference) {
       problems.push(`legacy repo URL reference found: ${rel}`);
     }
@@ -323,12 +330,13 @@ function main() {
   }
 
   const config = readJson(FRESHNESS_CONFIG_PATH);
-  const scanPaths = Array.isArray(config.scanPaths) && config.scanPaths.length > 0
-    ? config.scanPaths
-    : DEFAULT_SCAN_PATHS;
+  const scanPaths =
+    Array.isArray(config.scanPaths) && config.scanPaths.length > 0
+      ? config.scanPaths
+      : DEFAULT_SCAN_PATHS;
   const markdownFiles = collectMarkdownFiles(scanPaths);
   const repoGuardFiles = collectTextFiles(REPO_GUARD_SCAN_PATHS, REPO_GUARD_EXTENSIONS);
-  const ignoreSet = new Set((config.ignoreFilesForLint ?? []).map(p => String(p)));
+  const ignoreSet = new Set((config.ignoreFilesForLint ?? []).map((p) => String(p)));
 
   validateFreshness(config, problems);
   validateMarkdownLinks(markdownFiles, problems);
@@ -348,7 +356,9 @@ function main() {
 
   const freshnessDocs = Array.isArray(config.documents) ? config.documents.length : 0;
   const markdownCount = markdownFiles.length;
-  console.log(`Docs verification passed (${freshnessDocs} tracked docs, ${markdownCount} markdown files scanned).`);
+  console.log(
+    `Docs verification passed (${freshnessDocs} tracked docs, ${markdownCount} markdown files scanned).`,
+  );
 }
 
 main();

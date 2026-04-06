@@ -123,6 +123,7 @@ export function toPostForScoring(row: Record<string, unknown>): PostForScoring {
     repostCount: (row.repost_count as number) ?? 0,
     replyCount: (row.reply_count as number) ?? 0,
     topicVector: (row.topic_vector as Record<string, number>) ?? {},
-    classificationMethod: (row.classification_method as string) === 'embedding' ? 'embedding' : 'keyword',
+    classificationMethod:
+      (row.classification_method as string) === 'embedding' ? 'embedding' : 'keyword',
   };
 }

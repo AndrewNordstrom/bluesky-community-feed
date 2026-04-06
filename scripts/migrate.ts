@@ -126,7 +126,7 @@ export async function detectLegacySchema(client: pg.Client): Promise<boolean> {
   for (const tableName of LEGACY_MIGRATION_SENTINEL_TABLES) {
     const result = await client.query<{ exists: boolean }>(
       `SELECT to_regclass($1) IS NOT NULL AS exists`,
-      [`public.${tableName}`]
+      [`public.${tableName}`],
     );
     if (result.rows[0]?.exists === true) {
       return true;
@@ -139,7 +139,7 @@ export async function detectLegacySchema(client: pg.Client): Promise<boolean> {
 export async function bootstrapLegacyMigrations(
   client: pg.Client,
   files: string[],
-  applied: Set<string>
+  applied: Set<string>,
 ): Promise<Set<string>> {
   if (applied.size > 0) {
     return applied;
@@ -166,7 +166,7 @@ export async function bootstrapLegacyMigrations(
 
     await client.query(
       `INSERT INTO ${MIGRATIONS_TABLE} (filename) VALUES ($1) ON CONFLICT (filename) DO NOTHING`,
-      [filename]
+      [filename],
     );
     bootstrapped.add(filename);
     console.log(`[bootstrap] ${filename}`);
@@ -188,7 +188,7 @@ export async function runMigrations(databaseUrl = process.env.DATABASE_URL): Pro
 
     const files = await getMigrationFiles();
     const appliedResult = await client.query<{ filename: string }>(
-      `SELECT filename FROM ${MIGRATIONS_TABLE}`
+      `SELECT filename FROM ${MIGRATIONS_TABLE}`,
     );
     let applied = new Set(appliedResult.rows.map((row) => row.filename));
     applied = await bootstrapLegacyMigrations(client, files, applied);

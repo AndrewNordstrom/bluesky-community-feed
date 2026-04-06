@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { isReadyMock, execFileMock } = vi.hoisted(() => ({
   isReadyMock: vi.fn(),
-  execFileMock: vi.fn((_cmd: string, _args: string[], cb?: (err?: Error | null) => void) => cb?.(null)),
+  execFileMock: vi.fn((_cmd: string, _args: string[], cb?: (err?: Error | null) => void) =>
+    cb?.(null),
+  ),
 }));
 
 vi.mock('../src/lib/health.js', () => ({
@@ -70,7 +72,11 @@ describe('watchdog', () => {
     await Promise.resolve();
 
     expect(isReadyMock).toHaveBeenCalledTimes(1);
-    expect(execFileMock).toHaveBeenCalledWith('systemd-notify', ['WATCHDOG=1'], expect.any(Function));
+    expect(execFileMock).toHaveBeenCalledWith(
+      'systemd-notify',
+      ['WATCHDOG=1'],
+      expect.any(Function),
+    );
   });
 
   it('uses half of WATCHDOG_USEC for recurring heartbeat interval', async () => {

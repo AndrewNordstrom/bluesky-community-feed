@@ -78,7 +78,10 @@ export function TopicsPanel() {
   }
 
   function parseTerms(input: string): string[] {
-    return input.split(',').map(t => t.trim()).filter(Boolean);
+    return input
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
   }
 
   async function handleAdd(e: React.FormEvent) {
@@ -168,7 +171,7 @@ export function TopicsPanel() {
     }
   }
 
-  const activeTopics = topics.filter(t => t.isActive);
+  const activeTopics = topics.filter((t) => t.isActive);
   const totalPosts = activeTopics.reduce((sum, t) => sum + t.postCount, 0);
 
   function renderForm(isEdit: boolean) {
@@ -253,19 +256,10 @@ export function TopicsPanel() {
         </div>
 
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={isSaving}
-          >
+          <button type="submit" className="btn btn-primary" disabled={isSaving}>
             {isSaving ? 'Saving...' : isEdit ? 'Update Topic' : 'Add Topic'}
           </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={cancelEdit}
-            disabled={isSaving}
-          >
+          <button type="button" className="btn" onClick={cancelEdit} disabled={isSaving}>
             Cancel
           </button>
         </div>
@@ -283,12 +277,25 @@ export function TopicsPanel() {
 
       {/* Add Topic */}
       <div className="admin-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h2>Topic Catalog ({activeTopics.length} active, {totalPosts} posts)</h2>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '16px',
+          }}
+        >
+          <h2>
+            Topic Catalog ({activeTopics.length} active, {totalPosts} posts)
+          </h2>
           {!showAddForm && !editingSlug && (
             <button
               className="btn btn-primary"
-              onClick={() => { setShowAddForm(true); setFormData(EMPTY_FORM); setMessage(null); }}
+              onClick={() => {
+                setShowAddForm(true);
+                setFormData(EMPTY_FORM);
+                setMessage(null);
+              }}
             >
               Add Topic
             </button>
@@ -333,24 +340,32 @@ export function TopicsPanel() {
                 {topics.map((t) => (
                   <tr key={t.slug} style={!t.isActive ? { opacity: 0.6 } : undefined}>
                     <td>
-                      <span style={{
-                        display: 'inline-block',
-                        width: '10px',
-                        height: '10px',
-                        borderRadius: '50%',
-                        backgroundColor: t.isActive ? 'var(--color-success, #22c55e)' : 'var(--color-text-tertiary, #666)',
-                      }} title={t.isActive ? 'Active' : 'Inactive'} />
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          width: '10px',
+                          height: '10px',
+                          borderRadius: '50%',
+                          backgroundColor: t.isActive
+                            ? 'var(--color-success, #22c55e)'
+                            : 'var(--color-text-tertiary, #666)',
+                        }}
+                        title={t.isActive ? 'Active' : 'Inactive'}
+                      />
                     </td>
                     <td>
                       <span className="text-primary">{t.name}</span>
                       <br />
-                      <span className="text-secondary" style={{ fontSize: '0.8em' }}>{t.slug}</span>
+                      <span className="text-secondary" style={{ fontSize: '0.8em' }}>
+                        {t.slug}
+                      </span>
                     </td>
                     <td>{t.postCount}</td>
                     <td>{t.currentWeight !== null ? t.currentWeight.toFixed(2) : '—'}</td>
                     <td>
                       <span className="text-secondary" style={{ fontSize: '0.85em' }}>
-                        {t.terms.slice(0, 5).join(', ')}{t.terms.length > 5 ? `, +${t.terms.length - 5}` : ''}
+                        {t.terms.slice(0, 5).join(', ')}
+                        {t.terms.length > 5 ? `, +${t.terms.length - 5}` : ''}
                       </span>
                     </td>
                     <td>
@@ -375,7 +390,10 @@ export function TopicsPanel() {
                             onClick={async () => {
                               try {
                                 await adminApi.updateTopic(t.slug, { name: t.name });
-                                setMessage({ type: 'success', text: `Topic reactivated: ${t.slug}` });
+                                setMessage({
+                                  type: 'success',
+                                  text: `Topic reactivated: ${t.slug}`,
+                                });
                                 fetchTopics();
                               } catch (err) {
                                 const msg = err instanceof Error ? err.message : 'Failed';
@@ -424,12 +442,16 @@ export function TopicsPanel() {
 
         {classifyResult && (
           <div>
-            <p><strong>Tokens:</strong> {classifyResult.tokenCount}</p>
+            <p>
+              <strong>Tokens:</strong> {classifyResult.tokenCount}
+            </p>
             {classifyResult.matchedTopics.length === 0 ? (
               <p className="text-secondary">No topics matched.</p>
             ) : (
               <div>
-                <p><strong>Matched {classifyResult.matchedTopics.length} topics:</strong></p>
+                <p>
+                  <strong>Matched {classifyResult.matchedTopics.length} topics:</strong>
+                </p>
                 <div className="table-container">
                   <table className="admin-table">
                     <thead>
@@ -446,8 +468,7 @@ export function TopicsPanel() {
                             <td>{slug}</td>
                             <td>{score.toFixed(2)}</td>
                           </tr>
-                        ))
-                      }
+                        ))}
                     </tbody>
                   </table>
                 </div>

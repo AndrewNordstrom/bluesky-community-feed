@@ -117,10 +117,10 @@ describe('relevance floor in feed output', () => {
   it('SQL query contains relevance_score >= parameter', async () => {
     // No posts → pipeline skips scoring, goes straight to writeToRedisFromDb
     dbQueryMock
-      .mockResolvedValueOnce({ rows: [makeEpochRow()] })   // getActiveEpoch
-      .mockResolvedValueOnce({ rows: [] })                   // getPostsForScoring
-      .mockResolvedValueOnce({ rows: [] })                   // writeToRedisFromDb
-      .mockResolvedValueOnce({ rows: [] });                  // updateCurrentRunScope
+      .mockResolvedValueOnce({ rows: [makeEpochRow()] }) // getActiveEpoch
+      .mockResolvedValueOnce({ rows: [] }) // getPostsForScoring
+      .mockResolvedValueOnce({ rows: [] }) // writeToRedisFromDb
+      .mockResolvedValueOnce({ rows: [] }); // updateCurrentRunScope
 
     await runScoringPipeline();
 
@@ -179,15 +179,13 @@ describe('relevance floor in feed output', () => {
   });
 
   it('includes posts returned by DB query in Redis feed', async () => {
-    const feedPosts = [
-      { post_uri: 'at://did:plc:test/post/high', total_score: 0.85 },
-    ];
+    const feedPosts = [{ post_uri: 'at://did:plc:test/post/high', total_score: 0.85 }];
 
     // No posts to score, but writeToRedisFromDb returns 1 post
     dbQueryMock
       .mockResolvedValueOnce({ rows: [makeEpochRow()] })
-      .mockResolvedValueOnce({ rows: [] })                     // no posts to score
-      .mockResolvedValueOnce({ rows: feedPosts })               // writeToRedisFromDb
+      .mockResolvedValueOnce({ rows: [] }) // no posts to score
+      .mockResolvedValueOnce({ rows: feedPosts }) // writeToRedisFromDb
       .mockResolvedValueOnce({ rows: [] });
 
     await runScoringPipeline();
@@ -195,7 +193,7 @@ describe('relevance floor in feed output', () => {
     expect(pipelineZaddMock).toHaveBeenCalledWith(
       'feed:current',
       0.85,
-      'at://did:plc:test/post/high'
+      'at://did:plc:test/post/high',
     );
     expect(pipelineSetMock).toHaveBeenCalledWith('feed:count', '1');
   });

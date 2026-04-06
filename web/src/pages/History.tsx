@@ -54,7 +54,7 @@ function normalizeKeywords(values: string[] | undefined): string[] {
     return [];
   }
   return Array.from(
-    new Set(values.map((value) => value.trim().toLowerCase()).filter((value) => value.length > 0))
+    new Set(values.map((value) => value.trim().toLowerCase()).filter((value) => value.length > 0)),
   );
 }
 
@@ -176,9 +176,8 @@ export function History() {
     ? sortedEpochs.findIndex((epoch) => epoch.id === selectedEpoch.id)
     : -1;
   const previousEpoch = selectedIndex >= 0 ? (sortedEpochs[selectedIndex + 1] ?? null) : null;
-  const roundDiff = selectedEpoch && previousEpoch
-    ? computeRoundDiff(selectedEpoch, previousEpoch)
-    : null;
+  const roundDiff =
+    selectedEpoch && previousEpoch ? computeRoundDiff(selectedEpoch, previousEpoch) : null;
 
   if (isLoading) {
     return (
@@ -188,9 +187,15 @@ export function History() {
             <div className="header-left">
               <h1>Community feed</h1>
               <nav className="header-nav">
-                <Link to="/vote" className="nav-link">Vote</Link>
-                <Link to="/dashboard" className="nav-link">Dashboard</Link>
-                <Link to="/history" className="nav-link active">History</Link>
+                <Link to="/vote" className="nav-link">
+                  Vote
+                </Link>
+                <Link to="/dashboard" className="nav-link">
+                  Dashboard
+                </Link>
+                <Link to="/history" className="nav-link active">
+                  History
+                </Link>
               </nav>
             </div>
           </div>
@@ -209,7 +214,9 @@ export function History() {
         <div className="error-container">
           <h2>Error</h2>
           <p>{error}</p>
-          <Link to="/dashboard" className="back-link">Back to Dashboard</Link>
+          <Link to="/dashboard" className="back-link">
+            Back to Dashboard
+          </Link>
         </div>
         <style>{styles}</style>
       </div>
@@ -223,10 +230,20 @@ export function History() {
           <div className="header-left">
             <h1>Community feed</h1>
             <nav className="header-nav">
-              <Link to="/vote" className="nav-link">Vote</Link>
-              <Link to="/dashboard" className="nav-link">Dashboard</Link>
-              <Link to="/history" className="nav-link">History</Link>
-              {isAdmin && <Link to="/admin" className="nav-link">Admin</Link>}
+              <Link to="/vote" className="nav-link">
+                Vote
+              </Link>
+              <Link to="/dashboard" className="nav-link">
+                Dashboard
+              </Link>
+              <Link to="/history" className="nav-link">
+                History
+              </Link>
+              {isAdmin && (
+                <Link to="/admin" className="nav-link">
+                  Admin
+                </Link>
+              )}
             </nav>
           </div>
           <div className="user-info">
@@ -324,9 +341,9 @@ export function History() {
                           <div key={change.key} className="change-item">
                             <span>{WEIGHT_LABELS[change.key]}</span>
                             <strong>
-                              {(change.previous * 100).toFixed(1)}% → {(change.current * 100).toFixed(1)}%
-                              {' '}
-                              ({change.delta >= 0 ? '+' : ''}{(change.delta * 100).toFixed(1)}%)
+                              {(change.previous * 100).toFixed(1)}% →{' '}
+                              {(change.current * 100).toFixed(1)}% ({change.delta >= 0 ? '+' : ''}
+                              {(change.delta * 100).toFixed(1)}%)
                             </strong>
                           </div>
                         ))}
@@ -340,16 +357,28 @@ export function History() {
                       roundDiff.keywordDiff.excludeRemoved.length > 0) && (
                       <div className="changes-keywords">
                         {roundDiff.keywordDiff.includeAdded.length > 0 && (
-                          <p><strong>Include added:</strong> {roundDiff.keywordDiff.includeAdded.join(', ')}</p>
+                          <p>
+                            <strong>Include added:</strong>{' '}
+                            {roundDiff.keywordDiff.includeAdded.join(', ')}
+                          </p>
                         )}
                         {roundDiff.keywordDiff.includeRemoved.length > 0 && (
-                          <p><strong>Include removed:</strong> {roundDiff.keywordDiff.includeRemoved.join(', ')}</p>
+                          <p>
+                            <strong>Include removed:</strong>{' '}
+                            {roundDiff.keywordDiff.includeRemoved.join(', ')}
+                          </p>
                         )}
                         {roundDiff.keywordDiff.excludeAdded.length > 0 && (
-                          <p><strong>Exclude added:</strong> {roundDiff.keywordDiff.excludeAdded.join(', ')}</p>
+                          <p>
+                            <strong>Exclude added:</strong>{' '}
+                            {roundDiff.keywordDiff.excludeAdded.join(', ')}
+                          </p>
                         )}
                         {roundDiff.keywordDiff.excludeRemoved.length > 0 && (
-                          <p><strong>Exclude removed:</strong> {roundDiff.keywordDiff.excludeRemoved.join(', ')}</p>
+                          <p>
+                            <strong>Exclude removed:</strong>{' '}
+                            {roundDiff.keywordDiff.excludeRemoved.join(', ')}
+                          </p>
                         )}
                       </div>
                     )}

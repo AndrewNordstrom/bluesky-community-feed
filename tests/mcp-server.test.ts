@@ -9,12 +9,7 @@ import Fastify from 'fastify';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Hoisted mocks ──
-const {
-  getSessionByTokenMock,
-  isAdminMock,
-  dbQueryMock,
-  redisGetMock,
-} = vi.hoisted(() => ({
+const { getSessionByTokenMock, isAdminMock, dbQueryMock, redisGetMock } = vi.hoisted(() => ({
   getSessionByTokenMock: vi.fn(),
   isAdminMock: vi.fn(),
   dbQueryMock: vi.fn(),
@@ -29,7 +24,7 @@ vi.mock('../src/governance/session-store.js', () => ({
 
 vi.mock('../src/auth/admin.js', () => ({
   isAdmin: isAdminMock,
-  requireAdmin: vi.fn(async (request: any, reply: any) => {
+  requireAdmin: vi.fn(async (request: MockAdminRequest, reply: MockReply) => {
     const cookie = request.headers.cookie || '';
     const match = cookie.match(/governance_session=([^;]+)/);
     if (!match) return reply.status(401).send({ error: 'Authentication required' });
@@ -37,9 +32,10 @@ vi.mock('../src/auth/admin.js', () => ({
     const session = await getSessionByTokenMock(match[1]);
     if (!session) return reply.status(401).send({ error: 'Invalid session' });
 
-    if (!isAdminMock(session.did)) return reply.status(403).send({ error: 'Admin access required' });
+    if (!isAdminMock(session.did))
+      return reply.status(403).send({ error: 'Admin access required' });
 
-    (request as any).adminDid = session.did;
+    request.adminDid = session.did;
   }),
   getCurrentUserDid: vi.fn(async () => 'did:plc:testadmin'),
   getAdminDid: vi.fn(() => 'did:plc:testadmin'),
@@ -90,6 +86,41 @@ import { registerMcpRoutes } from '../src/mcp/transport.js';
 const VALID_TOKEN = 'test-session-token-abc123';
 const ADMIN_DID = 'did:plc:testadmin';
 
+interface MockAdminRequest {
+  headers: {
+    cookie?: string;
+  };
+  adminDid?: string;
+}
+
+interface MockReply {
+  status: (code: number) => {
+    send: (body: unknown) => unknown;
+  };
+}
+
+interface JsonRpcTool {
+  name: string;
+}
+
+interface JsonRpcContentItem {
+  type: string;
+  text: string;
+}
+
+interface JsonRpcResult {
+  serverInfo?: Record<string, unknown>;
+  capabilities?: unknown;
+  tools?: JsonRpcTool[];
+  content?: JsonRpcContentItem[];
+  isError?: boolean;
+}
+
+interface JsonRpcEnvelope {
+  id?: number;
+  result?: JsonRpcResult;
+}
+
 /** Standard MCP headers for content negotiation. */
 const MCP_HEADERS = {
   'content-type': 'application/json',
@@ -133,26 +164,33 @@ function setupValidAuth() {
  * Parse MCP response which may be direct JSON or SSE format.
  * Returns all parsed JSON-RPC messages.
  */
-function parseMcpResponses(body: string): any[] {
-  const results: any[] = [];
+function parseMcpResponses(body: string): JsonRpcEnvelope[] {
+  const results: JsonRpcEnvelope[] = [];
 
   // Try direct JSON first
   const trimmed = body.trimStart();
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
     try {
-      const parsed = JSON.parse(trimmed);
+      const parsed = JSON.parse(trimmed) as JsonRpcEnvelope | JsonRpcEnvelope[];
       if (Array.isArray(parsed)) return parsed;
       return [parsed];
-    } catch { /* fall through to SSE parsing */ }
+    } catch {
+      /* fall through to SSE parsing */
+    }
   }
 
   // Parse SSE format
-  const dataLines = body.split('\n')
+  const dataLines = body
+    .split('\n')
     .filter((line) => line.startsWith('data: '))
     .map((line) => line.slice(6));
 
   for (const line of dataLines) {
-    try { results.push(JSON.parse(line)); } catch { /* skip */ }
+    try {
+      results.push(JSON.parse(line) as JsonRpcEnvelope);
+    } catch {
+      /* skip */
+    }
   }
 
   return results;
@@ -175,13 +213,21 @@ describe('MCP Server', () => {
         url: '/mcp',
         headers: MCP_HEADERS,
         payload: {
-          jsonrpc: '2.0', id: 1, method: 'initialize',
-          params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'test', version: '1.0' } },
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2025-03-26',
+            capabilities: {},
+            clientInfo: { name: 'test', version: '1.0' },
+          },
         },
       });
 
       expect(res.statusCode).toBe(401);
-      expect(res.json()).toMatchObject({ error: expect.stringContaining('Authentication required') });
+      expect(res.json()).toMatchObject({
+        error: expect.stringContaining('Authentication required'),
+      });
 
       await app.close();
     });
@@ -196,8 +242,14 @@ describe('MCP Server', () => {
         url: '/mcp',
         headers: { ...MCP_HEADERS, authorization: 'Bearer invalid-token' },
         payload: {
-          jsonrpc: '2.0', id: 1, method: 'initialize',
-          params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'test', version: '1.0' } },
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2025-03-26',
+            capabilities: {},
+            clientInfo: { name: 'test', version: '1.0' },
+          },
         },
       });
 
@@ -223,8 +275,14 @@ describe('MCP Server', () => {
         url: '/mcp',
         headers: { ...MCP_HEADERS, authorization: 'Bearer some-token' },
         payload: {
-          jsonrpc: '2.0', id: 1, method: 'initialize',
-          params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'test', version: '1.0' } },
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2025-03-26',
+            capabilities: {},
+            clientInfo: { name: 'test', version: '1.0' },
+          },
         },
       });
 
@@ -256,7 +314,9 @@ describe('MCP Server', () => {
         url: '/mcp',
         headers: { ...MCP_HEADERS, authorization: `Bearer ${VALID_TOKEN}` },
         payload: {
-          jsonrpc: '2.0', id: 1, method: 'initialize',
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
           params: {
             protocolVersion: '2025-03-26',
             capabilities: {},
@@ -306,7 +366,7 @@ describe('MCP Server', () => {
       const toolsResult = results.find((r) => r.id === 2);
 
       if (toolsResult?.result?.tools) {
-        const toolNames = toolsResult.result.tools.map((t: any) => t.name).sort();
+        const toolNames = toolsResult.result.tools.map((tool) => tool.name).sort();
 
         // Governance tools (10)
         expect(toolNames).toContain('get_status');

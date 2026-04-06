@@ -51,8 +51,8 @@ export function ScoreRadar({
   // Transform data for recharts
   const data = Object.keys(SCORE_LABELS).map((key) => ({
     component: SCORE_LABELS[key as keyof ScoreData],
-    score: scores ? (scores[key as keyof ScoreData] * 100) : 0,
-    weight: weights ? (weights[key as keyof ScoreData] * 100) : 0,
+    score: scores ? scores[key as keyof ScoreData] * 100 : 0,
+    weight: weights ? weights[key as keyof ScoreData] * 100 : 0,
   }));
 
   // Bluesky design tokens
@@ -123,7 +123,7 @@ export function ScoreRadar({
               color: '#f1f3f5',
             }}
           />
-          {(scores && showWeights && weights) && (
+          {scores && showWeights && weights && (
             <Legend
               wrapperStyle={{
                 paddingTop: '12px',

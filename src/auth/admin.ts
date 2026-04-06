@@ -10,6 +10,10 @@ import { getSession, SessionStoreUnavailableError } from '../governance/auth.js'
 import { logger } from '../lib/logger.js';
 import { config } from '../config.js';
 
+interface AdminRequest extends FastifyRequest {
+  adminDid?: string;
+}
+
 /**
  * Parsed admin DID set — computed once at module load to avoid
  * re-splitting BOT_ADMIN_DIDS on every request.
@@ -55,16 +59,17 @@ export async function getCurrentUserDid(request: FastifyRequest): Promise<string
  * Fastify preHandler hook that requires admin access.
  * Returns 401 if not logged in, 403 if not admin.
  */
-export async function requireAdmin(
-  request: FastifyRequest,
-  reply: FastifyReply
-): Promise<void> {
+export async function requireAdmin(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const adminRequest = request as AdminRequest;
   let did: string | null;
   try {
-    did = await getCurrentUserDid(request);
+    did = await getCurrentUserDid(adminRequest);
   } catch (err) {
     if (err instanceof SessionStoreUnavailableError) {
-      logger.error({ err, path: request.url }, 'Admin auth check failed due to unavailable session store');
+      logger.error(
+        { err, path: request.url },
+        'Admin auth check failed due to unavailable session store',
+      );
       return reply.status(503).send({ error: 'Authentication service temporarily unavailable' });
     }
     throw err;
@@ -81,12 +86,12 @@ export async function requireAdmin(
   }
 
   // Attach admin DID to request for later use
-  (request as any).adminDid = did;
+  adminRequest.adminDid = did;
 }
 
 /**
  * Get admin DID from request (after requireAdmin has run).
  */
 export function getAdminDid(request: FastifyRequest): string {
-  return (request as any).adminDid;
+  return (request as AdminRequest).adminDid ?? '';
 }

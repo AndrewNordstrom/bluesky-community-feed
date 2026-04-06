@@ -53,7 +53,7 @@ export async function startInteractionLogger(): Promise<void> {
 
   logger.info(
     { intervalMs: DRAIN_INTERVAL_MS, batchSize: BATCH_SIZE },
-    'Starting interaction logger'
+    'Starting interaction logger',
   );
 
   // Run immediately on start
@@ -135,7 +135,7 @@ async function logQueueDepth(): Promise<void> {
     if (depth > QUEUE_DEPTH_WARN_THRESHOLD) {
       logger.warn(
         { queueDepth: depth, threshold: QUEUE_DEPTH_WARN_THRESHOLD },
-        'Interaction logger queue depth is above warning threshold'
+        'Interaction logger queue depth is above warning threshold',
       );
     }
   } catch (err) {
@@ -158,7 +158,10 @@ async function drainQueue(): Promise<void> {
       const entry = JSON.parse(raw) as FeedRequestLogEntry;
       entries.push(entry);
     } catch (err) {
-      logger.warn({ err, raw: raw.substring(0, 200) }, 'Malformed feed request log entry, skipping');
+      logger.warn(
+        { err, raw: raw.substring(0, 200) },
+        'Malformed feed request log entry, skipping',
+      );
     }
   }
 
@@ -188,7 +191,7 @@ async function insertFeedRequests(entries: FeedRequestLogEntry[]): Promise<void>
     const e = entries[i];
     const base = i * 7;
     placeholders.push(
-      `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7})`
+      `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7})`,
     );
     values.push(
       e.viewer_did,
@@ -197,7 +200,7 @@ async function insertFeedRequests(entries: FeedRequestLogEntry[]): Promise<void>
       e.page_offset,
       e.posts_served,
       e.response_time_ms,
-      e.requested_at
+      e.requested_at,
     );
   }
 
@@ -205,7 +208,7 @@ async function insertFeedRequests(entries: FeedRequestLogEntry[]): Promise<void>
     await db.query(
       `INSERT INTO feed_requests (viewer_did, epoch_id, snapshot_id, page_offset, posts_served, response_time_ms, requested_at)
        VALUES ${placeholders.join(', ')}`,
-      values
+      values,
     );
   } catch (err) {
     logger.error({ err, count: entries.length }, 'Failed to insert feed_requests batch');
@@ -227,15 +230,13 @@ async function insertEngagementAttributions(entries: FeedRequestLogEntry[]): Pro
 
     for (let j = 0; j < entry.post_uris.length; j++) {
       const base = paramIndex * 5;
-      placeholders.push(
-        `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`
-      );
+      placeholders.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`);
       values.push(
         entry.post_uris[j],
         entry.viewer_did,
         entry.epoch_id,
         entry.requested_at,
-        entry.position_start + j
+        entry.position_start + j,
       );
       paramIndex++;
     }
@@ -248,12 +249,12 @@ async function insertEngagementAttributions(entries: FeedRequestLogEntry[]): Pro
       `INSERT INTO engagement_attributions (post_uri, viewer_did, epoch_id, served_at, position_in_feed)
        VALUES ${placeholders.join(', ')}
        ON CONFLICT (post_uri, viewer_did, epoch_id) DO NOTHING`,
-      values
+      values,
     );
   } catch (err) {
     logger.error(
       { err, count: placeholders.length },
-      'Failed to insert engagement_attributions batch'
+      'Failed to insert engagement_attributions batch',
     );
   }
 }

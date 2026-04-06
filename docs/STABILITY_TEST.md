@@ -5,6 +5,7 @@ This document outlines the procedure for running a 24-hour stability test to ver
 ## Overview
 
 The stability test validates that the system can:
+
 1. Run continuously without crashes or memory leaks
 2. Handle normal load with acceptable latency
 3. Recover from temporary failures (DB/Redis/Jetstream disconnects)
@@ -52,14 +53,14 @@ curl -s "http://localhost:3000/xrpc/app.bsky.feed.getFeedSkeleton?feed=at://...&
 
 ### Every Hour (Manual or Automated)
 
-| Check | Command | Expected |
-|-------|---------|----------|
-| Process running | `pgrep -f "node dist/index.js"` | PID returned |
-| Memory usage | `ps -o rss= -p <PID>` | < 1GB, stable |
-| CPU usage | `top -l 1 -pid <PID>` | < 50% avg |
-| Error count | `grep -c ERROR logs/app.log` | Minimal growth |
-| DB connections | `SELECT count(*) FROM pg_stat_activity WHERE datname='community_feed'` | < 20 |
-| Redis memory | `redis-cli INFO memory \| grep used_memory_human` | Stable |
+| Check           | Command                                                                | Expected       |
+| --------------- | ---------------------------------------------------------------------- | -------------- |
+| Process running | `pgrep -f "node dist/index.js"`                                        | PID returned   |
+| Memory usage    | `ps -o rss= -p <PID>`                                                  | < 1GB, stable  |
+| CPU usage       | `top -l 1 -pid <PID>`                                                  | < 50% avg      |
+| Error count     | `grep -c ERROR logs/app.log`                                           | Minimal growth |
+| DB connections  | `SELECT count(*) FROM pg_stat_activity WHERE datname='community_feed'` | < 20           |
+| Redis memory    | `redis-cli INFO memory \| grep used_memory_human`                      | Stable         |
 
 ```sql
 -- Verify scoring is running
@@ -88,6 +89,7 @@ npx tsx scripts/load-test.ts --duration 60
 ```
 
 Expected:
+
 - p95 latency < 50ms
 - 0 errors
 - 0 timeouts
@@ -105,12 +107,14 @@ docker compose start postgres
 ```
 
 **Expected behavior:**
+
 - Application logs connection errors
 - Health endpoint shows database unhealthy
 - Application reconnects automatically
 - No manual intervention needed
 
 **Verify recovery:**
+
 ```bash
 curl http://localhost:3000/health
 # Status should return to "healthy" within 60s
@@ -125,11 +129,13 @@ docker compose start redis
 ```
 
 **Expected behavior:**
+
 - Feed skeleton returns empty temporarily
 - Next scoring run repopulates Redis
 - Application recovers automatically
 
 **Verify recovery:**
+
 ```bash
 redis-cli ZCARD feed:current
 # Should have entries after next scoring run (max 5 min)
@@ -147,11 +153,13 @@ sudo iptables -D OUTPUT -d jetstream2.us-east.bsky.network -j DROP
 ```
 
 **Expected behavior:**
+
 - Jetstream reconnects with exponential backoff
 - Falls back to secondary instance if primary unreachable
 - Resumes from saved cursor (no data loss)
 
 **Verify recovery:**
+
 ```bash
 # Check logs for reconnection
 grep -i "reconnect\|fallback" logs/app.log | tail -5
@@ -167,6 +175,7 @@ npx tsx scripts/load-test.ts --connections 200 --duration 120
 ```
 
 **Expected behavior:**
+
 - System remains responsive
 - No OOM kills
 - p95 < 100ms under heavy load
@@ -186,6 +195,7 @@ kill -TERM $PID
 ```
 
 **Expected behavior:**
+
 - "Shutting down gracefully..." logged
 - All components stop in order
 - "Graceful shutdown complete" within 30s
@@ -236,14 +246,14 @@ WHERE p.uri IS NULL;
 
 ### Performance Summary
 
-| Metric | Target | Actual |
-|--------|--------|--------|
-| Uptime | 24h | |
-| p95 Latency | <50ms | |
-| Error Rate | <0.1% | |
-| Memory Growth | <10% | |
-| Scoring Runs | ~288 | |
-| Recovery Time | <60s | |
+| Metric        | Target | Actual |
+| ------------- | ------ | ------ |
+| Uptime        | 24h    |        |
+| p95 Latency   | <50ms  |        |
+| Error Rate    | <0.1%  |        |
+| Memory Growth | <10%   |        |
+| Scoring Runs  | ~288   |        |
+| Recovery Time | <60s   |        |
 
 ## Success Criteria
 
@@ -269,16 +279,16 @@ If the test fails, gather:
 
 Common issues:
 
-| Symptom | Possible Cause | Investigation |
-|---------|---------------|---------------|
-| Memory growth | Event processing leak | Heap dump, check for unbounded arrays |
-| Connection errors | Pool exhaustion | Check pg_stat_activity, increase pool |
-| High latency | Missing indexes | Run analyze-queries.sql |
-| Scoring gaps | Pipeline timeout | Check scoring duration in logs |
+| Symptom           | Possible Cause        | Investigation                         |
+| ----------------- | --------------------- | ------------------------------------- |
+| Memory growth     | Event processing leak | Heap dump, check for unbounded arrays |
+| Connection errors | Pool exhaustion       | Check pg_stat_activity, increase pool |
+| High latency      | Missing indexes       | Run analyze-queries.sql               |
+| Scoring gaps      | Pipeline timeout      | Check scoring duration in logs        |
 
 ## Sign-off
 
-| Role | Name | Date | Pass/Fail |
-|------|------|------|-----------|
-| Tester | | | |
-| Reviewer | | | |
+| Role     | Name | Date | Pass/Fail |
+| -------- | ---- | ---- | --------- |
+| Tester   |      |      |           |
+| Reviewer |      |      |           |

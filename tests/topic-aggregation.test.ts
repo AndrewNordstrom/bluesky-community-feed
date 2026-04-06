@@ -39,9 +39,7 @@ const ACTIVE_SLUGS = [
  * Setup db.query to return votes and active slugs.
  * Call index 0 = votes query, call index 1 = slug query.
  */
-function setupMocks(
-  votes: Array<{ topic_weight_votes: Record<string, number> }>
-): void {
+function setupMocks(votes: Array<{ topic_weight_votes: Record<string, number> }>): void {
   dbQueryMock.mockImplementation((sql: string) => {
     if (sql.includes('topic_weight_votes')) {
       return Promise.resolve({ rows: votes });
@@ -65,9 +63,7 @@ describe('aggregateTopicWeights', () => {
   });
 
   it('returns single voter values directly (no trimming)', async () => {
-    setupMocks([
-      { topic_weight_votes: { 'software-development': 0.8, 'dogs-pets': 0.3 } },
-    ]);
+    setupMocks([{ topic_weight_votes: { 'software-development': 0.8, 'dogs-pets': 0.3 } }]);
 
     const result = await aggregateTopicWeights(1);
 
@@ -107,7 +103,7 @@ describe('aggregateTopicWeights', () => {
   it('handles voters who vote on different subsets of topics', async () => {
     setupMocks([
       { topic_weight_votes: { 'software-development': 0.9, 'dogs-pets': 0.4 } },
-      { topic_weight_votes: { 'software-development': 0.7, 'politics': 0.2 } },
+      { topic_weight_votes: { 'software-development': 0.7, politics: 0.2 } },
       { topic_weight_votes: { 'dogs-pets': 0.8 } },
     ]);
 

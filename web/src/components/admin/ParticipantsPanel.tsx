@@ -90,7 +90,8 @@ export function ParticipantsPanel() {
       <div className="admin-card">
         <h2>Add Participant</h2>
         <p className="text-secondary" style={{ marginBottom: '16px' }}>
-          Add approved participants by DID or Bluesky handle. Handles are resolved to DIDs automatically.
+          Add approved participants by DID or Bluesky handle. Handles are resolved to DIDs
+          automatically.
         </p>
 
         {message && (

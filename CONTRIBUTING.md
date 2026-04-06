@@ -3,19 +3,26 @@
 ## Development Setup
 
 1. Install dependencies:
+
 ```bash
 npm install
 cd web && npm install && cd ..
 ```
+
 2. Configure environment:
+
 ```bash
 cp .env.example .env
 ```
+
 3. Start services:
+
 ```bash
 docker compose up -d
 ```
+
 4. Run migrations:
+
 ```bash
 npm run migrate
 ```

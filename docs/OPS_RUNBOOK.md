@@ -68,6 +68,7 @@ gh secret list --repo "$REPO"
 ```
 
 Expected required names:
+
 - `VPS_HOST`
 - `VPS_USER`
 - `VPS_SSH_KEY`
@@ -99,6 +100,7 @@ gh run watch "$(gh run list --repo "$REPO" --workflow "Weekly Research Export" -
 ```
 
 Expected pass criteria:
+
 - Each workflow concludes with `success`.
 - `Daily Health Check` creates no incident issue when the run passes.
 - `Weekly Research Export` uploads the expected CSV artifacts.
@@ -111,6 +113,7 @@ curl -sSI https://docs.corgi.network/
 ```
 
 Expected:
+
 - feed health returns `{"status":"ok"}`.
 - docs endpoint returns `200`.
 
@@ -129,6 +132,7 @@ curl -i "http://localhost:3001/xrpc/app.bsky.feed.getFeedSkeleton?feed=at://<PUB
 ```
 
 Expected:
+
 - health endpoints return healthy/ready/live
 - feed skeleton returns posts + cursor
 - invalid pagination inputs return `400 ValidationError`
@@ -214,36 +218,47 @@ echo "db=$TOP_DB"
 ### 1) Disk pressure (`/` above 92%)
 
 1. Confirm usage:
+
 ```bash
 df -h /
 du -xhd1 /var | sort -h
 du -xhd1 /home/corgi | sort -h
 ```
+
 2. Run retention:
+
 ```bash
 sudo /usr/local/bin/bluesky-ops-retention.sh
 ```
+
 3. If backup directory is large, keep latest 5 only:
+
 ```bash
 cd /home/corgi/backups
 ls -1t db_* | tail -n +6 | xargs -r rm -f
 ```
+
 4. Re-check `df -h /`.
 
 ### 2) Feed stale or empty
 
 1. Check app and health:
+
 ```bash
 sudo systemctl status bluesky-feed --no-pager
 curl -sS http://localhost:3001/health
 ```
+
 2. Check feed keys:
+
 ```bash
 docker exec bluesky-feed-redis redis-cli zcard feed:current
 docker exec bluesky-feed-redis redis-cli get feed:updated_at
 ```
+
 3. Trigger manual rescore from admin UI.
 4. Check logs for scoring errors:
+
 ```bash
 sudo journalctl -u bluesky-feed -n 300 --no-pager | grep -Ei "scoring|error|redis|postgres"
 ```
@@ -252,10 +267,13 @@ sudo journalctl -u bluesky-feed -n 300 --no-pager | grep -Ei "scoring|error|redi
 
 1. Check health payload (`jetstream.connected`).
 2. Inspect logs:
+
 ```bash
 sudo journalctl -u bluesky-feed -n 300 --no-pager | grep -Ei "jetstream|websocket|reconnect"
 ```
+
 3. Restart service if needed:
+
 ```bash
 sudo systemctl restart bluesky-feed
 ```
@@ -263,20 +281,27 @@ sudo systemctl restart bluesky-feed
 ### 4) PostgreSQL/Redis unavailable
 
 1. Check container state:
+
 ```bash
 cd /opt/bluesky-feed
 docker compose -f docker-compose.prod.yml ps
 ```
+
 2. Start infra if down:
+
 ```bash
 docker compose -f docker-compose.prod.yml up -d postgres redis
 ```
+
 3. Validate DB/Redis:
+
 ```bash
 docker exec bluesky-feed-postgres pg_isready -U feed -d bluesky_feed
 docker exec bluesky-feed-redis redis-cli ping
 ```
+
 4. Restart app:
+
 ```bash
 sudo systemctl restart bluesky-feed
 ```
@@ -296,6 +321,7 @@ sudo systemctl restart bluesky-feed
 ```
 
 Notes:
+
 - DB migrations are forward-only by default.
 - For destructive rollback needs, restore from backup first in a controlled maintenance window.
 

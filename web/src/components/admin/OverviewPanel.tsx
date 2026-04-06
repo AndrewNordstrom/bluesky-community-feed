@@ -71,7 +71,9 @@ export function OverviewPanel({ onNavigate }: OverviewPanelProps) {
         </div>
         <div className="stat-row">
           <span>Last scoring</span>
-          <strong>{system.feed.lastScoringRun ? formatRelative(system.feed.lastScoringRun) : 'Never'}</strong>
+          <strong>
+            {system.feed.lastScoringRun ? formatRelative(system.feed.lastScoringRun) : 'Never'}
+          </strong>
         </div>
         <div className="button-group" style={{ marginTop: '16px' }}>
           <button className="btn-secondary" onClick={() => onNavigate('health')}>
@@ -86,8 +88,10 @@ export function OverviewPanel({ onNavigate }: OverviewPanelProps) {
           <label>Include keywords:</label>
           <div className="keyword-pills">
             {system.contentRules?.includeKeywords?.length > 0 ? (
-              system.contentRules.includeKeywords.map(k => (
-                <span key={k} className="pill pill-include">{k}</span>
+              system.contentRules.includeKeywords.map((k) => (
+                <span key={k} className="pill pill-include">
+                  {k}
+                </span>
               ))
             ) : (
               <span className="no-rules">None set</span>
@@ -98,8 +102,10 @@ export function OverviewPanel({ onNavigate }: OverviewPanelProps) {
           <label>Exclude keywords:</label>
           <div className="keyword-pills">
             {system.contentRules?.excludeKeywords?.length > 0 ? (
-              system.contentRules.excludeKeywords.map(k => (
-                <span key={k} className="pill pill-exclude">{k}</span>
+              system.contentRules.excludeKeywords.map((k) => (
+                <span key={k} className="pill pill-exclude">
+                  {k}
+                </span>
               ))
             ) : (
               <span className="no-rules">None set</span>

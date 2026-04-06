@@ -33,10 +33,10 @@ export function createAuthorCountMap(): AuthorCountMap {
  * Index = number of previous posts from same author in this batch.
  */
 const DIVERSITY_PENALTIES: number[] = [
-  1.0,  // First post: full score
-  0.7,  // Second post
-  0.5,  // Third post
-  0.3,  // Fourth+ posts
+  1.0, // First post: full score
+  0.7, // Second post
+  0.5, // Third post
+  0.3, // Fourth+ posts
 ];
 
 /**
@@ -48,10 +48,7 @@ const DIVERSITY_PENALTIES: number[] = [
  * @param authorCounts - In-memory map tracking how many posts per author have been scored
  * @returns Score between 0.0 and 1.0 (higher = author is underrepresented)
  */
-export function scoreSourceDiversity(
-  authorDid: string,
-  authorCounts: AuthorCountMap
-): number {
+export function scoreSourceDiversity(authorDid: string, authorCounts: AuthorCountMap): number {
   // Get current count for this author
   const currentCount = authorCounts.get(authorDid) ?? 0;
 
@@ -71,10 +68,7 @@ export function scoreSourceDiversity(
  * @param authorCounts - In-memory map tracking how many posts per author have been scored
  * @returns Score between 0.0 and 1.0 (higher = author is underrepresented)
  */
-export function peekSourceDiversity(
-  authorDid: string,
-  authorCounts: AuthorCountMap
-): number {
+export function peekSourceDiversity(authorDid: string, authorCounts: AuthorCountMap): number {
   const currentCount = authorCounts.get(authorDid) ?? 0;
   const penaltyIndex = Math.min(currentCount, DIVERSITY_PENALTIES.length - 1);
   return DIVERSITY_PENALTIES[penaltyIndex];

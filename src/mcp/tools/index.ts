@@ -19,7 +19,7 @@ export function registerAllTools(
   server: McpServer,
   app: FastifyInstance,
   token: string,
-  cookieName: string
+  cookieName: string,
 ): void {
   registerGovernanceTools(server, app, token, cookieName);
   registerFeedTools(server, app, token, cookieName);

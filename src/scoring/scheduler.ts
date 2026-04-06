@@ -44,10 +44,7 @@ export async function startScoring(): Promise<void> {
   isRunning = true;
   isShuttingDown = false;
 
-  logger.info(
-    { intervalMs: config.SCORING_INTERVAL_MS },
-    'Starting scoring scheduler'
-  );
+  logger.info({ intervalMs: config.SCORING_INTERVAL_MS }, 'Starting scoring scheduler');
 
   // Run immediately on start
   await runWithGuard();
@@ -180,7 +177,13 @@ function sleep(ms: number): Promise<void> {
  */
 async function acquireScoringLock(): Promise<boolean> {
   try {
-    const result = await redis.set(SCORING_LOCK_KEY, Date.now().toString(), 'EX', SCORING_LOCK_TTL, 'NX');
+    const result = await redis.set(
+      SCORING_LOCK_KEY,
+      Date.now().toString(),
+      'EX',
+      SCORING_LOCK_TTL,
+      'NX',
+    );
     const acquired = result === 'OK';
     if (acquired) {
       isScoring = true;

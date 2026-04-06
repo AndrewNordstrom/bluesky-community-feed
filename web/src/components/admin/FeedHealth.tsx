@@ -73,11 +73,7 @@ export function FeedHealth() {
 
   return (
     <div className="content-loaded">
-      {message && (
-        <div className={`alert alert-${message.type}`}>
-          {message.text}
-        </div>
-      )}
+      {message && <div className={`alert alert-${message.type}`}>{message.text}</div>}
 
       {/* Database Stats */}
       <div className="admin-card">
@@ -99,14 +95,14 @@ export function FeedHealth() {
         <div className="section-divider" />
         <div className="stat-row">
           <span>Oldest post</span>
-          <strong>{health.database.oldestPost ? formatDate(health.database.oldestPost) : 'N/A'}</strong>
+          <strong>
+            {health.database.oldestPost ? formatDate(health.database.oldestPost) : 'N/A'}
+          </strong>
         </div>
         <div className="stat-row">
           <span>Newest post</span>
           <strong>
-            {health.database.newestPost
-              ? formatRelative(health.database.newestPost)
-              : 'N/A'}
+            {health.database.newestPost ? formatRelative(health.database.newestPost) : 'N/A'}
           </strong>
         </div>
       </div>
@@ -133,7 +129,9 @@ export function FeedHealth() {
         <div className="section-divider" />
         <div className="stat-row">
           <span>Last run</span>
-          <strong>{health.scoring.lastRun ? formatRelative(health.scoring.lastRun) : 'Never'}</strong>
+          <strong>
+            {health.scoring.lastRun ? formatRelative(health.scoring.lastRun) : 'Never'}
+          </strong>
         </div>
         <button
           className="btn-secondary"
@@ -149,20 +147,25 @@ export function FeedHealth() {
       <div className="admin-card">
         <h2>Jetstream Connection</h2>
         <div className="connection-status">
-          <span className={`status-indicator ${health.jetstream.connected ? 'connected' : 'disconnected'}`} />
+          <span
+            className={`status-indicator ${health.jetstream.connected ? 'connected' : 'disconnected'}`}
+          />
           <span style={{ color: '#f1f3f5' }}>
             {health.jetstream.connected ? 'Connected' : 'Disconnected'}
           </span>
         </div>
-        {!health.jetstream.connected && typeof health.jetstream.disconnectedForSeconds === 'number' && (
-          <div className="stat-row">
-            <span>Disconnected for</span>
-            <strong>{Math.floor(health.jetstream.disconnectedForSeconds / 60)}m</strong>
-          </div>
-        )}
+        {!health.jetstream.connected &&
+          typeof health.jetstream.disconnectedForSeconds === 'number' && (
+            <div className="stat-row">
+              <span>Disconnected for</span>
+              <strong>{Math.floor(health.jetstream.disconnectedForSeconds / 60)}m</strong>
+            </div>
+          )}
         <div className="stat-row">
           <span>Last event</span>
-          <strong>{health.jetstream.lastEvent ? formatRelative(health.jetstream.lastEvent) : 'Unknown'}</strong>
+          <strong>
+            {health.jetstream.lastEvent ? formatRelative(health.jetstream.lastEvent) : 'Unknown'}
+          </strong>
         </div>
         <div className="stat-row">
           <span>Events (5 min)</span>
@@ -204,8 +207,10 @@ export function FeedHealth() {
           <label>Include keywords:</label>
           <div className="keyword-pills">
             {health.contentRules?.includeKeywords?.length > 0 ? (
-              health.contentRules.includeKeywords.map(k => (
-                <span key={k} className="pill pill-include">{k}</span>
+              health.contentRules.includeKeywords.map((k) => (
+                <span key={k} className="pill pill-include">
+                  {k}
+                </span>
               ))
             ) : (
               <span className="no-rules">None</span>
@@ -216,8 +221,10 @@ export function FeedHealth() {
           <label>Exclude keywords:</label>
           <div className="keyword-pills">
             {health.contentRules?.excludeKeywords?.length > 0 ? (
-              health.contentRules.excludeKeywords.map(k => (
-                <span key={k} className="pill pill-exclude">{k}</span>
+              health.contentRules.excludeKeywords.map((k) => (
+                <span key={k} className="pill pill-exclude">
+                  {k}
+                </span>
               ))
             ) : (
               <span className="no-rules">None</span>

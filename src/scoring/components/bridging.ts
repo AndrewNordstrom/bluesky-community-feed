@@ -41,10 +41,7 @@ const MIN_ENGAGERS = 2;
  * @param _authorDid - The post author's DID (unused in MVP, kept for future)
  * @returns Score between 0.0 and 1.0 (higher = more cross-cluster appeal)
  */
-export async function scoreBridging(
-  postUri: string,
-  _authorDid: string
-): Promise<number> {
+export async function scoreBridging(postUri: string, _authorDid: string): Promise<number> {
   // Get DIDs of users who engaged with this post
   const engagers = await db.query(
     `SELECT DISTINCT author_did FROM (
@@ -53,7 +50,7 @@ export async function scoreBridging(
        SELECT author_did FROM reposts WHERE subject_uri = $1 AND deleted = FALSE
      ) AS engagers
      LIMIT $2`,
-    [postUri, MAX_ENGAGERS]
+    [postUri, MAX_ENGAGERS],
   );
 
   // Not enough engagers for meaningful comparison
@@ -72,12 +69,9 @@ export async function scoreBridging(
   for (const did of engagersToCompare) {
     const follows = await db.query(
       `SELECT subject_did FROM follows WHERE author_did = $1 AND deleted = FALSE LIMIT $2`,
-      [did, MAX_FOLLOWS_PER_ENGAGER]
+      [did, MAX_FOLLOWS_PER_ENGAGER],
     );
-    followSets.set(
-      did,
-      new Set(follows.rows.map((r: { subject_did: string }) => r.subject_did))
-    );
+    followSets.set(did, new Set(follows.rows.map((r: { subject_did: string }) => r.subject_did)));
   }
 
   // Compute average pairwise Jaccard distance (1 - Jaccard similarity)

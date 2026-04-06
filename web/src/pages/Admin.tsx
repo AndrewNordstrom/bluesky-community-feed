@@ -25,7 +25,15 @@ import { useAuth } from '../contexts/useAuth';
 import { useAdminStatus } from '../hooks/useAdminStatus';
 import '../styles/admin.css';
 
-type AdminTab = 'overview' | 'governance' | 'announcements' | 'health' | 'interactions' | 'topics' | 'participants' | 'audit';
+type AdminTab =
+  | 'overview'
+  | 'governance'
+  | 'announcements'
+  | 'health'
+  | 'interactions'
+  | 'topics'
+  | 'participants'
+  | 'audit';
 
 export function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -46,10 +54,18 @@ export function AdminPage() {
             <div className="header-left">
               <h1>Community feed</h1>
               <nav className="header-nav">
-                <Link to="/vote" className="nav-link">Vote</Link>
-                <Link to="/dashboard" className="nav-link">Dashboard</Link>
-                <Link to="/history" className="nav-link">History</Link>
-                <Link to="/admin" className="nav-link active">Admin</Link>
+                <Link to="/vote" className="nav-link">
+                  Vote
+                </Link>
+                <Link to="/dashboard" className="nav-link">
+                  Dashboard
+                </Link>
+                <Link to="/history" className="nav-link">
+                  History
+                </Link>
+                <Link to="/admin" className="nav-link active">
+                  Admin
+                </Link>
               </nav>
             </div>
             <div className="user-info">
@@ -76,8 +92,8 @@ export function AdminPage() {
               { id: 'interactions', label: 'Interactions' },
               { id: 'topics', label: 'Topics' },
               ...(isPrivateMode ? [{ id: 'participants', label: 'Participants' }] : []),
-              { id: 'audit', label: 'Audit Log' }
-            ].map(tab => (
+              { id: 'audit', label: 'Audit Log' },
+            ].map((tab) => (
               <button
                 key={tab.id}
                 className={activeTab === tab.id ? 'active' : ''}

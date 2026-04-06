@@ -42,7 +42,7 @@ export async function startInteractionAggregator(): Promise<void> {
 
   logger.info(
     { intervalMs: AGGREGATION_INTERVAL_MS, retentionDays: RETENTION_DAYS },
-    'Starting interaction aggregator'
+    'Starting interaction aggregator',
   );
 
   // Run immediately on start
@@ -195,7 +195,7 @@ async function rollupDailyStats(): Promise<void> {
         total_pages = EXCLUDED.total_pages,
         avg_pages_per_session = EXCLUDED.avg_pages_per_session,
         max_scroll_depth = EXCLUDED.max_scroll_depth,
-        returning_viewers = EXCLUDED.returning_viewers`
+        returning_viewers = EXCLUDED.returning_viewers`,
     );
 
     const rowCount = result.rowCount ?? 0;
@@ -213,7 +213,7 @@ async function computeEpochStats(): Promise<void> {
   try {
     // Get current epoch
     const epochResult = await db.query(
-      `SELECT id FROM governance_epochs WHERE status = 'active' ORDER BY id DESC LIMIT 1`
+      `SELECT id FROM governance_epochs WHERE status = 'active' ORDER BY id DESC LIMIT 1`,
     );
 
     if (epochResult.rows.length === 0) {
@@ -249,7 +249,7 @@ async function computeEpochStats(): Promise<void> {
         SUM(posts_served) AS posts_served
       FROM feed_requests fr
       WHERE fr.epoch_id = $1`,
-      [epochId]
+      [epochId],
     );
 
     // Compute engagement stats
@@ -264,7 +264,7 @@ async function computeEpochStats(): Promise<void> {
         AVG(position_in_feed) FILTER (WHERE engaged_at IS NOT NULL)::float AS avg_engagement_position
       FROM engagement_attributions
       WHERE epoch_id = $1`,
-      [epochId]
+      [epochId],
     );
 
     const stats = statsResult.rows[0];
@@ -297,7 +297,7 @@ async function computeEpochStats(): Promise<void> {
         parseInt(engagement.engaged) || 0,
         parseFloat(engagement.engagement_rate) || null,
         parseFloat(engagement.avg_engagement_position) || null,
-      ]
+      ],
     );
 
     logger.debug({ epochId }, 'Epoch engagement stats computed');
@@ -362,7 +362,7 @@ async function checkEngagementTrends(): Promise<void> {
             drop_percent: Math.round(dropPercent),
             consecutive_drops: consecutiveTrendDrops,
           },
-          'Engagement rate dropped >50% vs 7-day average for 2+ consecutive checks'
+          'Engagement rate dropped >50% vs 7-day average for 2+ consecutive checks',
         );
 
         // Store alert in system_status
@@ -370,14 +370,16 @@ async function checkEngagementTrends(): Promise<void> {
           `INSERT INTO system_status (key, value, updated_at)
            VALUES ('engagement_alert', $1::jsonb, NOW())
            ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
-          [JSON.stringify({
-            type: 'engagement_drop',
-            current_rate: currentRate,
-            avg_7d_rate: avgRate,
-            drop_percent: Math.round(dropPercent),
-            consecutive_drops: consecutiveTrendDrops,
-            detected_at: new Date().toISOString(),
-          })]
+          [
+            JSON.stringify({
+              type: 'engagement_drop',
+              current_rate: currentRate,
+              avg_7d_rate: avgRate,
+              drop_percent: Math.round(dropPercent),
+              consecutive_drops: consecutiveTrendDrops,
+              detected_at: new Date().toISOString(),
+            }),
+          ],
         );
       }
     } else {
@@ -385,11 +387,11 @@ async function checkEngagementTrends(): Promise<void> {
       if (consecutiveTrendDrops > 0) {
         consecutiveTrendDrops = 0;
         // Clear alert
-        await db.query(
-          `DELETE FROM system_status WHERE key = 'engagement_alert'`
-        ).catch((err: unknown) => {
-          logger.warn({ err }, 'Failed to clear engagement alert from system_status');
-        });
+        await db
+          .query(`DELETE FROM system_status WHERE key = 'engagement_alert'`)
+          .catch((err: unknown) => {
+            logger.warn({ err }, 'Failed to clear engagement alert from system_status');
+          });
       }
     }
   } catch (err) {
@@ -404,13 +406,13 @@ async function retentionCleanup(): Promise<void> {
     const feedResult = await db.query(
       `DELETE FROM feed_requests
        WHERE requested_at < NOW() - ($1::int * INTERVAL '1 day')`,
-      [RETENTION_DAYS]
+      [RETENTION_DAYS],
     );
 
     const attrResult = await db.query(
       `DELETE FROM engagement_attributions
        WHERE served_at < NOW() - ($1::int * INTERVAL '1 day')`,
-      [RETENTION_DAYS]
+      [RETENTION_DAYS],
     );
 
     const feedDeleted = feedResult.rowCount ?? 0;
@@ -419,7 +421,7 @@ async function retentionCleanup(): Promise<void> {
     if (feedDeleted > 0 || attrDeleted > 0) {
       logger.info(
         { feedDeleted, attrDeleted, retentionDays: RETENTION_DAYS },
-        'Interaction retention cleanup complete'
+        'Interaction retention cleanup complete',
       );
 
       // VACUUM ANALYZE if significant rows deleted

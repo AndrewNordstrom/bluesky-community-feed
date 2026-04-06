@@ -38,16 +38,16 @@ Restart Claude Desktop. The MCP tools icon will appear in the chat input area.
 
 ## Available Tools
 
-| Tool | Description |
-|------|-------------|
-| `feed_status` | Service health, post counts, scoring timing, disk usage |
-| `feed_audit` | Audit top N posts with score breakdowns |
-| `db_query` | Read-only SQL queries (SELECT/WITH only) |
-| `governance_state` | Current epoch weights, vote count, status |
-| `service_logs` | Recent logs with optional grep filtering |
-| `generate_report` | Generate feed quality analysis report (docx) |
-| `redis_get` | Fetch a Redis cache value |
-| `deploy` | Deploy latest main to VPS (requires confirmation) |
+| Tool               | Description                                             |
+| ------------------ | ------------------------------------------------------- |
+| `feed_status`      | Service health, post counts, scoring timing, disk usage |
+| `feed_audit`       | Audit top N posts with score breakdowns                 |
+| `db_query`         | Read-only SQL queries (SELECT/WITH only)                |
+| `governance_state` | Current epoch weights, vote count, status               |
+| `service_logs`     | Recent logs with optional grep filtering                |
+| `generate_report`  | Generate feed quality analysis report (docx)            |
+| `redis_get`        | Fetch a Redis cache value                               |
+| `deploy`           | Deploy latest main to VPS (requires confirmation)       |
 
 ## Verify
 

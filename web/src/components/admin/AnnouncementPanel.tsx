@@ -37,7 +37,7 @@ export function AnnouncementPanel() {
     try {
       const result = await adminApi.postAnnouncement({
         content: content.trim(),
-        includeEpochLink: includeLink
+        includeEpochLink: includeLink,
       });
 
       setMessage({ type: 'success', text: 'Announcement posted!' });
@@ -77,9 +77,7 @@ export function AnnouncementPanel() {
             placeholder="Write your announcement..."
             rows={4}
           />
-          <div className={`char-count ${isOverLimit ? 'over-limit' : ''}`}>
-            {charCount}/280
-          </div>
+          <div className={`char-count ${isOverLimit ? 'over-limit' : ''}`}>{charCount}/280</div>
         </div>
 
         <div className="form-group">
@@ -116,25 +114,27 @@ export function AnnouncementPanel() {
           <p className="empty-state">No announcements yet</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {announcements.map(a => (
+            {announcements.map((a) => (
               <div
                 key={a.id}
                 style={{
                   background: '#161718',
                   borderRadius: '8px',
-                  padding: '16px'
+                  padding: '16px',
                 }}
               >
                 <p style={{ color: '#f1f3f5', margin: '0 0 12px 0', whiteSpace: 'pre-wrap' }}>
                   {a.content}
                 </p>
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  fontSize: '13px',
-                  color: '#787c7e'
-                }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontSize: '13px',
+                    color: '#787c7e',
+                  }}
+                >
                   <span>{formatRelative(a.postedAt)}</span>
                   <a
                     href={a.postUrl}

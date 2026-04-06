@@ -51,7 +51,15 @@ vi.mock('../src/scoring/topics/classifier.js', () => ({
 
 vi.mock('../src/scoring/topics/taxonomy.js', () => ({
   getTaxonomy: vi.fn().mockReturnValue([
-    { slug: 'software-development', name: 'Software Development', description: null, parentSlug: null, terms: ['programming'], contextTerms: [], antiTerms: [] },
+    {
+      slug: 'software-development',
+      name: 'Software Development',
+      description: null,
+      parentSlug: null,
+      terms: ['programming'],
+      contextTerms: [],
+      antiTerms: [],
+    },
   ]),
 }));
 
@@ -67,7 +75,8 @@ import { handlePost } from '../src/ingestion/handlers/post-handler.js';
 /** Get the embed_url parameter ($11) from the INSERT INTO posts call. */
 function getInsertedEmbedUrl(): string | null | undefined {
   const insertCall = dbQueryMock.mock.calls.find(
-    (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('INSERT INTO posts')
+    (call: unknown[]) =>
+      typeof call[0] === 'string' && (call[0] as string).includes('INSERT INTO posts'),
   );
   if (!insertCall) return undefined;
   // embed_url is the 11th parameter (index 10)
@@ -77,7 +86,8 @@ function getInsertedEmbedUrl(): string | null | undefined {
 /** Count INSERT INTO posts calls. */
 function countInsertCalls(): number {
   return dbQueryMock.mock.calls.filter(
-    (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('INSERT INTO posts')
+    (call: unknown[]) =>
+      typeof call[0] === 'string' && (call[0] as string).includes('INSERT INTO posts'),
   ).length;
 }
 
@@ -86,9 +96,7 @@ describe('embed URL extraction', () => {
     vi.clearAllMocks();
     dbQueryMock.mockResolvedValue({ rows: [], rowCount: 1 });
     redisSetMock.mockResolvedValue('OK');
-    redisGetMock.mockResolvedValue(
-      JSON.stringify({ includeKeywords: [], excludeKeywords: [] })
-    );
+    redisGetMock.mockResolvedValue(JSON.stringify({ includeKeywords: [], excludeKeywords: [] }));
     isGovernanceGateReadyMock.mockReturnValue(true);
     checkGovernanceGateMock.mockResolvedValue({
       passes: true,
@@ -103,133 +111,104 @@ describe('embed URL extraction', () => {
   });
 
   it('extracts URL from app.bsky.embed.external', async () => {
-    await handlePost(
-      'at://did:plc:abc/app.bsky.feed.post/1',
-      'did:plc:abc',
-      'cid123',
-      {
-        text: 'Check out this article about programming',
-        createdAt: new Date().toISOString(),
-        embed: {
-          $type: 'app.bsky.embed.external',
-          external: {
-            uri: 'https://example.com/article',
-            title: 'Cool Article',
-            description: 'An article about programming',
-          },
+    await handlePost('at://did:plc:abc/app.bsky.feed.post/1', 'did:plc:abc', 'cid123', {
+      text: 'Check out this article about programming',
+      createdAt: new Date().toISOString(),
+      embed: {
+        $type: 'app.bsky.embed.external',
+        external: {
+          uri: 'https://example.com/article',
+          title: 'Cool Article',
+          description: 'An article about programming',
         },
-      }
-    );
+      },
+    });
 
     expect(countInsertCalls()).toBe(1);
     expect(getInsertedEmbedUrl()).toBe('https://example.com/article');
   });
 
   it('extracts URL from app.bsky.embed.recordWithMedia nested external', async () => {
-    await handlePost(
-      'at://did:plc:abc/app.bsky.feed.post/2',
-      'did:plc:abc',
-      'cid456',
-      {
-        text: 'Quote post with a link about programming',
-        createdAt: new Date().toISOString(),
-        embed: {
-          $type: 'app.bsky.embed.recordWithMedia',
-          media: {
-            $type: 'app.bsky.embed.external',
-            external: {
-              uri: 'https://example.com/nested-article',
-              title: 'Nested Article',
-              description: 'A nested link',
-            },
+    await handlePost('at://did:plc:abc/app.bsky.feed.post/2', 'did:plc:abc', 'cid456', {
+      text: 'Quote post with a link about programming',
+      createdAt: new Date().toISOString(),
+      embed: {
+        $type: 'app.bsky.embed.recordWithMedia',
+        media: {
+          $type: 'app.bsky.embed.external',
+          external: {
+            uri: 'https://example.com/nested-article',
+            title: 'Nested Article',
+            description: 'A nested link',
           },
         },
-      }
-    );
+      },
+    });
 
     expect(countInsertCalls()).toBe(1);
     expect(getInsertedEmbedUrl()).toBe('https://example.com/nested-article');
   });
 
   it('stores null when no external embed present', async () => {
-    await handlePost(
-      'at://did:plc:abc/app.bsky.feed.post/3',
-      'did:plc:abc',
-      'cid789',
-      {
-        text: 'Just a text post about programming',
-        createdAt: new Date().toISOString(),
-      }
-    );
+    await handlePost('at://did:plc:abc/app.bsky.feed.post/3', 'did:plc:abc', 'cid789', {
+      text: 'Just a text post about programming',
+      createdAt: new Date().toISOString(),
+    });
 
     expect(countInsertCalls()).toBe(1);
     expect(getInsertedEmbedUrl()).toBeNull();
   });
 
   it('stores null for image-only embeds', async () => {
-    await handlePost(
-      'at://did:plc:abc/app.bsky.feed.post/4',
-      'did:plc:abc',
-      'cidabc',
-      {
-        text: 'Image post about programming',
-        createdAt: new Date().toISOString(),
-        embed: {
-          $type: 'app.bsky.embed.images',
-          images: [{ alt: 'A screenshot', image: {} }],
-        },
-      }
-    );
+    await handlePost('at://did:plc:abc/app.bsky.feed.post/4', 'did:plc:abc', 'cidabc', {
+      text: 'Image post about programming',
+      createdAt: new Date().toISOString(),
+      embed: {
+        $type: 'app.bsky.embed.images',
+        images: [{ alt: 'A screenshot', image: {} }],
+      },
+    });
 
     expect(countInsertCalls()).toBe(1);
     expect(getInsertedEmbedUrl()).toBeNull();
   });
 
   it('stores null for quote-post embeds (app.bsky.embed.record)', async () => {
-    await handlePost(
-      'at://did:plc:abc/app.bsky.feed.post/5',
-      'did:plc:abc',
-      'ciddef',
-      {
-        text: 'Quoting another post about programming',
-        createdAt: new Date().toISOString(),
-        embed: {
-          $type: 'app.bsky.embed.record',
-          record: { uri: 'at://did:plc:xyz/app.bsky.feed.post/99' },
-        },
-      }
-    );
+    await handlePost('at://did:plc:abc/app.bsky.feed.post/5', 'did:plc:abc', 'ciddef', {
+      text: 'Quoting another post about programming',
+      createdAt: new Date().toISOString(),
+      embed: {
+        $type: 'app.bsky.embed.record',
+        record: { uri: 'at://did:plc:xyz/app.bsky.feed.post/99' },
+      },
+    });
 
     expect(countInsertCalls()).toBe(1);
     expect(getInsertedEmbedUrl()).toBeNull();
   });
 
   it('stores the URL in the posts table via $11 parameter', async () => {
-    await handlePost(
-      'at://did:plc:abc/app.bsky.feed.post/6',
-      'did:plc:abc',
-      'cidghi',
-      {
-        text: 'Post with external link about programming',
-        createdAt: new Date().toISOString(),
-        embed: {
-          $type: 'app.bsky.embed.external',
-          external: {
-            uri: 'https://wired.com/big-story',
-            title: 'Big Story',
-            description: 'Breaking news',
-          },
+    await handlePost('at://did:plc:abc/app.bsky.feed.post/6', 'did:plc:abc', 'cidghi', {
+      text: 'Post with external link about programming',
+      createdAt: new Date().toISOString(),
+      embed: {
+        $type: 'app.bsky.embed.external',
+        external: {
+          uri: 'https://wired.com/big-story',
+          title: 'Big Story',
+          description: 'Breaking news',
         },
-      }
-    );
+      },
+    });
 
     expect(countInsertCalls()).toBe(1);
     // Verify the INSERT query includes embed_url column
     const insertCall = dbQueryMock.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('INSERT INTO posts')
+      (call: unknown[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('INSERT INTO posts'),
     );
-    expect((insertCall![0] as string)).toContain('embed_url');
-    expect((insertCall![0] as string)).toContain('$11');
+    expect(insertCall![0] as string).toContain('embed_url');
+    expect(insertCall![0] as string).toContain('$11');
     expect((insertCall![1] as unknown[])[10]).toBe('https://wired.com/big-story');
   });
 });

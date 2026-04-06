@@ -2,7 +2,7 @@ name: Docs Freshness
 
 on:
   schedule:
-    - cron: "0 14 * * 1"
+    - cron: '0 14 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -21,7 +21,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
-          node-version: "20"
+          node-version: '20'
 
       - name: Run docs verification
         id: docs_verify

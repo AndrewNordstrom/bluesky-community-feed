@@ -37,7 +37,7 @@ export interface EmbeddingClassifyResult {
  * @returns Classification result, or null if embedder is not ready (fail-open)
  */
 export async function classifyPostByEmbedding(
-  text: string
+  text: string,
 ): Promise<EmbeddingClassifyResult | null> {
   if (!isEmbedderReady()) {
     return null;

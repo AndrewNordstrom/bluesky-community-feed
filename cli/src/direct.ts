@@ -61,13 +61,13 @@ export async function getDirectEpochStatus(databaseUrl: string): Promise<EpochSt
         WHERE status IN ('active', 'voting')
         ORDER BY id DESC
         LIMIT 1
-      `
+      `,
     );
 
     let subscriberCount = 0;
     try {
       const subscribersResult = await pool.query<SubscriberCountRow>(
-        `SELECT COUNT(*)::text AS count FROM subscribers WHERE is_active = TRUE`
+        `SELECT COUNT(*)::text AS count FROM subscribers WHERE is_active = TRUE`,
       );
       subscriberCount = Number.parseInt(subscribersResult.rows[0]?.count ?? '0', 10);
     } catch {

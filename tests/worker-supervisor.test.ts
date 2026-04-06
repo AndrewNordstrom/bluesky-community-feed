@@ -89,7 +89,7 @@ describe('worker supervisor', () => {
     });
 
     await expect(supervisor.start()).rejects.toThrow(
-      'Maintenance worker interaction-logger failed to start'
+      'Maintenance worker interaction-logger failed to start',
     );
     expect(worker.start).toHaveBeenCalledTimes(3);
     expect(sleep).toHaveBeenCalledTimes(2);

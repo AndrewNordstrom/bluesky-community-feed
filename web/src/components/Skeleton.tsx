@@ -142,12 +142,7 @@ export function HistorySkeleton() {
 
       {/* History entries */}
       {[1, 2, 3, 4, 5].map((i) => (
-        <Skeleton
-          key={i}
-          variant="card"
-          height="80px"
-          style={{ marginBottom: '12px' }}
-        />
+        <Skeleton key={i} variant="card" height="80px" style={{ marginBottom: '12px' }} />
       ))}
     </div>
   );

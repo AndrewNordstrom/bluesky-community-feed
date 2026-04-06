@@ -84,7 +84,9 @@ export function registerEpochRoutes(app: FastifyInstance): void {
     const parseResult = UpdateEpochSchema.safeParse(request.body);
 
     if (!parseResult.success) {
-      return reply.status(400).send({ error: 'Invalid request body', details: parseResult.error.issues });
+      return reply
+        .status(400)
+        .send({ error: 'Invalid request body', details: parseResult.error.issues });
     }
 
     const body = parseResult.data;
@@ -104,7 +106,7 @@ export function registerEpochRoutes(app: FastifyInstance): void {
 
     const epochId = current.rows[0].id;
     const updates: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramIndex = 1;
 
     if (body.votingEndsAt !== undefined) {
@@ -132,14 +134,14 @@ export function registerEpochRoutes(app: FastifyInstance): void {
        SET ${updates.join(', ')}
        WHERE id = $${paramIndex}
        RETURNING *`,
-      values
+      values,
     );
 
     // Log to audit
     await db.query(
       `INSERT INTO governance_audit_log (action, epoch_id, actor_did, details)
        VALUES ('epoch_updated', $1, $2, $3)`,
-      [epochId, adminDid, JSON.stringify({ updates: body })]
+      [epochId, adminDid, JSON.stringify({ updates: body })],
     );
 
     logger.info({ epochId, updates: body, adminDid }, 'Epoch updated by admin');
@@ -164,7 +166,9 @@ export function registerEpochRoutes(app: FastifyInstance): void {
     const parseResult = TransitionSchema.safeParse(request.body || {});
 
     if (!parseResult.success) {
-      return reply.status(400).send({ error: 'Invalid request body', details: parseResult.error.issues });
+      return reply
+        .status(400)
+        .send({ error: 'Invalid request body', details: parseResult.error.issues });
     }
 
     const body = parseResult.data;
@@ -231,16 +235,18 @@ export function registerEpochRoutes(app: FastifyInstance): void {
             voteCount,
             weightVoteCount,
           }),
-        ]
+        ],
       );
 
       logger.info(
         { fromEpoch: previousEpochId, toEpoch: newEpochId, forced: body.force, adminDid },
-        'Epoch transition triggered by admin'
+        'Epoch transition triggered by admin',
       );
 
       // Get new epoch data
-      const newEpoch = await db.query(`SELECT * FROM governance_epochs WHERE id = $1`, [newEpochId]);
+      const newEpoch = await db.query(`SELECT * FROM governance_epochs WHERE id = $1`, [
+        newEpochId,
+      ]);
 
       return reply.send({
         success: true,

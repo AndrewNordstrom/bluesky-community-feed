@@ -40,11 +40,9 @@ describe('engagement attribution - likes', () => {
     // Third call: UPDATE engagement_attributions (fire-and-forget)
     dbQueryMock.mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-    await handleLike(
-      'at://did:plc:liker/app.bsky.feed.like/1',
-      'did:plc:liker',
-      { subject: { uri: 'at://did:plc:author/app.bsky.feed.post/1' } }
-    );
+    await handleLike('at://did:plc:liker/app.bsky.feed.like/1', 'did:plc:liker', {
+      subject: { uri: 'at://did:plc:author/app.bsky.feed.post/1' },
+    });
 
     // Wait a tick for the fire-and-forget promise to resolve
     await new Promise((r) => setTimeout(r, 10));
@@ -69,11 +67,9 @@ describe('engagement attribution - likes', () => {
     // INSERT like → duplicate (rowCount = 0, ON CONFLICT DO NOTHING)
     dbQueryMock.mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-    await handleLike(
-      'at://did:plc:liker/app.bsky.feed.like/1',
-      'did:plc:liker',
-      { subject: { uri: 'at://did:plc:author/app.bsky.feed.post/1' } }
-    );
+    await handleLike('at://did:plc:liker/app.bsky.feed.like/1', 'did:plc:liker', {
+      subject: { uri: 'at://did:plc:author/app.bsky.feed.post/1' },
+    });
 
     await new Promise((r) => setTimeout(r, 10));
 
@@ -89,11 +85,9 @@ describe('engagement attribution - likes', () => {
     // UPDATE attribution → FAILS
     dbQueryMock.mockRejectedValueOnce(new Error('attribution table gone'));
 
-    await handleLike(
-      'at://did:plc:liker/app.bsky.feed.like/1',
-      'did:plc:liker',
-      { subject: { uri: 'at://did:plc:author/app.bsky.feed.post/1' } }
-    );
+    await handleLike('at://did:plc:liker/app.bsky.feed.like/1', 'did:plc:liker', {
+      subject: { uri: 'at://did:plc:author/app.bsky.feed.post/1' },
+    });
 
     await new Promise((r) => setTimeout(r, 10));
 
@@ -109,11 +103,9 @@ describe('engagement attribution - likes', () => {
     // UPDATE attribution → no row updated (epoch mismatch)
     dbQueryMock.mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-    await handleLike(
-      'at://did:plc:liker/app.bsky.feed.like/1',
-      'did:plc:liker',
-      { subject: { uri: 'at://did:plc:author/app.bsky.feed.post/1' } }
-    );
+    await handleLike('at://did:plc:liker/app.bsky.feed.like/1', 'did:plc:liker', {
+      subject: { uri: 'at://did:plc:author/app.bsky.feed.post/1' },
+    });
 
     await new Promise((r) => setTimeout(r, 10));
 
@@ -132,11 +124,9 @@ describe('engagement attribution - reposts', () => {
     dbQueryMock.mockResolvedValueOnce({ rows: [], rowCount: 1 });
     dbQueryMock.mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-    await handleRepost(
-      'at://did:plc:reposter/app.bsky.feed.repost/1',
-      'did:plc:reposter',
-      { subject: { uri: 'at://did:plc:author/app.bsky.feed.post/1' } }
-    );
+    await handleRepost('at://did:plc:reposter/app.bsky.feed.repost/1', 'did:plc:reposter', {
+      subject: { uri: 'at://did:plc:author/app.bsky.feed.post/1' },
+    });
 
     await new Promise((r) => setTimeout(r, 10));
 
@@ -157,11 +147,9 @@ describe('engagement attribution - reposts', () => {
   it('does not fire attribution when repost is duplicate', async () => {
     dbQueryMock.mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-    await handleRepost(
-      'at://did:plc:reposter/app.bsky.feed.repost/1',
-      'did:plc:reposter',
-      { subject: { uri: 'at://did:plc:author/app.bsky.feed.post/1' } }
-    );
+    await handleRepost('at://did:plc:reposter/app.bsky.feed.repost/1', 'did:plc:reposter', {
+      subject: { uri: 'at://did:plc:author/app.bsky.feed.post/1' },
+    });
 
     await new Promise((r) => setTimeout(r, 10));
 
@@ -173,11 +161,9 @@ describe('engagement attribution - reposts', () => {
     dbQueryMock.mockResolvedValueOnce({ rows: [], rowCount: 1 });
     dbQueryMock.mockRejectedValueOnce(new Error('attribution table gone'));
 
-    await handleRepost(
-      'at://did:plc:reposter/app.bsky.feed.repost/1',
-      'did:plc:reposter',
-      { subject: { uri: 'at://did:plc:author/app.bsky.feed.post/1' } }
-    );
+    await handleRepost('at://did:plc:reposter/app.bsky.feed.repost/1', 'did:plc:reposter', {
+      subject: { uri: 'at://did:plc:author/app.bsky.feed.post/1' },
+    });
 
     await new Promise((r) => setTimeout(r, 10));
 
@@ -189,11 +175,9 @@ describe('engagement attribution - reposts', () => {
     dbQueryMock.mockResolvedValueOnce({ rows: [], rowCount: 1 });
     dbQueryMock.mockResolvedValueOnce({ rows: [], rowCount: 1 });
 
-    await handleRepost(
-      'at://did:plc:reposter/app.bsky.feed.repost/1',
-      'did:plc:reposter',
-      { subject: { uri: 'at://did:plc:author/app.bsky.feed.post/1' } }
-    );
+    await handleRepost('at://did:plc:reposter/app.bsky.feed.repost/1', 'did:plc:reposter', {
+      subject: { uri: 'at://did:plc:author/app.bsky.feed.post/1' },
+    });
 
     await new Promise((r) => setTimeout(r, 10));
 

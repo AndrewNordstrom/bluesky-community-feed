@@ -15,14 +15,11 @@ import { z } from 'zod';
  * the full config (which requires all env vars).
  */
 function zodEnvBool(defaultValue: boolean) {
-  return z.preprocess(
-    (val) => {
-      if (typeof val === 'boolean') return val;
-      if (typeof val === 'string') return val.toLowerCase() === 'true' || val === '1';
-      return defaultValue;
-    },
-    z.boolean().default(defaultValue),
-  );
+  return z.preprocess((val) => {
+    if (typeof val === 'boolean') return val;
+    if (typeof val === 'string') return val.toLowerCase() === 'true' || val === '1';
+    return defaultValue;
+  }, z.boolean().default(defaultValue));
 }
 
 describe('zodEnvBool', () => {

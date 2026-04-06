@@ -22,7 +22,7 @@ export async function updateScoringStatus(status: ScoringStatus): Promise<void> 
     `INSERT INTO system_status (key, value, updated_at)
      VALUES ('last_scoring_run', $1, NOW())
      ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
-    [JSON.stringify(status)]
+    [JSON.stringify(status)],
   );
 }
 
@@ -32,9 +32,7 @@ export async function updateScoringStatus(status: ScoringStatus): Promise<void> 
  */
 export async function getScoringStatus(): Promise<ScoringStatus> {
   try {
-    const result = await db.query(
-      `SELECT value FROM system_status WHERE key = 'last_scoring_run'`
-    );
+    const result = await db.query(`SELECT value FROM system_status WHERE key = 'last_scoring_run'`);
 
     if (result.rows.length === 0) {
       return { timestamp: null, duration_ms: null, posts_scored: 0, posts_filtered: 0 };

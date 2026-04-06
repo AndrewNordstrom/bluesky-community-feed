@@ -43,133 +43,145 @@ export function registerParticipantRoutes(app: FastifyInstance): void {
    * GET /api/admin/participants
    * List all active (non-removed) participants.
    */
-  app.get('/participants', {
-    schema: {
-      tags: ['Admin'],
-      summary: 'List participants',
-      description: 'Returns all active (non-removed) approved participants for private feed mode.',
-      security: adminSecurity,
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            participants: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  did: { type: 'string' },
-                  handle: { type: 'string', nullable: true },
-                  added_by: { type: 'string' },
-                  notes: { type: 'string', nullable: true },
-                  added_at: { type: 'string', format: 'date-time' },
+  app.get(
+    '/participants',
+    {
+      schema: {
+        tags: ['Admin'],
+        summary: 'List participants',
+        description:
+          'Returns all active (non-removed) approved participants for private feed mode.',
+        security: adminSecurity,
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              participants: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    did: { type: 'string' },
+                    handle: { type: 'string', nullable: true },
+                    added_by: { type: 'string' },
+                    notes: { type: 'string', nullable: true },
+                    added_at: { type: 'string', format: 'date-time' },
+                  },
                 },
               },
+              total: { type: 'integer' },
             },
-            total: { type: 'integer' },
+            required: ['participants', 'total'],
           },
-          required: ['participants', 'total'],
         },
       },
     },
-  }, async (_request: FastifyRequest, reply: FastifyReply) => {
-    const result = await db.query(
-      `SELECT did, handle, added_by, notes, added_at
+    async (_request: FastifyRequest, reply: FastifyReply) => {
+      const result = await db.query(
+        `SELECT did, handle, added_by, notes, added_at
        FROM approved_participants
        WHERE removed_at IS NULL
-       ORDER BY added_at DESC`
-    );
+       ORDER BY added_at DESC`,
+      );
 
-    return reply.send({
-      participants: result.rows,
-      total: result.rows.length,
-    });
-  });
+      return reply.send({
+        participants: result.rows,
+        total: result.rows.length,
+      });
+    },
+  );
 
   /**
    * POST /api/admin/participants
    * Add a new approved participant. Accepts DID or Bluesky handle.
    */
-  app.post('/participants', {
-    schema: {
-      tags: ['Admin'],
-      summary: 'Add participant',
-      description: 'Adds an approved participant by DID or Bluesky handle. Handles are resolved to DIDs via AT Protocol.',
-      security: adminSecurity,
-      body: {
-        type: 'object',
-        properties: {
-          did: { type: 'string', description: 'DID of participant (provide did or handle)' },
-          handle: { type: 'string', description: 'Bluesky handle (resolved to DID if no did provided)' },
-          notes: { type: 'string', maxLength: 500 },
-        },
-      },
-      response: {
-        201: {
+  app.post(
+    '/participants',
+    {
+      schema: {
+        tags: ['Admin'],
+        summary: 'Add participant',
+        description:
+          'Adds an approved participant by DID or Bluesky handle. Handles are resolved to DIDs via AT Protocol.',
+        security: adminSecurity,
+        body: {
           type: 'object',
           properties: {
-            success: { type: 'boolean' },
-            participant: {
-              type: 'object',
-              properties: {
-                did: { type: 'string' },
-                handle: { type: 'string', nullable: true },
-                notes: { type: 'string', nullable: true },
+            did: { type: 'string', description: 'DID of participant (provide did or handle)' },
+            handle: {
+              type: 'string',
+              description: 'Bluesky handle (resolved to DID if no did provided)',
+            },
+            notes: { type: 'string', maxLength: 500 },
+          },
+        },
+        response: {
+          201: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              participant: {
+                type: 'object',
+                properties: {
+                  did: { type: 'string' },
+                  handle: { type: 'string', nullable: true },
+                  notes: { type: 'string', nullable: true },
+                },
               },
             },
+            required: ['success'],
           },
-          required: ['success'],
+          400: ErrorResponseSchema,
+          409: ErrorResponseSchema,
         },
-        400: ErrorResponseSchema,
-        409: ErrorResponseSchema,
       },
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const parseResult = AddParticipantSchema.safeParse(request.body);
-    if (!parseResult.success) {
-      throw Errors.VALIDATION_ERROR('Must provide did or handle', parseResult.error.issues);
-    }
-
-    const { did: inputDid, handle: inputHandle, notes } = parseResult.data;
-    let resolvedDid: string;
-    let resolvedHandle: string | null = inputHandle ?? null;
-
-    if (inputDid) {
-      resolvedDid = inputDid;
-    } else {
-      // Resolve handle to DID
-      try {
-        const resolved = await resolveHandleToDid(inputHandle!);
-        resolvedDid = resolved.did;
-        resolvedHandle = resolved.handle;
-      } catch (err) {
-        logger.warn({ handle: inputHandle, err }, 'Failed to resolve handle');
-        throw Errors.BAD_REQUEST(`Could not resolve handle: ${inputHandle}`);
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const parseResult = AddParticipantSchema.safeParse(request.body);
+      if (!parseResult.success) {
+        throw Errors.VALIDATION_ERROR('Must provide did or handle', parseResult.error.issues);
       }
-    }
 
-    // Check if already approved (active)
-    const existing = await db.query(
-      `SELECT id FROM approved_participants WHERE did = $1 AND removed_at IS NULL`,
-      [resolvedDid]
-    );
+      const { did: inputDid, handle: inputHandle, notes } = parseResult.data;
+      let resolvedDid: string;
+      let resolvedHandle: string | null = inputHandle ?? null;
 
-    if (existing.rows.length > 0) {
-      throw Errors.CONFLICT('Participant already approved');
-    }
+      if (inputDid) {
+        resolvedDid = inputDid;
+      } else {
+        // Resolve handle to DID
+        try {
+          const resolved = await resolveHandleToDid(inputHandle!);
+          resolvedDid = resolved.did;
+          resolvedHandle = resolved.handle;
+        } catch (err) {
+          logger.warn({ handle: inputHandle, err }, 'Failed to resolve handle');
+          throw Errors.BAD_REQUEST(`Could not resolve handle: ${inputHandle}`);
+        }
+      }
 
-    // Get admin DID for added_by
-    let adminDid = 'admin';
-    try {
-      const did = await getAuthenticatedDid(request);
-      if (did) adminDid = did;
-    } catch {
-      // Fall back to 'admin' if session lookup fails
-    }
+      // Check if already approved (active)
+      const existing = await db.query(
+        `SELECT id FROM approved_participants WHERE did = $1 AND removed_at IS NULL`,
+        [resolvedDid],
+      );
 
-    // Insert (or re-activate if previously removed)
-    await db.query(
-      `INSERT INTO approved_participants (did, handle, added_by, notes)
+      if (existing.rows.length > 0) {
+        throw Errors.CONFLICT('Participant already approved');
+      }
+
+      // Get admin DID for added_by
+      let adminDid = 'admin';
+      try {
+        const did = await getAuthenticatedDid(request);
+        if (did) adminDid = did;
+      } catch {
+        // Fall back to 'admin' if session lookup fails
+      }
+
+      // Insert (or re-activate if previously removed)
+      await db.query(
+        `INSERT INTO approved_participants (did, handle, added_by, notes)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (did) DO UPDATE SET
          removed_at = NULL,
@@ -177,30 +189,31 @@ export function registerParticipantRoutes(app: FastifyInstance): void {
          added_by = $3,
          notes = $4,
          added_at = NOW()`,
-      [resolvedDid, resolvedHandle, adminDid, notes ?? null]
-    );
+        [resolvedDid, resolvedHandle, adminDid, notes ?? null],
+      );
 
-    // Invalidate cache so next feed request picks up the change
-    await invalidateParticipantCache(resolvedDid);
+      // Invalidate cache so next feed request picks up the change
+      await invalidateParticipantCache(resolvedDid);
 
-    // Audit log
-    await db.query(
-      `INSERT INTO governance_audit_log (action, actor_did, details)
+      // Audit log
+      await db.query(
+        `INSERT INTO governance_audit_log (action, actor_did, details)
        VALUES ($1, $2, $3)`,
-      [
-        'participant_added',
-        adminDid,
-        JSON.stringify({ did: resolvedDid, handle: resolvedHandle, notes }),
-      ]
-    );
+        [
+          'participant_added',
+          adminDid,
+          JSON.stringify({ did: resolvedDid, handle: resolvedHandle, notes }),
+        ],
+      );
 
-    logger.info({ did: resolvedDid, handle: resolvedHandle, adminDid }, 'Participant added');
+      logger.info({ did: resolvedDid, handle: resolvedHandle, adminDid }, 'Participant added');
 
-    return reply.code(201).send({
-      success: true,
-      participant: { did: resolvedDid, handle: resolvedHandle, notes },
-    });
-  });
+      return reply.code(201).send({
+        success: true,
+        participant: { did: resolvedDid, handle: resolvedHandle, notes },
+      });
+    },
+  );
 
   /**
    * DELETE /api/admin/participants/:did
@@ -216,7 +229,8 @@ export function registerParticipantRoutes(app: FastifyInstance): void {
       schema: {
         tags: ['Admin'],
         summary: 'Remove participant',
-        description: 'Soft-removes a participant by setting removed_at. Does not delete the record.',
+        description:
+          'Soft-removes a participant by setting removed_at. Does not delete the record.',
         security: adminSecurity,
         params: {
           type: 'object',
@@ -250,7 +264,7 @@ export function registerParticipantRoutes(app: FastifyInstance): void {
          SET removed_at = NOW()
          WHERE did = $1 AND removed_at IS NULL
          RETURNING id, handle`,
-        [did]
+        [did],
       );
 
       if (result.rows.length === 0) {
@@ -273,16 +287,12 @@ export function registerParticipantRoutes(app: FastifyInstance): void {
       await db.query(
         `INSERT INTO governance_audit_log (action, actor_did, details)
          VALUES ($1, $2, $3)`,
-        [
-          'participant_removed',
-          adminDid,
-          JSON.stringify({ did, handle: result.rows[0].handle }),
-        ]
+        ['participant_removed', adminDid, JSON.stringify({ did, handle: result.rows[0].handle })],
       );
 
       logger.info({ did, adminDid }, 'Participant removed');
 
       return reply.send({ success: true });
-    }
+    },
   );
 }

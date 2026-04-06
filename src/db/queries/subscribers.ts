@@ -18,7 +18,7 @@ export function upsertSubscriberAsync(did: string): void {
       `INSERT INTO subscribers (did, first_seen, last_seen, is_active)
        VALUES ($1, NOW(), NOW(), TRUE)
        ON CONFLICT (did) DO UPDATE SET last_seen = NOW(), is_active = TRUE`,
-      [did]
+      [did],
     ).catch((err) => logger.warn({ err, did }, 'Subscriber upsert failed'));
   });
 }

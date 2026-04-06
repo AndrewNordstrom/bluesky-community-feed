@@ -116,7 +116,13 @@ describe('extend voting phase guard', () => {
       .mockResolvedValueOnce({ rows: [] }) // BEGIN
       .mockResolvedValueOnce({ rows: [epochRow({ phase: 'voting', status: 'active' })] }) // current round
       .mockResolvedValueOnce({
-        rows: [epochRow({ phase: 'voting', status: 'active', voting_ends_at: '2026-02-12T00:00:00.000Z' })],
+        rows: [
+          epochRow({
+            phase: 'voting',
+            status: 'active',
+            voting_ends_at: '2026-02-12T00:00:00.000Z',
+          }),
+        ],
       }) // UPDATE
       .mockResolvedValueOnce({ rows: [{ count: '3' }] }) // vote count
       .mockResolvedValueOnce({ rows: [] }) // audit insert

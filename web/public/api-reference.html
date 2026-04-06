@@ -5,30 +5,37 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
-      body { margin: 0; padding: 0; }
+      body {
+        margin: 0;
+        padding: 0;
+      }
     </style>
   </head>
   <body>
     <div id="redoc-container"></div>
     <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
     <script>
-      Redoc.init('/api/openapi.json', {
-        theme: {
-          colors: {
-            primary: { main: '#FF5722' },
+      Redoc.init(
+        '/api/openapi.json',
+        {
+          theme: {
+            colors: {
+              primary: { main: '#FF5722' },
+            },
+            typography: {
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+            },
+            sidebar: {
+              width: '280px',
+            },
           },
-          typography: {
-            fontFamily: 'system-ui, -apple-system, sans-serif',
-          },
-          sidebar: {
-            width: '280px',
-          },
+          expandResponses: '200',
+          hideDownloadButton: false,
+          sortPropsAlphabetically: false,
+          pathInMiddlePanel: true,
         },
-        expandResponses: '200',
-        hideDownloadButton: false,
-        sortPropsAlphabetically: false,
-        pathInMiddlePanel: true,
-      }, document.getElementById('redoc-container'));
+        document.getElementById('redoc-container'),
+      );
     </script>
   </body>
 </html>

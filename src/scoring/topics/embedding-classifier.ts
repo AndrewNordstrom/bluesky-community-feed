@@ -32,7 +32,7 @@ import type { TopicVector } from './classifier.js';
  * @returns Map from post URI to TopicVector
  */
 export async function classifyPostsBatch(
-  posts: { uri: string; text: string }[]
+  posts: { uri: string; text: string }[],
 ): Promise<Map<string, TopicVector>> {
   const results = new Map<string, TopicVector>();
   const topicsWithEmbeddings = getTopicsWithEmbeddings();
@@ -88,7 +88,7 @@ export async function classifyPostsBatch(
       embed_ms: embedMs,
       classify_ms: Date.now() - startMs,
     },
-    'Batch embedding classification complete'
+    'Batch embedding classification complete',
   );
 
   return results;

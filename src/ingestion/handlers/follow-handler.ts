@@ -16,7 +16,7 @@ interface FollowRecord {
 export async function handleFollow(
   uri: string,
   authorDid: string,
-  record: Record<string, unknown>
+  record: Record<string, unknown>,
 ): Promise<void> {
   const followRecord = record as FollowRecord;
 
@@ -34,7 +34,7 @@ export async function handleFollow(
       `INSERT INTO follows (uri, author_did, subject_did, created_at)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (uri) DO NOTHING`,
-      [uri, authorDid, subjectDid, createdAt]
+      [uri, authorDid, subjectDid, createdAt],
     );
 
     logger.debug({ uri, authorDid, subjectDid }, 'Follow indexed');

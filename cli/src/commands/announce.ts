@@ -11,9 +11,7 @@ import { printJson, printTable, printSuccess, printError } from '../output.js';
 
 /** Register announce commands on the program. */
 export function registerAnnounceCommands(program: Command): void {
-  const announce = program
-    .command('announce')
-    .description('Bot announcements');
+  const announce = program.command('announce').description('Bot announcements');
 
   // ── List ──
   announce
@@ -24,7 +22,7 @@ export function registerAnnounceCommands(program: Command): void {
         const config = resolveConfig(program.opts());
         const data = await apiGet<{ announcements: Record<string, unknown>[] }>(
           '/api/admin/announcements',
-          config
+          config,
         );
 
         if (config.json) {
@@ -35,9 +33,7 @@ export function registerAnnounceCommands(program: Command): void {
             return;
           }
           const rows = data.announcements.map((a) => [
-            a.created_at
-              ? new Date(a.created_at as string).toLocaleDateString()
-              : '',
+            a.created_at ? new Date(a.created_at as string).toLocaleDateString() : '',
             String(a.text ?? '').slice(0, 60),
             a.post_uri ? 'Yes' : 'No',
           ]);
@@ -67,7 +63,7 @@ export function registerAnnounceCommands(program: Command): void {
         const data = await apiPost<Record<string, unknown>>(
           '/api/admin/announcements',
           { text },
-          config
+          config,
         );
 
         if (config.json) {

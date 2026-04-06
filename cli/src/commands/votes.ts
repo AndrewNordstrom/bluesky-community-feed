@@ -11,9 +11,7 @@ import { printJson, printSummary, printTable, printError } from '../output.js';
 
 /** Register votes commands on the program. */
 export function registerVotesCommands(program: Command): void {
-  const votes = program
-    .command('votes')
-    .description('View vote data');
+  const votes = program.command('votes').description('View vote data');
 
   // ── Summary ──
   votes
@@ -25,7 +23,7 @@ export function registerVotesCommands(program: Command): void {
         const config = resolveConfig(program.opts());
         const data = await apiGet<{ votes: Record<string, unknown>[] }>(
           `/api/admin/governance/votes/${opts.epoch}`,
-          config
+          config,
         );
 
         if (config.json) {
@@ -43,7 +41,7 @@ export function registerVotesCommands(program: Command): void {
             ]);
             printTable(
               ['Voter', 'Recency', 'Engagement', 'Bridging', 'SrcDiv', 'Relevance'],
-              rows as (string | number | null)[][]
+              rows as (string | number | null)[][],
             );
           }
         }
@@ -62,7 +60,7 @@ export function registerVotesCommands(program: Command): void {
         const config = resolveConfig(program.opts());
         const data = await apiGet<Record<string, unknown>>(
           '/api/admin/governance/aggregation/preview',
-          config
+          config,
         );
 
         if (config.json) {
@@ -70,9 +68,7 @@ export function registerVotesCommands(program: Command): void {
         } else {
           const weights = data.weights as Record<string, number> | undefined;
           if (weights) {
-            printSummary(
-              Object.entries(weights).map(([k, v]) => [k, v.toFixed(3)])
-            );
+            printSummary(Object.entries(weights).map(([k, v]) => [k, v.toFixed(3)]));
           } else {
             printSummary([['Status', 'No aggregation data available']]);
           }

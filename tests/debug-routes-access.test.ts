@@ -4,9 +4,14 @@ import { describe, expect, it, vi } from 'vitest';
 async function loadDebugRoutesForEnv(nodeEnv: 'production' | 'development') {
   vi.resetModules();
 
-  const requireAdminMock = vi.fn(async (_request: unknown, reply: { status: (code: number) => { send: (body: unknown) => void } }) => {
-    reply.status(401).send({ error: 'Authentication required' });
-  });
+  const requireAdminMock = vi.fn(
+    async (
+      _request: unknown,
+      reply: { status: (code: number) => { send: (body: unknown) => void } },
+    ) => {
+      reply.status(401).send({ error: 'Authentication required' });
+    },
+  );
   const dbQueryMock = vi.fn();
   const redisZCardMock = vi.fn();
   const getCurrentContentRulesMock = vi.fn();
@@ -53,7 +58,8 @@ async function loadDebugRoutesForEnv(nodeEnv: 'production' | 'development') {
 
 describe('debug route access control', () => {
   it('requires admin auth in production', async () => {
-    const { registerDebugRoutes, requireAdminMock, dbQueryMock } = await loadDebugRoutesForEnv('production');
+    const { registerDebugRoutes, requireAdminMock, dbQueryMock } =
+      await loadDebugRoutesForEnv('production');
 
     const app = Fastify();
     registerDebugRoutes(app);

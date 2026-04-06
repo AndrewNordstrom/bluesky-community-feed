@@ -25,7 +25,9 @@ interface ApiAdminStatusResponse {
   };
 }
 
-async function getApiEpochStatus(config: ReturnType<typeof resolveConfig>): Promise<EpochStatusData> {
+async function getApiEpochStatus(
+  config: ReturnType<typeof resolveConfig>,
+): Promise<EpochStatusData> {
   const data = await apiGet<ApiAdminStatusResponse>('/api/admin/status', config);
   const currentEpoch = data.system?.currentEpoch ?? null;
 
@@ -45,9 +47,7 @@ async function getApiEpochStatus(config: ReturnType<typeof resolveConfig>): Prom
 
 /** Register epoch commands on the program. */
 export function registerEpochCommands(program: Command): void {
-  const epoch = program
-    .command('epoch')
-    .description('Manage governance epochs');
+  const epoch = program.command('epoch').description('Manage governance epochs');
 
   // ── Status ──
   epoch
@@ -93,7 +93,7 @@ export function registerEpochCommands(program: Command): void {
         const config = resolveConfig(program.opts());
         const data = await apiGet<{ epochs: Record<string, unknown>[] }>(
           '/api/admin/epochs',
-          config
+          config,
         );
 
         if (config.json) {
@@ -105,10 +105,7 @@ export function registerEpochCommands(program: Command): void {
             e.vote_count ?? 0,
             e.created_at ? new Date(e.created_at as string).toLocaleDateString() : '',
           ]);
-          printTable(
-            ['ID', 'Phase', 'Votes', 'Created'],
-            rows as (string | number | null)[][]
-          );
+          printTable(['ID', 'Phase', 'Votes', 'Created'], rows as (string | number | null)[][]);
         }
       } catch (err) {
         printError((err as Error).message);
@@ -126,7 +123,7 @@ export function registerEpochCommands(program: Command): void {
         const data = await apiPost<Record<string, unknown>>(
           '/api/admin/governance/weights/apply',
           { action: 'open_voting' },
-          config
+          config,
         );
 
         if (config.json) {
@@ -150,7 +147,7 @@ export function registerEpochCommands(program: Command): void {
         const data = await apiPost<Record<string, unknown>>(
           '/api/admin/epochs/transition',
           {},
-          config
+          config,
         );
 
         if (config.json) {
@@ -178,7 +175,7 @@ export function registerEpochCommands(program: Command): void {
         const data = await apiPost<Record<string, unknown>>(
           '/api/admin/epochs/transition',
           { force: opts.force ?? false },
-          config
+          config,
         );
 
         if (config.json) {

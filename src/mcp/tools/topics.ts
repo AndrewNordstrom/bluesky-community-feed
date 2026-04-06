@@ -14,7 +14,7 @@ export function registerTopicTools(
   server: McpServer,
   app: FastifyInstance,
   token: string,
-  cookieName: string
+  cookieName: string,
 ): void {
   const cookie = `${cookieName}=${token}`;
 
@@ -23,7 +23,10 @@ export function registerTopicTools(
     {
       description: 'List all topics in the catalog with post counts and community weights',
       inputSchema: {
-        includeInactive: z.boolean().optional().default(true)
+        includeInactive: z
+          .boolean()
+          .optional()
+          .default(true)
           .describe('Include inactive topics (default true)'),
       },
     },
@@ -41,7 +44,7 @@ export function registerTopicTools(
       }
 
       return formatInjectResponse(res);
-    }
+    },
   );
 
   server.registerTool(
@@ -79,7 +82,7 @@ export function registerTopicTools(
         },
       });
       return formatInjectResponse(res);
-    }
+    },
   );
 
   server.registerTool(
@@ -114,13 +117,14 @@ export function registerTopicTools(
         payload: body,
       });
       return formatInjectResponse(res);
-    }
+    },
   );
 
   server.registerTool(
     'get_topic_stats',
     {
-      description: 'Get topic classification statistics: total topics, posts classified, most/least matched',
+      description:
+        'Get topic classification statistics: total topics, posts classified, most/least matched',
     },
     async () => {
       const res = await app.inject({
@@ -129,24 +133,30 @@ export function registerTopicTools(
         headers: { cookie },
       });
       const topics = JSON.parse(res.body) as Array<{
-        slug: string; name: string; isActive: boolean; postCount: number;
+        slug: string;
+        name: string;
+        isActive: boolean;
+        postCount: number;
       }>;
 
-      const active = topics.filter(t => t.isActive);
+      const active = topics.filter((t) => t.isActive);
       const totalPosts = active.reduce((sum, t) => sum + t.postCount, 0);
       const sorted = [...active].sort((a, b) => b.postCount - a.postCount);
 
       const stats = {
         totalTopics: topics.length,
         activeTopics: active.length,
-        topicsWithPosts: active.filter(t => t.postCount > 0).length,
+        topicsWithPosts: active.filter((t) => t.postCount > 0).length,
         totalClassifiedPosts: totalPosts,
-        mostMatched: sorted.slice(0, 5).map(t => ({ name: t.name, posts: t.postCount })),
-        leastMatched: sorted.slice(-5).reverse().map(t => ({ name: t.name, posts: t.postCount })),
+        mostMatched: sorted.slice(0, 5).map((t) => ({ name: t.name, posts: t.postCount })),
+        leastMatched: sorted
+          .slice(-5)
+          .reverse()
+          .map((t) => ({ name: t.name, posts: t.postCount })),
       };
 
       return { content: [{ type: 'text' as const, text: JSON.stringify(stats, null, 2) }] };
-    }
+    },
   );
 
   server.registerTool(
@@ -165,6 +175,6 @@ export function registerTopicTools(
         payload: { text },
       });
       return formatInjectResponse(res);
-    }
+    },
   );
 }

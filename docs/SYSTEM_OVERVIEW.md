@@ -57,13 +57,13 @@ A Bluesky custom feed where **subscribers democratically vote on algorithm param
 
 Each component returns a normalized **0.0 to 1.0** score:
 
-| Component | What It Measures | Algorithm |
-|-----------|------------------|-----------|
-| **Recency** | How new the post is | Exponential decay, half-life 18 hours |
-| **Engagement** | Likes, reposts, replies | Log-scaled: `log10(likes×1 + reposts×2 + replies×3 + 1)` |
-| **Bridging** | Cross-bubble appeal | Jaccard distance of engager follower sets |
-| **Source Diversity** | Prevent author domination | Gini coefficient penalty for concentration |
-| **Relevance** | Topic matching | Weighted average of post topic vector × community topic weights (governance-driven) |
+| Component            | What It Measures          | Algorithm                                                                           |
+| -------------------- | ------------------------- | ----------------------------------------------------------------------------------- |
+| **Recency**          | How new the post is       | Exponential decay, half-life 18 hours                                               |
+| **Engagement**       | Likes, reposts, replies   | Log-scaled: `log10(likes×1 + reposts×2 + replies×3 + 1)`                            |
+| **Bridging**         | Cross-bubble appeal       | Jaccard distance of engager follower sets                                           |
+| **Source Diversity** | Prevent author domination | Gini coefficient penalty for concentration                                          |
+| **Relevance**        | Topic matching            | Weighted average of post topic vector × community topic weights (governance-driven) |
 
 ### Final Score Calculation
 
@@ -126,10 +126,13 @@ Minimum 10 votes required before trimming kicks in.
 ## Database Schema (Key Tables)
 
 ### posts
+
 Stores all ingested Bluesky posts with `deleted` flag for soft deletes.
 
 ### post_scores (GOLDEN RULE)
+
 Stores **decomposed scores** - 15 columns per post per epoch:
+
 - 5 raw scores (recency_score, engagement_score, etc.)
 - 5 weights from governance epoch
 - 5 weighted values (score × weight)
@@ -137,18 +140,23 @@ Stores **decomposed scores** - 15 columns per post per epoch:
 - epoch_id (critical for measuring governance impact)
 
 ### governance_epochs
+
 Current and historical governance periods with weight distribution.
 
 ### governance_votes
+
 Individual subscriber votes (one per voter per epoch).
 
 ### governance_audit_log
+
 **Append-only** record of all governance actions (trust anchor).
 
 ### subscribers
+
 Tracks who uses the feed and is eligible to vote.
 
 ### jetstream_cursor
+
 Persists cursor every 1000 events to resume without gaps.
 
 ---
@@ -198,16 +206,19 @@ Currently users vote on **ranking** (how to order posts). Future extension: vote
 ## Deployment Requirements
 
 ### Infrastructure
+
 - **VPS**: Any Linux server with Docker (2GB RAM minimum)
 - **PostgreSQL 16+**: Main data store
 - **Redis 7+**: Feed cache and cursor snapshots
 
 ### Bluesky Requirements
+
 - **DID:PLC**: Must use `did:plc` (not `did:web`) - survives domain changes
 - **publish-feed.ts**: Script to register feed with Bluesky
 - **DNS**: Point domain to VPS for feed URL
 
 ### Environment Variables
+
 ```bash
 DATABASE_URL=postgresql://...
 REDIS_URL=redis://...
@@ -220,16 +231,16 @@ FEED_HOSTNAME=feed.yourdomain.com
 
 ## Key Files
 
-| Path | Purpose |
-|------|---------|
-| `src/ingestion/jetstream.ts` | WebSocket connection to Bluesky firehose |
-| `src/ingestion/embedding-gate.ts` | Single-post embedding classifier (at ingestion time) |
-| `src/scoring/pipeline.ts` | 5-component scoring and Redis population |
-| `src/feed/routes/feed-skeleton.ts` | AT Protocol feed endpoint |
-| `src/governance/routes/vote.ts` | Vote submission API |
-| `src/governance/aggregation.ts` | Trimmed mean calculation |
-| `web/src/pages/Vote.tsx` | Voting UI with linked sliders |
-| `web/src/pages/Dashboard.tsx` | Transparency dashboard |
+| Path                               | Purpose                                              |
+| ---------------------------------- | ---------------------------------------------------- |
+| `src/ingestion/jetstream.ts`       | WebSocket connection to Bluesky firehose             |
+| `src/ingestion/embedding-gate.ts`  | Single-post embedding classifier (at ingestion time) |
+| `src/scoring/pipeline.ts`          | 5-component scoring and Redis population             |
+| `src/feed/routes/feed-skeleton.ts` | AT Protocol feed endpoint                            |
+| `src/governance/routes/vote.ts`    | Vote submission API                                  |
+| `src/governance/aggregation.ts`    | Trimmed mean calculation                             |
+| `web/src/pages/Vote.tsx`           | Voting UI with linked sliders                        |
+| `web/src/pages/Dashboard.tsx`      | Transparency dashboard                               |
 
 ---
 
