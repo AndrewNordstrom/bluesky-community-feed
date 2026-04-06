@@ -6,7 +6,12 @@ import { DashboardSkeleton } from '../components/Skeleton';
 import { useAuth } from '../contexts/useAuth';
 import { useAdminStatus } from '../hooks/useAdminStatus';
 import { transparencyApi, voteApi } from '../api/client';
-import type { FeedStatsResponse, AuditLogEntry, EpochResponse, TopicCatalogResponse } from '../api/client';
+import type {
+  FeedStatsResponse,
+  AuditLogEntry,
+  EpochResponse,
+  TopicCatalogResponse,
+} from '../api/client';
 
 interface WeightChange {
   key: keyof EpochResponse['weights'];
@@ -58,7 +63,7 @@ function normalizeKeywords(values: string[] | undefined): string[] {
     return [];
   }
   return Array.from(
-    new Set(values.map((value) => value.trim().toLowerCase()).filter((value) => value.length > 0))
+    new Set(values.map((value) => value.trim().toLowerCase()).filter((value) => value.length > 0)),
   );
 }
 
@@ -131,41 +136,44 @@ export function Dashboard() {
   const [hasInitialLoad, setHasInitialLoad] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadData = useCallback(async (silent = false) => {
-    try {
-      if (!silent) {
-        setIsLoading(true);
-      }
-
-      const [statsData, auditData, historyData] = await Promise.all([
-        transparencyApi.getStats(),
-        transparencyApi.getAuditLog({ limit: 8 }),
-        transparencyApi.getEpochHistory(2),
-      ]);
-
-      setStats(statsData);
-      setAuditLog(auditData.entries);
-      setEpochHistory(historyData.epochs);
-      setError(null);
-
-      // Load topic catalog (public endpoint, no auth)
+  const loadData = useCallback(
+    async (silent = false) => {
       try {
-        const catalog = await voteApi.getTopicCatalog();
-        setTopicData(catalog);
-      } catch {
-        // Topic catalog unavailable — skip
+        if (!silent) {
+          setIsLoading(true);
+        }
+
+        const [statsData, auditData, historyData] = await Promise.all([
+          transparencyApi.getStats(),
+          transparencyApi.getAuditLog({ limit: 8 }),
+          transparencyApi.getEpochHistory(2),
+        ]);
+
+        setStats(statsData);
+        setAuditLog(auditData.entries);
+        setEpochHistory(historyData.epochs);
+        setError(null);
+
+        // Load topic catalog (public endpoint, no auth)
+        try {
+          const catalog = await voteApi.getTopicCatalog();
+          setTopicData(catalog);
+        } catch {
+          // Topic catalog unavailable — skip
+        }
+      } catch (err: unknown) {
+        if (!silent || !hasInitialLoad) {
+          setError(getErrorMessage(err, 'Failed to load dashboard data'));
+        }
+      } finally {
+        if (!silent) {
+          setIsLoading(false);
+        }
+        setHasInitialLoad(true);
       }
-    } catch (err: unknown) {
-      if (!silent || !hasInitialLoad) {
-        setError(getErrorMessage(err, 'Failed to load dashboard data'));
-      }
-    } finally {
-      if (!silent) {
-        setIsLoading(false);
-      }
-      setHasInitialLoad(true);
-    }
-  }, [hasInitialLoad]);
+    },
+    [hasInitialLoad],
+  );
 
   useEffect(() => {
     void loadData(false);
@@ -177,10 +185,7 @@ export function Dashboard() {
     return () => window.clearInterval(interval);
   }, [loadData]);
 
-  const latestRoundUpdate = useMemo(
-    () => deriveLatestRoundUpdate(epochHistory),
-    [epochHistory]
-  );
+  const latestRoundUpdate = useMemo(() => deriveLatestRoundUpdate(epochHistory), [epochHistory]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -211,9 +216,15 @@ export function Dashboard() {
             <div className="header-left">
               <h1>Community feed</h1>
               <nav className="header-nav">
-                <Link to="/vote" className="nav-link">Vote</Link>
-                <Link to="/dashboard" className="nav-link active">Dashboard</Link>
-                <Link to="/history" className="nav-link">History</Link>
+                <Link to="/vote" className="nav-link">
+                  Vote
+                </Link>
+                <Link to="/dashboard" className="nav-link active">
+                  Dashboard
+                </Link>
+                <Link to="/history" className="nav-link">
+                  History
+                </Link>
               </nav>
             </div>
           </div>
@@ -248,10 +259,20 @@ export function Dashboard() {
           <div className="header-left">
             <h1>Community feed</h1>
             <nav className="header-nav">
-              <Link to="/vote" className="nav-link">Vote</Link>
-              <Link to="/dashboard" className="nav-link active">Dashboard</Link>
-              <Link to="/history" className="nav-link">History</Link>
-              {isAdmin && <Link to="/admin" className="nav-link">Admin</Link>}
+              <Link to="/vote" className="nav-link">
+                Vote
+              </Link>
+              <Link to="/dashboard" className="nav-link active">
+                Dashboard
+              </Link>
+              <Link to="/history" className="nav-link">
+                History
+              </Link>
+              {isAdmin && (
+                <Link to="/admin" className="nav-link">
+                  Admin
+                </Link>
+              )}
             </nav>
           </div>
           <div className="user-info">
@@ -276,7 +297,8 @@ export function Dashboard() {
                   Round {latestRoundUpdate.currentRoundId} is now live.
                 </p>
                 <p className="latest-update-meta">
-                  Applied from Round {latestRoundUpdate.previousRoundId} with {latestRoundUpdate.participantCount} voter(s).
+                  Applied from Round {latestRoundUpdate.previousRoundId} with{' '}
+                  {latestRoundUpdate.participantCount} voter(s).
                 </p>
                 {latestRoundUpdate.weightChanges.length > 0 ? (
                   <div className="latest-update-list">
@@ -284,9 +306,9 @@ export function Dashboard() {
                       <div key={change.key} className="latest-update-item">
                         <span>{WEIGHT_LABELS[change.key]}</span>
                         <strong>
-                          {(change.previous * 100).toFixed(1)}% → {(change.current * 100).toFixed(1)}%
-                          {' '}
-                          ({change.delta >= 0 ? '+' : ''}{(change.delta * 100).toFixed(1)}%)
+                          {(change.previous * 100).toFixed(1)}% →{' '}
+                          {(change.current * 100).toFixed(1)}% ({change.delta >= 0 ? '+' : ''}
+                          {(change.delta * 100).toFixed(1)}%)
                         </strong>
                       </div>
                     ))}
@@ -360,13 +382,12 @@ export function Dashboard() {
                   {Object.entries(stats.epoch.weights).map(([key, value]) => (
                     <div key={key} className="weight-item">
                       <span className="weight-name">
-                        {key === 'source_diversity' ? 'Source diversity' : key.charAt(0).toUpperCase() + key.slice(1)}
+                        {key === 'source_diversity'
+                          ? 'Source diversity'
+                          : key.charAt(0).toUpperCase() + key.slice(1)}
                       </span>
                       <div className="weight-bar-container">
-                        <div
-                          className="weight-bar"
-                          style={{ width: `${value * 100}%` }}
-                        />
+                        <div className="weight-bar" style={{ width: `${value * 100}%` }} />
                       </div>
                       <span className="weight-value">{(value * 100).toFixed(0)}%</span>
                     </div>
@@ -398,34 +419,45 @@ export function Dashboard() {
               <h2>Feed statistics</h2>
               <div className="stats-grid">
                 <div className="stat-card">
-                  <span className="stat-value">{stats.feed_stats.total_posts_scored.toLocaleString()}</span>
+                  <span className="stat-value">
+                    {stats.feed_stats.total_posts_scored.toLocaleString()}
+                  </span>
                   <span className="stat-label">Posts scored</span>
                 </div>
                 <div className="stat-card">
-                  <span className="stat-value">{stats.feed_stats.unique_authors.toLocaleString()}</span>
+                  <span className="stat-value">
+                    {stats.feed_stats.unique_authors.toLocaleString()}
+                  </span>
                   <span className="stat-label">Unique authors</span>
                 </div>
                 <div className="stat-card">
-                  <span className="stat-value">{(stats.feed_stats.avg_bridging_score * 100).toFixed(1)}%</span>
+                  <span className="stat-value">
+                    {(stats.feed_stats.avg_bridging_score * 100).toFixed(1)}%
+                  </span>
                   <span className="stat-label">Avg bridging</span>
                 </div>
                 <div className="stat-card">
                   <span className="stat-value">{stats.governance.votes_this_epoch}</span>
                   <span className="stat-label">Votes this epoch</span>
                 </div>
-                {stats.metrics?.author_gini !== null && stats.metrics?.author_gini !== undefined && (
-                  <div className="stat-card">
-                    <span className="stat-value">{(stats.metrics.author_gini * 100).toFixed(1)}%</span>
-                    <span className="stat-label">Author concentration</span>
-                  </div>
-                )}
+                {stats.metrics?.author_gini !== null &&
+                  stats.metrics?.author_gini !== undefined && (
+                    <div className="stat-card">
+                      <span className="stat-value">
+                        {(stats.metrics.author_gini * 100).toFixed(1)}%
+                      </span>
+                      <span className="stat-label">Author concentration</span>
+                    </div>
+                  )}
               </div>
             </section>
 
             <section className="audit-section">
               <div className="section-header">
                 <h2>Recent governance activity</h2>
-                <Link to="/history" className="view-all-link">View all</Link>
+                <Link to="/history" className="view-all-link">
+                  View all
+                </Link>
               </div>
               <div className="audit-list">
                 {auditLog.length === 0 ? (

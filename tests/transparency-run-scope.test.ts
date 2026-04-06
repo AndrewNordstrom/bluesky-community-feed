@@ -23,13 +23,33 @@ describe('transparency routes current-run scoping', () => {
   it('scopes feed stats to current scoring run when run metadata exists', async () => {
     dbQueryMock
       .mockResolvedValueOnce({
-        rows: [{ id: 2, status: 'active', recency_weight: 0.2, engagement_weight: 0.2, bridging_weight: 0.2, source_diversity_weight: 0.2, relevance_weight: 0.2, created_at: '2026-02-09T00:00:00.000Z' }],
+        rows: [
+          {
+            id: 2,
+            status: 'active',
+            recency_weight: 0.2,
+            engagement_weight: 0.2,
+            bridging_weight: 0.2,
+            source_diversity_weight: 0.2,
+            relevance_weight: 0.2,
+            created_at: '2026-02-09T00:00:00.000Z',
+          },
+        ],
       })
       .mockResolvedValueOnce({
         rows: [{ value: { run_id: 'run-1', epoch_id: 2 } }],
       })
       .mockResolvedValueOnce({
-        rows: [{ total_posts: '10', unique_authors: '8', avg_bridging: '0.3', avg_engagement: '0.4', median_bridging: '0.25', median_total: '0.5' }],
+        rows: [
+          {
+            total_posts: '10',
+            unique_authors: '8',
+            avg_bridging: '0.3',
+            avg_engagement: '0.4',
+            median_bridging: '0.25',
+            median_total: '0.5',
+          },
+        ],
       })
       .mockResolvedValueOnce({ rows: [{ count: '5' }] })
       .mockResolvedValueOnce({ rows: [] });
@@ -51,7 +71,16 @@ describe('transparency routes current-run scoping', () => {
   it('scopes counterfactual ranking query to current run', async () => {
     dbQueryMock
       .mockResolvedValueOnce({
-        rows: [{ id: 2, recency_weight: 0.2, engagement_weight: 0.2, bridging_weight: 0.2, source_diversity_weight: 0.2, relevance_weight: 0.2 }],
+        rows: [
+          {
+            id: 2,
+            recency_weight: 0.2,
+            engagement_weight: 0.2,
+            bridging_weight: 0.2,
+            source_diversity_weight: 0.2,
+            relevance_weight: 0.2,
+          },
+        ],
       })
       .mockResolvedValueOnce({
         rows: [{ value: { run_id: 'run-2', epoch_id: 2 } }],

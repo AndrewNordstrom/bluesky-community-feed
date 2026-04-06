@@ -10,11 +10,7 @@ import {
   stopInteractionAggregator,
   isInteractionAggregatorRunning,
 } from './interaction-aggregator.js';
-import {
-  startDiskMonitor,
-  stopDiskMonitor,
-  isDiskMonitorRunning,
-} from './disk-monitor.js';
+import { startDiskMonitor, stopDiskMonitor, isDiskMonitorRunning } from './disk-monitor.js';
 
 const START_RETRY_ATTEMPTS = 3;
 const START_RETRY_DELAY_MS = 5_000;
@@ -105,13 +101,13 @@ export function createWorkerSupervisor(options: WorkerSupervisorOptions): Worker
         const isLastAttempt = attempt === retryAttempts;
         logger.warn(
           { err, worker: worker.name, reason, attempt, retryAttempts },
-          'Maintenance worker start attempt failed'
+          'Maintenance worker start attempt failed',
         );
 
         if (isLastAttempt) {
           logger.fatal(
             { worker: worker.name, reason, retryAttempts },
-            'Maintenance worker failed to start after retries'
+            'Maintenance worker failed to start after retries',
           );
           exitFn(1);
           throw new Error(`Maintenance worker ${worker.name} failed to start`);

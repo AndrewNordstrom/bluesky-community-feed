@@ -12,7 +12,9 @@ describe('security-oriented config defaults', () => {
   it('enforces a non-default export anonymization salt in production', () => {
     const source = readFileSync(new URL('../src/config.ts', import.meta.url), 'utf8');
     expect(source).toContain('EXPORT_ANONYMIZATION_SALT must be explicitly set in production.');
-    expect(source).toContain('EXPORT_ANONYMIZATION_SALT should be at least 32 characters in production.');
+    expect(source).toContain(
+      'EXPORT_ANONYMIZATION_SALT should be at least 32 characters in production.',
+    );
   });
 
   it('parses trustProxy configuration safely', () => {

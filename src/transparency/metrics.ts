@@ -155,7 +155,7 @@ export function calculateAuthorConcentration(authorPostCounts: Map<string, numbe
 export function compareRankings(
   rankingA: string[],
   rankingB: string[],
-  topN?: number
+  topN?: number,
 ): {
   jaccard: number;
   topNOverlap: number;

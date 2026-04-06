@@ -10,7 +10,7 @@ interface SchedulingCardProps {
 function toInputDateTime(value: Date): string {
   const pad = (input: number) => String(input).padStart(2, '0');
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(
-    value.getMinutes()
+    value.getMinutes(),
   )}`;
 }
 
@@ -51,7 +51,9 @@ function toPhase(round: RoundSummary | null): 'running' | 'voting' | 'results' {
 
 export function SchedulingCard({ round, onUpdate, onNotify }: SchedulingCardProps) {
   const [scheduledVotes, setScheduledVotes] = useState<ScheduledVote[]>([]);
-  const [startsAtInput, setStartsAtInput] = useState(toInputDateTime(new Date(Date.now() + 24 * 60 * 60 * 1000)));
+  const [startsAtInput, setStartsAtInput] = useState(
+    toInputDateTime(new Date(Date.now() + 24 * 60 * 60 * 1000)),
+  );
   const [durationHours, setDurationHours] = useState(72);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -106,7 +108,12 @@ export function SchedulingCard({ round, onUpdate, onNotify }: SchedulingCardProp
         <>
           <p className="countdown">{formatCountdown(round.votingEndsAt)}</p>
           <div className="action-buttons">
-            <button type="button" className="btn-secondary" onClick={handleExtend24h} disabled={isSaving}>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={handleExtend24h}
+              disabled={isSaving}
+            >
               Extend 24h
             </button>
           </div>
@@ -137,7 +144,12 @@ export function SchedulingCard({ round, onUpdate, onNotify }: SchedulingCardProp
       </div>
 
       <div className="action-buttons">
-        <button type="button" className="btn-primary" onClick={handleScheduleVote} disabled={isSaving}>
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={handleScheduleVote}
+          disabled={isSaving}
+        >
           {isSaving ? 'Saving...' : 'Schedule Next Vote'}
         </button>
       </div>

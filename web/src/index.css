@@ -3,7 +3,9 @@
 @import './styles/transitions.css';
 
 /* Reset and base styles */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
@@ -31,17 +33,30 @@ body {
 }
 
 /* Typography */
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   margin: 0;
   font-weight: var(--font-weight-semibold);
   line-height: var(--leading-tight);
   color: var(--text-primary);
 }
 
-h1 { font-size: var(--text-3xl); }
-h2 { font-size: var(--text-2xl); }
-h3 { font-size: var(--text-xl); }
-h4 { font-size: var(--text-lg); }
+h1 {
+  font-size: var(--text-3xl);
+}
+h2 {
+  font-size: var(--text-2xl);
+}
+h3 {
+  font-size: var(--text-xl);
+}
+h4 {
+  font-size: var(--text-lg);
+}
 
 p {
   margin: 0;
@@ -115,7 +130,9 @@ button:disabled {
 }
 
 /* Form inputs */
-input, textarea, select {
+input,
+textarea,
+select {
   font-family: inherit;
   font-size: var(--text-base);
   padding: var(--space-3) var(--space-4);
@@ -126,12 +143,15 @@ input, textarea, select {
   transition: border-color var(--transition-fast);
 }
 
-input:focus, textarea:focus, select:focus {
+input:focus,
+textarea:focus,
+select:focus {
   outline: none;
   border-color: var(--accent-blue);
 }
 
-input::placeholder, textarea::placeholder {
+input::placeholder,
+textarea::placeholder {
   color: var(--text-muted);
 }
 
@@ -144,14 +164,28 @@ input::placeholder, textarea::placeholder {
 }
 
 /* Utility classes */
-.text-primary { color: var(--text-primary); }
-.text-secondary { color: var(--text-secondary); }
-.text-muted { color: var(--text-muted); }
-.text-accent { color: var(--accent-blue); }
+.text-primary {
+  color: var(--text-primary);
+}
+.text-secondary {
+  color: var(--text-secondary);
+}
+.text-muted {
+  color: var(--text-muted);
+}
+.text-accent {
+  color: var(--accent-blue);
+}
 
-.bg-app { background-color: var(--bg-app); }
-.bg-card { background-color: var(--bg-card); }
-.bg-elevated { background-color: var(--bg-elevated); }
+.bg-app {
+  background-color: var(--bg-app);
+}
+.bg-card {
+  background-color: var(--bg-card);
+}
+.bg-elevated {
+  background-color: var(--bg-elevated);
+}
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {

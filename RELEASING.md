@@ -13,6 +13,7 @@ This project uses Semantic Versioning (`MAJOR.MINOR.PATCH`) and Keep a Changelog
 Any user-visible, operator-visible, or contributor-visible change must add an entry under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md) before merge.
 
 Allowed omission:
+
 - Internal refactors with zero observable behavior/tooling/docs impact.
 
 ## Pre-Release Checklist

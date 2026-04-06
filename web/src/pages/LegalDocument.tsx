@@ -59,26 +59,17 @@ export function LegalDocument({ document }: LegalDocumentProps) {
     <div className="legal-page">
       <div className="legal-container">
         <div className="legal-header">
-          <button
-            className="legal-back"
-            onClick={handleBack}
-            type="button"
-          >
+          <button className="legal-back" onClick={handleBack} type="button">
             &larr; Back
           </button>
           <h1>{title}</h1>
-          {lastUpdated && (
-            <p className="legal-updated">Last updated: {lastUpdated}</p>
-          )}
+          {lastUpdated && <p className="legal-updated">Last updated: {lastUpdated}</p>}
         </div>
 
         {isLoading && <p className="legal-loading">Loading...</p>}
         {error && <p className="legal-error">{error}</p>}
         {renderedHtml && (
-          <div
-            className="legal-content"
-            dangerouslySetInnerHTML={{ __html: renderedHtml }}
-          />
+          <div className="legal-content" dangerouslySetInnerHTML={{ __html: renderedHtml }} />
         )}
       </div>
 

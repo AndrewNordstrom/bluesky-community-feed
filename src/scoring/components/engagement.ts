@@ -28,13 +28,9 @@
  * @param replies - Number of replies
  * @returns Score between 0.0 and 1.0 (more engagement = higher)
  */
-export function scoreEngagement(
-  likes: number,
-  reposts: number,
-  replies: number
-): number {
+export function scoreEngagement(likes: number, reposts: number, replies: number): number {
   // Weight different engagement types (replies show deeper engagement)
-  const raw = (likes * 1.0) + (reposts * 2.0) + (replies * 3.0);
+  const raw = likes * 1.0 + reposts * 2.0 + replies * 3.0;
 
   // Handle zero engagement
   if (raw === 0) {

@@ -14,19 +14,24 @@ export function registerFeedTools(
   server: McpServer,
   app: FastifyInstance,
   token: string,
-  cookieName: string
+  cookieName: string,
 ): void {
   const cookie = `${cookieName}=${token}`;
 
   server.registerTool(
     'get_feed_health',
     {
-      description: 'Get feed health status including database, scoring pipeline, Jetstream, and subscriber counts',
+      description:
+        'Get feed health status including database, scoring pipeline, Jetstream, and subscriber counts',
     },
     async () => {
-      const res = await app.inject({ method: 'GET', url: '/api/admin/feed-health', headers: { cookie } });
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/admin/feed-health',
+        headers: { cookie },
+      });
       return formatInjectResponse(res);
-    }
+    },
   );
 
   server.registerTool(
@@ -43,7 +48,7 @@ export function registerFeedTools(
         payload: {},
       });
       return formatInjectResponse(res);
-    }
+    },
   );
 
   server.registerTool(
@@ -60,15 +65,18 @@ export function registerFeedTools(
         payload: {},
       });
       return formatInjectResponse(res);
-    }
+    },
   );
 
   server.registerTool(
     'explain_post_score',
     {
-      description: 'Get detailed score breakdown for a specific post showing all component scores and weights',
+      description:
+        'Get detailed score breakdown for a specific post showing all component scores and weights',
       inputSchema: {
-        uri: z.string().describe('AT Protocol URI of the post (at://did:plc:.../app.bsky.feed.post/...)'),
+        uri: z
+          .string()
+          .describe('AT Protocol URI of the post (at://did:plc:.../app.bsky.feed.post/...)'),
       },
     },
     async ({ uri }: { uri: string }) => {
@@ -78,16 +86,27 @@ export function registerFeedTools(
         headers: { cookie },
       });
       return formatInjectResponse(res);
-    }
+    },
   );
 
   server.registerTool(
     'counterfactual_analysis',
     {
-      description: 'Run a what-if analysis with hypothetical weights to see how feed ranking would change',
+      description:
+        'Run a what-if analysis with hypothetical weights to see how feed ranking would change',
       inputSchema: {
-        weights: z.record(z.string(), z.number().min(0).max(1)).describe('Hypothetical weight map, e.g. {"recency":0.3,"engagement":0.2,"bridging":0.2,"source_diversity":0.2,"relevance":0.1}'),
-        limit: z.number().int().min(1).max(100).optional().describe('Number of posts to include in analysis (default 20)'),
+        weights: z
+          .record(z.string(), z.number().min(0).max(1))
+          .describe(
+            'Hypothetical weight map, e.g. {"recency":0.3,"engagement":0.2,"bridging":0.2,"source_diversity":0.2,"relevance":0.1}',
+          ),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe('Number of posts to include in analysis (default 20)'),
       },
     },
     async ({ weights, limit }: { weights: Record<string, number>; limit?: number }) => {
@@ -101,6 +120,6 @@ export function registerFeedTools(
         payload,
       });
       return formatInjectResponse(res);
-    }
+    },
   );
 }

@@ -6,6 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+
 - Topic scoring engine: winkNLP-based topic classification at ingestion time
 - Community topic weight voting (boost/penalize topics via governance)
 - Bluesky content label filtering (replaces keyword-based NSFW exclusion)
@@ -18,6 +19,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - Dedicated support guide (`SUPPORT.md`) and issue-template contact links for support/security routing
 
 ### Changed
+
 - README command examples and tooling descriptions updated to match current CLI and MCP behavior
 - PR template and contributing checklist now enforce changelog and security/audit validation gates
 - PR template and contributor guide now enforce small, single-purpose PR scope and Linear-linked branch/PR conventions
@@ -26,6 +28,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [1.1.0] — 2026-03-06
 
 ### Added
+
 - Admin CLI tool (`feed-cli`) with 7 command groups covering all admin operations
 - MCP server with 23 admin tools via Streamable HTTP for programmatic management
 - Research data export API: votes, scores, engagement, epochs, audit log (CSV/JSON)
@@ -34,12 +37,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - Daily governance health check workflow
 
 ### Changed
+
 - CLI authenticates via same session system as dashboard (no VPS credentials required)
 - MCP endpoint at `/mcp` with Bearer token auth (same admin DID allowlist)
 
 ## [1.0.0] — 2026-03-06
 
 ### Added
+
 - Community governance with epoch-based weight voting
 - Five scoring components: recency, engagement, bridging, source diversity, relevance
 - Modular scoring component interface for pluggable algorithms

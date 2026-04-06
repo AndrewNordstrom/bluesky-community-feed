@@ -28,7 +28,7 @@ const WEIGHT_LABELS = Object.fromEntries(
       name: param.label,
       description: param.description,
     },
-  ])
+  ]),
 ) as Record<GovernanceWeightKey, { name: string; description: string }>;
 
 const WEIGHT_KEYS = [...GOVERNANCE_WEIGHT_KEYS];
@@ -41,7 +41,7 @@ const WEIGHT_KEYS = [...GOVERNANCE_WEIGHT_KEYS];
  */
 export function WeightSliders({ initialWeights, onChange, disabled = false }: WeightSlidersProps) {
   const [weights, setWeights] = useState<GovernanceWeights>(
-    initialWeights ?? { ...DEFAULT_WEIGHTS }
+    initialWeights ?? { ...DEFAULT_WEIGHTS },
   );
 
   /**
@@ -54,63 +54,60 @@ export function WeightSliders({ initialWeights, onChange, disabled = false }: We
    * 4. If any slider would go negative, clamp to 0 and redistribute remainder
    * 5. After all adjustments, normalize to ensure exact sum of 1.0
    */
-  const handleSliderChange = useCallback(
-    (key: GovernanceWeightKey, newValue: number) => {
-      setWeights((prevWeights) => {
-        const oldValue = prevWeights[key];
-        const delta = newValue - oldValue;
+  const handleSliderChange = useCallback((key: GovernanceWeightKey, newValue: number) => {
+    setWeights((prevWeights) => {
+      const oldValue = prevWeights[key];
+      const delta = newValue - oldValue;
 
-        if (Math.abs(delta) < 0.001) {
-          return prevWeights;
+      if (Math.abs(delta) < 0.001) {
+        return prevWeights;
+      }
+
+      // Calculate sum of other weights
+      const otherKeys = WEIGHT_KEYS.filter((k) => k !== key);
+      const otherSum = otherKeys.reduce((sum, k) => sum + prevWeights[k], 0);
+
+      // If other weights are all zero, can't redistribute
+      if (otherSum < 0.001 && delta > 0) {
+        return prevWeights;
+      }
+
+      // Create new weights
+      const newWeights = { ...prevWeights };
+      newWeights[key] = Math.max(0, Math.min(1, newValue));
+
+      // Distribute -delta proportionally to other sliders
+      const amountToDistribute = -delta;
+
+      if (otherSum > 0.001) {
+        for (const otherKey of otherKeys) {
+          const proportion = prevWeights[otherKey] / otherSum;
+          const adjustment = amountToDistribute * proportion;
+          newWeights[otherKey] = Math.max(0, prevWeights[otherKey] + adjustment);
+        }
+      } else {
+        // If all others are zero, distribute equally
+        const equalShare = amountToDistribute / otherKeys.length;
+        for (const otherKey of otherKeys) {
+          newWeights[otherKey] = Math.max(0, equalShare);
+        }
+      }
+
+      // Normalize to ensure exact sum of 1.0
+      const total = WEIGHT_KEYS.reduce((sum, k) => sum + newWeights[k], 0);
+      if (total > 0) {
+        for (const k of WEIGHT_KEYS) {
+          newWeights[k] = Math.round((newWeights[k] / total) * 1000) / 1000;
         }
 
-        // Calculate sum of other weights
-        const otherKeys = WEIGHT_KEYS.filter((k) => k !== key);
-        const otherSum = otherKeys.reduce((sum, k) => sum + prevWeights[k], 0);
+        // Fix rounding error by adjusting the changed slider
+        const currentSum = WEIGHT_KEYS.reduce((sum, k) => sum + newWeights[k], 0);
+        newWeights[key] = Math.round((newWeights[key] + (1.0 - currentSum)) * 1000) / 1000;
+      }
 
-        // If other weights are all zero, can't redistribute
-        if (otherSum < 0.001 && delta > 0) {
-          return prevWeights;
-        }
-
-        // Create new weights
-        const newWeights = { ...prevWeights };
-        newWeights[key] = Math.max(0, Math.min(1, newValue));
-
-        // Distribute -delta proportionally to other sliders
-        const amountToDistribute = -delta;
-
-        if (otherSum > 0.001) {
-          for (const otherKey of otherKeys) {
-            const proportion = prevWeights[otherKey] / otherSum;
-            const adjustment = amountToDistribute * proportion;
-            newWeights[otherKey] = Math.max(0, prevWeights[otherKey] + adjustment);
-          }
-        } else {
-          // If all others are zero, distribute equally
-          const equalShare = amountToDistribute / otherKeys.length;
-          for (const otherKey of otherKeys) {
-            newWeights[otherKey] = Math.max(0, equalShare);
-          }
-        }
-
-        // Normalize to ensure exact sum of 1.0
-        const total = WEIGHT_KEYS.reduce((sum, k) => sum + newWeights[k], 0);
-        if (total > 0) {
-          for (const k of WEIGHT_KEYS) {
-            newWeights[k] = Math.round((newWeights[k] / total) * 1000) / 1000;
-          }
-
-          // Fix rounding error by adjusting the changed slider
-          const currentSum = WEIGHT_KEYS.reduce((sum, k) => sum + newWeights[k], 0);
-          newWeights[key] = Math.round((newWeights[key] + (1.0 - currentSum)) * 1000) / 1000;
-        }
-
-        return newWeights;
-      });
-    },
-    []
-  );
+      return newWeights;
+    });
+  }, []);
 
   // Notify parent of changes
   useEffect(() => {
@@ -126,8 +123,7 @@ export function WeightSliders({ initialWeights, onChange, disabled = false }: We
       <div className="sliders-header">
         <h3>Algorithm weights</h3>
         <div className={`sum-indicator ${isValid ? 'valid' : 'invalid'}`}>
-          Total: {(sum * 100).toFixed(0)}%
-          {isValid ? '' : ' (must equal 100%)'}
+          Total: {(sum * 100).toFixed(0)}%{isValid ? '' : ' (must equal 100%)'}
         </div>
       </div>
 

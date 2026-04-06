@@ -32,9 +32,7 @@
     "/xrpc/app.bsky.feed.describeFeedGenerator": {
       "get": {
         "summary": "Describe feed generator",
-        "tags": [
-          "Feed"
-        ],
+        "tags": ["Feed"],
         "description": "Returns the DID and feed URIs for this generator. Called by Bluesky for feed discovery.",
         "responses": {
           "200": {
@@ -60,17 +58,12 @@
                             "example": "at://did:plc:example/app.bsky.feed.generator/community-gov"
                           }
                         },
-                        "required": [
-                          "uri"
-                        ]
+                        "required": ["uri"]
                       },
                       "description": "List of feeds served by this generator"
                     }
                   },
-                  "required": [
-                    "did",
-                    "feeds"
-                  ]
+                  "required": ["did", "feeds"]
                 }
               }
             }
@@ -81,9 +74,7 @@
     "/.well-known/did.json": {
       "get": {
         "summary": "DID document",
-        "tags": [
-          "Feed"
-        ],
+        "tags": ["Feed"],
         "description": "Returns the DID document for did:web resolution. Used as a fallback — production uses did:plc.",
         "responses": {
           "200": {
@@ -122,19 +113,11 @@
                             "example": "https://feed.corgi.network"
                           }
                         },
-                        "required": [
-                          "id",
-                          "type",
-                          "serviceEndpoint"
-                        ]
+                        "required": ["id", "type", "serviceEndpoint"]
                       }
                     }
                   },
-                  "required": [
-                    "@context",
-                    "id",
-                    "service"
-                  ]
+                  "required": ["@context", "id", "service"]
                 }
               }
             }
@@ -145,9 +128,7 @@
     "/xrpc/app.bsky.feed.getFeedSkeleton": {
       "get": {
         "summary": "Get feed skeleton",
-        "tags": [
-          "Feed"
-        ],
+        "tags": ["Feed"],
         "description": "Returns a list of post URIs for the community-governed feed. Called by the Bluesky app. Uses snapshot-based cursors for stable pagination (5-minute TTL).",
         "parameters": [
           {
@@ -197,9 +178,7 @@
                             "example": "at://did:plc:example/app.bsky.feed.post/abc123"
                           }
                         },
-                        "required": [
-                          "post"
-                        ]
+                        "required": ["post"]
                       },
                       "description": "Ordered list of post references"
                     },
@@ -208,9 +187,7 @@
                       "description": "Pagination cursor for the next page (absent on last page)"
                     }
                   },
-                  "required": [
-                    "feed"
-                  ]
+                  "required": ["feed"]
                 }
               }
             }
@@ -235,10 +212,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -249,9 +223,7 @@
     "/xrpc/app.bsky.feed.sendInteractions": {
       "post": {
         "summary": "Send interaction signals",
-        "tags": [
-          "Feed"
-        ],
+        "tags": ["Feed"],
         "description": "Receives user interaction signals (requestMore, requestLess, etc.) from Bluesky clients. Requires a valid JWT in the Authorization header. Stored for analytics and scoring feedback.",
         "requestBody": {
           "required": true,
@@ -280,19 +252,14 @@
                           "maxLength": 512
                         }
                       },
-                      "required": [
-                        "item",
-                        "event"
-                      ],
+                      "required": ["item", "event"],
                       "additionalProperties": false
                     },
                     "minItems": 1,
                     "maxItems": 100
                   }
                 },
-                "required": [
-                  "interactions"
-                ],
+                "required": ["interactions"],
                 "additionalProperties": false
               }
             }
@@ -330,10 +297,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -358,10 +322,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -388,10 +349,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -402,9 +360,7 @@
     "/api/governance/auth/login": {
       "post": {
         "summary": "Login with Bluesky credentials",
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "description": "Authenticate using a Bluesky handle and app password. Returns a session cookie (HttpOnly) and bearer token. Use the cookie for browser-based governance actions, or the bearer token for CLI/MCP clients.",
         "requestBody": {
           "required": true,
@@ -422,10 +378,7 @@
                     "minLength": 1
                   }
                 },
-                "required": [
-                  "handle",
-                  "appPassword"
-                ],
+                "required": ["handle", "appPassword"],
                 "additionalProperties": false
               }
             }
@@ -459,12 +412,7 @@
                       "description": "Session expiration timestamp"
                     }
                   },
-                  "required": [
-                    "success",
-                    "did",
-                    "handle",
-                    "expiresAt"
-                  ]
+                  "required": ["success", "did", "handle", "expiresAt"]
                 }
               }
             }
@@ -489,10 +437,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -517,10 +462,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -547,10 +489,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -575,10 +514,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -589,9 +525,7 @@
     "/api/governance/auth/session": {
       "get": {
         "summary": "Get current session",
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "description": "Returns the authenticated user's session info. Requires a valid session cookie or bearer token.",
         "security": [
           {
@@ -629,12 +563,7 @@
                       "description": "Session expiration timestamp"
                     }
                   },
-                  "required": [
-                    "authenticated",
-                    "did",
-                    "handle",
-                    "expiresAt"
-                  ]
+                  "required": ["authenticated", "did", "handle", "expiresAt"]
                 }
               }
             }
@@ -659,10 +588,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -687,10 +613,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -701,9 +624,7 @@
     "/api/governance/auth/logout": {
       "post": {
         "summary": "Logout and invalidate session",
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "description": "Invalidates the current session and clears the session cookie.",
         "security": [
           {
@@ -730,10 +651,7 @@
                       "example": "Session invalidated"
                     }
                   },
-                  "required": [
-                    "success",
-                    "message"
-                  ]
+                  "required": ["success", "message"]
                 }
               }
             }
@@ -758,10 +676,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -772,9 +687,7 @@
     "/api/governance/vote": {
       "post": {
         "summary": "Submit or update a vote",
-        "tags": [
-          "Governance"
-        ],
+        "tags": ["Governance"],
         "description": "Cast or update your vote for the current epoch. You can vote on algorithm weights, content keywords, topic weights, or any combination. Weights must sum to 1.0. Requires authentication and active subscription.",
         "requestBody": {
           "required": true,
@@ -922,11 +835,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "success",
-                    "epoch_id",
-                    "message"
-                  ]
+                  "required": ["success", "epoch_id", "message"]
                 }
               }
             }
@@ -951,10 +860,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -979,10 +885,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -1007,10 +910,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -1035,10 +935,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -1065,10 +962,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -1093,10 +987,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -1105,9 +996,7 @@
       },
       "get": {
         "summary": "Get your current vote",
-        "tags": [
-          "Governance"
-        ],
+        "tags": ["Governance"],
         "description": "Returns the authenticated user's vote for the current active epoch, including weights, keywords, and topic weights.",
         "security": [
           {
@@ -1210,10 +1099,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -1238,10 +1124,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -1252,9 +1135,7 @@
     "/api/governance/topics": {
       "get": {
         "summary": "List active topics",
-        "tags": [
-          "Topics"
-        ],
+        "tags": ["Topics"],
         "description": "Returns all active topics from the topic catalog with their current community-voted weights. Public endpoint — no authentication required.",
         "responses": {
           "200": {
@@ -1303,10 +1184,7 @@
                       "description": "Number of topic weight voters this epoch"
                     }
                   },
-                  "required": [
-                    "topics",
-                    "voteCount"
-                  ]
+                  "required": ["topics", "voteCount"]
                 }
               }
             }
@@ -1331,10 +1209,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -1345,9 +1220,7 @@
     "/api/governance/weights": {
       "get": {
         "summary": "Get current weights",
-        "tags": [
-          "Governance"
-        ],
+        "tags": ["Governance"],
         "description": "Returns the active epoch's governance weights, vote count, and metadata.",
         "responses": {
           "200": {
@@ -1398,12 +1271,7 @@
                       "nullable": true
                     }
                   },
-                  "required": [
-                    "epoch_id",
-                    "status",
-                    "weights",
-                    "vote_count"
-                  ]
+                  "required": ["epoch_id", "status", "weights", "vote_count"]
                 }
               }
             }
@@ -1428,10 +1296,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -1442,9 +1307,7 @@
     "/api/governance/weights/history": {
       "get": {
         "summary": "Weight history",
-        "tags": [
-          "Governance"
-        ],
+        "tags": ["Governance"],
         "description": "Returns all epochs with their weights, ordered newest first. Useful for timeline visualization of governance changes.",
         "parameters": [
           {
@@ -1522,10 +1385,7 @@
                       "description": "Number of epochs returned"
                     }
                   },
-                  "required": [
-                    "epochs",
-                    "total"
-                  ]
+                  "required": ["epochs", "total"]
                 }
               }
             }
@@ -1550,10 +1410,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -1564,9 +1421,7 @@
     "/api/governance/weights/compare": {
       "get": {
         "summary": "Compare epoch weights",
-        "tags": [
-          "Governance"
-        ],
+        "tags": ["Governance"],
         "description": "Compare weights between two epochs, showing the difference for each component.",
         "parameters": [
           {
@@ -1680,11 +1535,7 @@
                       }
                     }
                   },
-                  "required": [
-                    "epoch1",
-                    "epoch2",
-                    "difference"
-                  ]
+                  "required": ["epoch1", "epoch2", "difference"]
                 }
               }
             }
@@ -1709,10 +1560,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -1737,10 +1585,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -1751,9 +1596,7 @@
     "/api/governance/epochs": {
       "get": {
         "summary": "List epochs",
-        "tags": [
-          "Governance"
-        ],
+        "tags": ["Governance"],
         "description": "Returns a paginated list of governance epochs with weights, vote counts, and content rules. Optionally filter by status.",
         "parameters": [
           {
@@ -1770,11 +1613,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "active",
-                "voting",
-                "closed"
-              ]
+              "enum": ["active", "voting", "closed"]
             },
             "in": "query",
             "name": "status",
@@ -1863,10 +1702,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "epochs",
-                    "total"
-                  ]
+                  "required": ["epochs", "total"]
                 }
               }
             }
@@ -1891,10 +1727,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -1905,9 +1738,7 @@
     "/api/governance/epochs/current": {
       "get": {
         "summary": "Get current epoch",
-        "tags": [
-          "Governance"
-        ],
+        "tags": ["Governance"],
         "description": "Returns the current active or voting epoch with weights, vote/subscriber counts, voting schedule, and content rules.",
         "responses": {
           "200": {
@@ -1994,13 +1825,7 @@
                       }
                     }
                   },
-                  "required": [
-                    "id",
-                    "status",
-                    "weights",
-                    "vote_count",
-                    "subscriber_count"
-                  ]
+                  "required": ["id", "status", "weights", "vote_count", "subscriber_count"]
                 }
               }
             }
@@ -2025,10 +1850,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -2039,9 +1861,7 @@
     "/api/governance/epochs/{id}": {
       "get": {
         "summary": "Get epoch by ID",
-        "tags": [
-          "Governance"
-        ],
+        "tags": ["Governance"],
         "description": "Returns full details for a specific epoch including weights, vote statistics (averages and ranges), and content rules.",
         "parameters": [
           {
@@ -2212,12 +2032,7 @@
                       }
                     }
                   },
-                  "required": [
-                    "id",
-                    "status",
-                    "weights",
-                    "vote_count"
-                  ]
+                  "required": ["id", "status", "weights", "vote_count"]
                 }
               }
             }
@@ -2242,10 +2057,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -2270,10 +2082,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -2284,9 +2093,7 @@
     "/api/governance/polis": {
       "get": {
         "summary": "Polis conversation info",
-        "tags": [
-          "Governance"
-        ],
+        "tags": ["Governance"],
         "description": "Returns Polis conversation info if configured. Currently a placeholder for future deliberation integration.",
         "responses": {
           "200": {
@@ -2318,9 +2125,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "enabled"
-                  ]
+                  "required": ["enabled"]
                 }
               }
             }
@@ -2331,9 +2136,7 @@
     "/api/governance/polis/status": {
       "get": {
         "summary": "Polis integration status",
-        "tags": [
-          "Governance"
-        ],
+        "tags": ["Governance"],
         "description": "Returns the current status of the Polis integration roadmap and planned features.",
         "responses": {
           "200": {
@@ -2365,10 +2168,7 @@
                       }
                     }
                   },
-                  "required": [
-                    "integration",
-                    "features"
-                  ]
+                  "required": ["integration", "features"]
                 }
               }
             }
@@ -2379,9 +2179,7 @@
     "/api/governance/content-rules": {
       "get": {
         "summary": "Get content rules",
-        "tags": [
-          "Governance"
-        ],
+        "tags": ["Governance"],
         "description": "Returns the current epoch's content rules (active keywords) and per-keyword vote statistics. Keywords require 30% voter support to become active.",
         "responses": {
           "200": {
@@ -2463,10 +2261,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -2477,9 +2272,7 @@
     "/api/governance/research-consent": {
       "get": {
         "summary": "Get research consent status",
-        "tags": [
-          "Governance"
-        ],
+        "tags": ["Governance"],
         "description": "Returns the authenticated user's current research consent status. Research consent is separate from TOS — declining does not restrict governance access.",
         "security": [
           {
@@ -2536,10 +2329,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -2564,10 +2354,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -2576,9 +2363,7 @@
       },
       "post": {
         "summary": "Record research consent",
-        "tags": [
-          "Governance"
-        ],
+        "tags": ["Governance"],
         "description": "Record or update the user's research consent decision. Consent changes are logged to the audit trail.",
         "requestBody": {
           "required": true,
@@ -2591,9 +2376,7 @@
                     "type": "boolean"
                   }
                 },
-                "required": [
-                  "consent"
-                ],
+                "required": ["consent"],
                 "additionalProperties": false
               }
             }
@@ -2619,9 +2402,7 @@
                       "type": "boolean"
                     }
                   },
-                  "required": [
-                    "success"
-                  ]
+                  "required": ["success"]
                 }
               }
             }
@@ -2646,10 +2427,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -2674,10 +2452,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -2688,9 +2463,7 @@
     "/api/transparency/post/{uri}": {
       "get": {
         "summary": "Explain post ranking",
-        "tags": [
-          "Transparency"
-        ],
+        "tags": ["Transparency"],
         "description": "Returns a full breakdown of why a post is ranked where it is: all 5 component scores (raw, weight, weighted), current rank, and a counterfactual showing what rank it would have with pure engagement sorting.",
         "parameters": [
           {
@@ -2786,19 +2559,10 @@
                     },
                     "classification_method": {
                       "type": "string",
-                      "enum": [
-                        "keyword",
-                        "embedding"
-                      ]
+                      "enum": ["keyword", "embedding"]
                     }
                   },
-                  "required": [
-                    "post_uri",
-                    "epoch_id",
-                    "total_score",
-                    "rank",
-                    "components"
-                  ]
+                  "required": ["post_uri", "epoch_id", "total_score", "rank", "components"]
                 }
               }
             }
@@ -2823,10 +2587,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -2851,10 +2612,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -2879,10 +2637,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -2893,9 +2648,7 @@
     "/api/transparency/stats": {
       "get": {
         "summary": "Feed statistics",
-        "tags": [
-          "Transparency"
-        ],
+        "tags": ["Transparency"],
         "description": "Returns aggregate statistics for the current feed including epoch weights, scoring metrics (posts scored, unique authors, avg/median bridging), governance info, and optional Gini coefficient.",
         "responses": {
           "200": {
@@ -2992,11 +2745,7 @@
                       }
                     }
                   },
-                  "required": [
-                    "epoch",
-                    "feed_stats",
-                    "governance"
-                  ]
+                  "required": ["epoch", "feed_stats", "governance"]
                 }
               }
             }
@@ -3021,10 +2770,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -3035,9 +2781,7 @@
     "/api/transparency/counterfactual": {
       "get": {
         "summary": "Counterfactual rankings",
-        "tags": [
-          "Transparency"
-        ],
+        "tags": ["Transparency"],
         "description": "\"What if the weights were different?\" Recalculates rankings using stored raw scores with alternate weights. Weights must sum to 1.0.",
         "parameters": [
           {
@@ -3206,12 +2950,7 @@
                       }
                     }
                   },
-                  "required": [
-                    "alternate_weights",
-                    "current_weights",
-                    "posts",
-                    "summary"
-                  ]
+                  "required": ["alternate_weights", "current_weights", "posts", "summary"]
                 }
               }
             }
@@ -3236,10 +2975,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -3264,10 +3000,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -3278,9 +3011,7 @@
     "/api/transparency/audit": {
       "get": {
         "summary": "Governance audit log",
-        "tags": [
-          "Transparency"
-        ],
+        "tags": ["Transparency"],
         "description": "Returns a paginated, append-only audit log of all governance actions. Vote details are redacted to preserve voter privacy (shows counts, not specific votes).",
         "parameters": [
           {
@@ -3378,18 +3109,10 @@
                           "type": "boolean"
                         }
                       },
-                      "required": [
-                        "total",
-                        "limit",
-                        "offset",
-                        "has_more"
-                      ]
+                      "required": ["total", "limit", "offset", "has_more"]
                     }
                   },
-                  "required": [
-                    "entries",
-                    "pagination"
-                  ]
+                  "required": ["entries", "pagination"]
                 }
               }
             }
@@ -3414,10 +3137,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -3442,10 +3162,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -3456,9 +3173,7 @@
     "/api/legal/tos": {
       "get": {
         "summary": "Terms of Service",
-        "tags": [
-          "Legal"
-        ],
+        "tags": ["Legal"],
         "description": "Returns the current Terms of Service document in Markdown format with version info.",
         "responses": {
           "200": {
@@ -3474,10 +3189,7 @@
                     },
                     "document": {
                       "type": "string",
-                      "enum": [
-                        "tos",
-                        "privacy"
-                      ]
+                      "enum": ["tos", "privacy"]
                     },
                     "version": {
                       "type": "string"
@@ -3487,12 +3199,7 @@
                       "format": "date"
                     }
                   },
-                  "required": [
-                    "content",
-                    "document",
-                    "version",
-                    "lastUpdated"
-                  ]
+                  "required": ["content", "document", "version", "lastUpdated"]
                 }
               }
             }
@@ -3517,10 +3224,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -3531,9 +3235,7 @@
     "/api/legal/privacy": {
       "get": {
         "summary": "Privacy Policy",
-        "tags": [
-          "Legal"
-        ],
+        "tags": ["Legal"],
         "description": "Returns the current Privacy Policy document in Markdown format with version info.",
         "responses": {
           "200": {
@@ -3549,10 +3251,7 @@
                     },
                     "document": {
                       "type": "string",
-                      "enum": [
-                        "tos",
-                        "privacy"
-                      ]
+                      "enum": ["tos", "privacy"]
                     },
                     "version": {
                       "type": "string"
@@ -3562,12 +3261,7 @@
                       "format": "date"
                     }
                   },
-                  "required": [
-                    "content",
-                    "document",
-                    "version",
-                    "lastUpdated"
-                  ]
+                  "required": ["content", "document", "version", "lastUpdated"]
                 }
               }
             }
@@ -3592,10 +3286,7 @@
                       "description": "Request correlation ID for debugging"
                     }
                   },
-                  "required": [
-                    "error",
-                    "message"
-                  ]
+                  "required": ["error", "message"]
                 }
               }
             }
@@ -3629,9 +3320,7 @@
     "/health": {
       "get": {
         "summary": "Public health check",
-        "tags": [
-          "Health"
-        ],
+        "tags": ["Health"],
         "description": "Returns a redacted health status (ok or degraded). Does not expose component details.",
         "responses": {
           "200": {
@@ -3643,16 +3332,11 @@
                   "properties": {
                     "status": {
                       "type": "string",
-                      "enum": [
-                        "ok",
-                        "degraded"
-                      ],
+                      "enum": ["ok", "degraded"],
                       "description": "Overall system health"
                     }
                   },
-                  "required": [
-                    "status"
-                  ]
+                  "required": ["status"]
                 }
               }
             }
@@ -3663,9 +3347,7 @@
     "/health/live": {
       "get": {
         "summary": "Liveness probe",
-        "tags": [
-          "Health"
-        ],
+        "tags": ["Health"],
         "description": "Returns 200 if the process is running. Used by Kubernetes liveness probes.",
         "responses": {
           "200": {
@@ -3677,15 +3359,11 @@
                   "properties": {
                     "status": {
                       "type": "string",
-                      "enum": [
-                        "live"
-                      ],
+                      "enum": ["live"],
                       "description": "Process is running"
                     }
                   },
-                  "required": [
-                    "status"
-                  ]
+                  "required": ["status"]
                 }
               }
             }
@@ -3699,14 +3377,10 @@
                   "properties": {
                     "status": {
                       "type": "string",
-                      "enum": [
-                        "not live"
-                      ]
+                      "enum": ["not live"]
                     }
                   },
-                  "required": [
-                    "status"
-                  ]
+                  "required": ["status"]
                 }
               }
             }
@@ -3717,9 +3391,7 @@
     "/health/ready": {
       "get": {
         "summary": "Readiness probe",
-        "tags": [
-          "Health"
-        ],
+        "tags": ["Health"],
         "description": "Returns 200 if database and Redis are healthy. Used by Kubernetes readiness probes.",
         "responses": {
           "200": {
@@ -3731,15 +3403,11 @@
                   "properties": {
                     "status": {
                       "type": "string",
-                      "enum": [
-                        "ready"
-                      ],
+                      "enum": ["ready"],
                       "description": "All critical dependencies healthy"
                     }
                   },
-                  "required": [
-                    "status"
-                  ]
+                  "required": ["status"]
                 }
               }
             }
@@ -3753,14 +3421,10 @@
                   "properties": {
                     "status": {
                       "type": "string",
-                      "enum": [
-                        "not ready"
-                      ]
+                      "enum": ["not ready"]
                     }
                   },
-                  "required": [
-                    "status"
-                  ]
+                  "required": ["status"]
                 }
               }
             }

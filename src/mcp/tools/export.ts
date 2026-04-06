@@ -14,7 +14,7 @@ export function registerExportTools(
   server: McpServer,
   app: FastifyInstance,
   token: string,
-  cookieName: string
+  cookieName: string,
 ): void {
   const cookie = `${cookieName}=${token}`;
 
@@ -34,7 +34,7 @@ export function registerExportTools(
         headers: { cookie },
       });
       return formatInjectResponse(res);
-    }
+    },
   );
 
   server.registerTool(
@@ -43,7 +43,13 @@ export function registerExportTools(
       description: 'Export score decomposition for an epoch as JSON with pagination support',
       inputSchema: {
         epochId: z.string().describe('Epoch ID to export scores for'),
-        limit: z.number().int().min(1).max(5000).optional().describe('Maximum results to return (default 5000)'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(5000)
+          .optional()
+          .describe('Maximum results to return (default 5000)'),
         offset: z.number().int().min(0).optional().describe('Offset for pagination (default 0)'),
       },
     },
@@ -58,7 +64,7 @@ export function registerExportTools(
         headers: { cookie },
       });
       return formatInjectResponse(res);
-    }
+    },
   );
 
   server.registerTool(
@@ -81,6 +87,6 @@ export function registerExportTools(
         headers: { cookie },
       });
       return formatInjectResponse(res);
-    }
+    },
   );
 }

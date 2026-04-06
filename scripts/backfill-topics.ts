@@ -42,7 +42,9 @@ function parseArgs(): { batchSize: number; dryRun: boolean; limit: number | null
 async function main() {
   const { batchSize, dryRun, limit } = parseArgs();
 
-  console.log(`Backfill topics: batchSize=${batchSize}, dryRun=${dryRun}, limit=${limit ?? 'none'}`);
+  console.log(
+    `Backfill topics: batchSize=${batchSize}, dryRun=${dryRun}, limit=${limit ?? 'none'}`,
+  );
 
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -52,7 +54,7 @@ async function main() {
       `SELECT slug, name, description, parent_slug, terms, context_terms, anti_terms
        FROM topic_catalog
        WHERE is_active = TRUE
-       ORDER BY slug`
+       ORDER BY slug`,
     );
 
     const taxonomy: Topic[] = taxonomyResult.rows.map((row: Record<string, unknown>) => ({
@@ -93,7 +95,7 @@ async function main() {
          WHERE topic_vector = '{}' OR topic_vector IS NULL
          ORDER BY created_at DESC
          LIMIT $1`,
-        [currentBatchSize]
+        [currentBatchSize],
       );
 
       if (postsResult.rows.length === 0) {
@@ -120,22 +122,22 @@ async function main() {
 
       if (!dryRun && batchClassified.length > 0) {
         // Batch UPDATE using unnest for efficiency
-        const uris = batchClassified.map(r => r.uri);
-        const vectors = batchClassified.map(r => r.vector);
+        const uris = batchClassified.map((r) => r.uri);
+        const vectors = batchClassified.map((r) => r.vector);
 
         await pool.query(
           `UPDATE posts AS p SET topic_vector = v.vector::jsonb
            FROM (SELECT unnest($1::text[]) AS uri, unnest($2::text[]) AS vector) AS v
            WHERE p.uri = v.uri`,
-          [uris, vectors]
+          [uris, vectors],
         );
       }
 
-      const matchedInBatch = batchClassified.filter(r => r.vector !== '{}').length;
+      const matchedInBatch = batchClassified.filter((r) => r.vector !== '{}').length;
       console.log(
         `Batch ${batchNumber}: ${postsResult.rows.length} posts, ` +
-        `${matchedInBatch} matched topics` +
-        (dryRun ? ' (dry run)' : '')
+          `${matchedInBatch} matched topics` +
+          (dryRun ? ' (dry run)' : ''),
       );
 
       // If we got fewer than batchSize, we've exhausted unclassified posts

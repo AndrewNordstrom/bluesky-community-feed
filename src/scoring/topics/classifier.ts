@@ -45,7 +45,7 @@ interface TopicIndex {
 }
 
 /** Cached pre-processed index keyed by taxonomy array identity. */
-let cachedIndex: WeakMap<Topic[], Map<string, TopicIndex>> = new WeakMap();
+const cachedIndex: WeakMap<Topic[], Map<string, TopicIndex>> = new WeakMap();
 
 /**
  * Build pre-processed lookup structures for each topic.
@@ -53,10 +53,10 @@ let cachedIndex: WeakMap<Topic[], Map<string, TopicIndex>> = new WeakMap();
  * when taxonomy is reloaded.
  */
 function getTopicIndex(taxonomy: Topic[]): Map<string, TopicIndex> {
-  let index = cachedIndex.get(taxonomy);
-  if (index) return index;
+  const existingIndex = cachedIndex.get(taxonomy);
+  if (existingIndex) return existingIndex;
 
-  index = new Map();
+  const index = new Map();
   for (const topic of taxonomy) {
     const entry: TopicIndex = {
       singleWordTerms: new Set<string>(),
@@ -220,7 +220,7 @@ export function classifyPost(text: string, taxonomy: Topic[]): ClassificationRes
     }
 
     // Rule 4: Primary match with context → confirmed topic
-    let rawScore = (primaryHits * 1.0) + (contextHits * 0.5);
+    let rawScore = primaryHits * 1.0 + contextHits * 0.5;
 
     // Rule 5: Multiple primary matches → strong signal bonus
     if (primaryHits >= 3) rawScore *= 1.2;

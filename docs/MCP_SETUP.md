@@ -21,6 +21,7 @@ The server uses **Streamable HTTP** transport in stateless mode. Each request cr
 - `DELETE /mcp` — Returns 405 (stateless mode, no sessions to terminate)
 
 Content negotiation requires:
+
 ```
 Content-Type: application/json
 Accept: application/json, text/event-stream
@@ -30,68 +31,68 @@ Accept: application/json, text/event-stream
 
 ### Governance (10)
 
-| Tool | Description |
-|------|-------------|
-| `get_status` | Overall system status (epoch, scoring, subscribers) |
-| `list_epochs` | List all governance epochs |
-| `get_governance_status` | Current governance state and active weights |
-| `start_voting` | Open a voting period |
-| `close_voting` | Close the active voting period |
-| `trigger_epoch_transition` | Transition to next epoch with aggregated weights |
-| `get_content_rules` | Current include/exclude keyword rules |
-| `update_content_rules` | Modify content filtering keywords |
-| `get_vote_summary` | Vote breakdown for a specific epoch |
-| `preview_aggregation` | Preview trimmed-mean aggregation results |
+| Tool                       | Description                                         |
+| -------------------------- | --------------------------------------------------- |
+| `get_status`               | Overall system status (epoch, scoring, subscribers) |
+| `list_epochs`              | List all governance epochs                          |
+| `get_governance_status`    | Current governance state and active weights         |
+| `start_voting`             | Open a voting period                                |
+| `close_voting`             | Close the active voting period                      |
+| `trigger_epoch_transition` | Transition to next epoch with aggregated weights    |
+| `get_content_rules`        | Current include/exclude keyword rules               |
+| `update_content_rules`     | Modify content filtering keywords                   |
+| `get_vote_summary`         | Vote breakdown for a specific epoch                 |
+| `preview_aggregation`      | Preview trimmed-mean aggregation results            |
 
 ### Feed & Scoring (5)
 
-| Tool | Description |
-|------|-------------|
-| `get_feed_health` | Database, scoring pipeline, Jetstream, and subscriber health |
-| `trigger_rescore` | Trigger immediate scoring pipeline run |
-| `reconnect_jetstream` | Force Jetstream WebSocket reconnection |
-| `explain_post_score` | Detailed score breakdown for a specific post |
-| `counterfactual_analysis` | What-if analysis with hypothetical weights |
+| Tool                      | Description                                                  |
+| ------------------------- | ------------------------------------------------------------ |
+| `get_feed_health`         | Database, scoring pipeline, Jetstream, and subscriber health |
+| `trigger_rescore`         | Trigger immediate scoring pipeline run                       |
+| `reconnect_jetstream`     | Force Jetstream WebSocket reconnection                       |
+| `explain_post_score`      | Detailed score breakdown for a specific post                 |
+| `counterfactual_analysis` | What-if analysis with hypothetical weights                   |
 
 ### Topics (5)
 
-| Tool | Description |
-|------|-------------|
-| `list_topics` | List all topics in the catalog with post counts and weights |
-| `add_topic` | Add a new topic to the voting catalog |
-| `update_topic` | Update a topic's metadata and terms |
-| `get_topic_stats` | Topic classification coverage and distribution summary |
-| `classify_text` | Debug classify arbitrary text against the taxonomy |
+| Tool              | Description                                                 |
+| ----------------- | ----------------------------------------------------------- |
+| `list_topics`     | List all topics in the catalog with post counts and weights |
+| `add_topic`       | Add a new topic to the voting catalog                       |
+| `update_topic`    | Update a topic's metadata and terms                         |
+| `get_topic_stats` | Topic classification coverage and distribution summary      |
+| `classify_text`   | Debug classify arbitrary text against the taxonomy          |
 
 ### Participants (3)
 
-| Tool | Description |
-|------|-------------|
-| `list_participants` | List approved participants (private feed mode) |
-| `add_participant` | Add participant by DID or Bluesky handle |
-| `remove_participant` | Remove approved participant |
+| Tool                 | Description                                    |
+| -------------------- | ---------------------------------------------- |
+| `list_participants`  | List approved participants (private feed mode) |
+| `add_participant`    | Add participant by DID or Bluesky handle       |
+| `remove_participant` | Remove approved participant                    |
 
 ### Export (3)
 
-| Tool | Description |
-|------|-------------|
-| `export_votes` | Anonymized vote data for an epoch (JSON) |
-| `export_scores` | Score decomposition with pagination (JSON) |
-| `export_audit` | Audit log entries with optional date range (JSON) |
+| Tool            | Description                                       |
+| --------------- | ------------------------------------------------- |
+| `export_votes`  | Anonymized vote data for an epoch (JSON)          |
+| `export_scores` | Score decomposition with pagination (JSON)        |
+| `export_audit`  | Audit log entries with optional date range (JSON) |
 
 ### Announcements (2)
 
-| Tool | Description |
-|------|-------------|
-| `list_announcements` | List all announcements |
-| `send_announcement` | Post an announcement (max 280 chars) |
+| Tool                 | Description                          |
+| -------------------- | ------------------------------------ |
+| `list_announcements` | List all announcements               |
+| `send_announcement`  | Post an announcement (max 280 chars) |
 
 ### Reports (2)
 
-| Tool | Description |
-|------|-------------|
-| `generate_feed_report` | Generate the DOCX feed quality report |
-| `get_feed_snapshot` | Return current feed/admin status snapshot JSON |
+| Tool                   | Description                                    |
+| ---------------------- | ---------------------------------------------- |
+| `generate_feed_report` | Generate the DOCX feed quality report          |
+| `get_feed_snapshot`    | Return current feed/admin status snapshot JSON |
 
 ## Client Configuration
 

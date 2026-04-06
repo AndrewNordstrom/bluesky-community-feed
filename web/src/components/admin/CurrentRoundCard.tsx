@@ -83,7 +83,7 @@ export function CurrentRoundCard({ round, onAction, onNotify }: CurrentRoundCard
         'success',
         result.rescoreTriggered
           ? 'Results approved and rescore triggered'
-          : 'Results approved (rescore already in progress)'
+          : 'Results approved (rescore already in progress)',
       );
       await onAction();
     } catch (error) {
@@ -116,7 +116,10 @@ export function CurrentRoundCard({ round, onAction, onNotify }: CurrentRoundCard
       if (pendingAction === 'end-round' || pendingAction === 'force-new-round') {
         const force = pendingAction === 'force-new-round';
         await adminApi.endRound(force);
-        onNotify('success', force ? 'Forced round transition complete' : 'Round ended and new round started');
+        onNotify(
+          'success',
+          force ? 'Forced round transition complete' : 'Round ended and new round started',
+        );
       } else if (pendingAction === 'end-voting') {
         await adminApi.endVoting(true);
         onNotify('success', 'Voting closed. Results are ready for review.');
@@ -151,14 +154,14 @@ export function CurrentRoundCard({ round, onAction, onNotify }: CurrentRoundCard
   const includeAdds =
     phase === 'results' && round.proposedContentRules
       ? round.proposedContentRules.includeKeywords.filter(
-          (keyword) => !round.contentRules.includeKeywords.includes(keyword)
+          (keyword) => !round.contentRules.includeKeywords.includes(keyword),
         )
       : [];
 
   const excludeAdds =
     phase === 'results' && round.proposedContentRules
       ? round.proposedContentRules.excludeKeywords.filter(
-          (keyword) => !round.contentRules.excludeKeywords.includes(keyword)
+          (keyword) => !round.contentRules.excludeKeywords.includes(keyword),
         )
       : [];
 
@@ -175,14 +178,19 @@ export function CurrentRoundCard({ round, onAction, onNotify }: CurrentRoundCard
         <div className="round-meta">
           <span>{round.voteCount} votes</span>
           <span>Started {formatRelative(round.createdAt)}</span>
-          {round.votingEndsAt ? <span>Voting ends {formatRelative(round.votingEndsAt)}</span> : null}
+          {round.votingEndsAt ? (
+            <span>Voting ends {formatRelative(round.votingEndsAt)}</span>
+          ) : null}
         </div>
 
         {phase === 'running' ? (
           <>
             <p className="help-text">
               <span className="help-text-icon">i</span>
-              <span>Algorithm is running with settled settings. Start a voting period when you want new input.</span>
+              <span>
+                Algorithm is running with settled settings. Start a voting period when you want new
+                input.
+              </span>
             </p>
             <div className="action-buttons" style={{ alignItems: 'center' }}>
               <label htmlFor="vote-duration-hours">Voting duration</label>
@@ -196,7 +204,12 @@ export function CurrentRoundCard({ round, onAction, onNotify }: CurrentRoundCard
                 <option value={72}>3 days</option>
                 <option value={168}>1 week</option>
               </select>
-              <button type="button" className="btn-primary" onClick={handleStartVoting} disabled={isSubmitting}>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleStartVoting}
+                disabled={isSubmitting}
+              >
                 {isSubmitting ? 'Starting...' : 'Start New Voting Period'}
               </button>
             </div>

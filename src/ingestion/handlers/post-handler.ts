@@ -8,7 +8,11 @@
 import { db } from '../../db/client.js';
 import { logger } from '../../lib/logger.js';
 import { config } from '../../config.js';
-import { getCurrentContentRules, checkContentRules, hasActiveContentRules } from '../../governance/content-filter.js';
+import {
+  getCurrentContentRules,
+  checkContentRules,
+  hasActiveContentRules,
+} from '../../governance/content-filter.js';
 import { classifyPost, type TopicVector } from '../../scoring/topics/classifier.js';
 import { getTaxonomy } from '../../scoring/topics/taxonomy.js';
 import { checkGovernanceGate, isGovernanceGateReady } from '../governance-gate.js';
@@ -57,7 +61,7 @@ export async function handlePost(
   uri: string,
   authorDid: string,
   cid: string,
-  record: Record<string, unknown>
+  record: Record<string, unknown>,
 ): Promise<void> {
   const postRecord = record as PostRecord;
 
@@ -111,7 +115,11 @@ export async function handlePost(
 
   // Media-without-text gate: skip media posts with insufficient text.
   // Images/videos without meaningful text are usually not on-topic content.
-  if (config.INGESTION_MIN_TEXT_FOR_MEDIA > 0 && hasMedia && (!text || text.trim().length < config.INGESTION_MIN_TEXT_FOR_MEDIA)) {
+  if (
+    config.INGESTION_MIN_TEXT_FOR_MEDIA > 0 &&
+    hasMedia &&
+    (!text || text.trim().length < config.INGESTION_MIN_TEXT_FOR_MEDIA)
+  ) {
     logger.debug({ uri, authorDid }, 'Post skipped: media with insufficient text');
     return;
   }
@@ -125,7 +133,7 @@ export async function handlePost(
       if (!filterResult.passes) {
         logger.debug(
           { uri, reason: filterResult.reason, keyword: filterResult.matchedKeyword },
-          'Post skipped by content filter'
+          'Post skipped by content filter',
         );
         return;
       }
@@ -156,7 +164,7 @@ export async function handlePost(
       if (!gateResult.passes) {
         logger.debug(
           { uri, relevance: gateResult.relevance, authorDid },
-          'Post rejected by governance gate: below community relevance threshold'
+          'Post rejected by governance gate: below community relevance threshold',
         );
         return;
       }
@@ -182,7 +190,10 @@ export async function handlePost(
       // keep the keyword vector. The post already passed the governance gate
       // on keyword matches, so it's worth storing with keyword classification.
     } catch (err) {
-      logger.warn({ err, uri }, 'Embedding classification failed at ingestion — using keyword vector');
+      logger.warn(
+        { err, uri },
+        'Embedding classification failed at ingestion — using keyword vector',
+      );
     }
   }
 
@@ -192,21 +203,33 @@ export async function handlePost(
       `INSERT INTO posts (uri, cid, author_did, text, reply_root, reply_parent, langs, has_media, created_at, topic_vector, embed_url, classification_method)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        ON CONFLICT (uri) DO NOTHING`,
-      [uri, cid, authorDid, text, replyRoot, replyParent, langs, hasMedia, createdAt, JSON.stringify(topicVector), embedUrl, classificationMethod]
+      [
+        uri,
+        cid,
+        authorDid,
+        text,
+        replyRoot,
+        replyParent,
+        langs,
+        hasMedia,
+        createdAt,
+        JSON.stringify(topicVector),
+        embedUrl,
+        classificationMethod,
+      ],
     );
 
     // Initialize engagement counters - UPSERT pattern
-    await db.query(
-      `INSERT INTO post_engagement (post_uri) VALUES ($1) ON CONFLICT DO NOTHING`,
-      [uri]
-    );
+    await db.query(`INSERT INTO post_engagement (post_uri) VALUES ($1) ON CONFLICT DO NOTHING`, [
+      uri,
+    ]);
 
     // If this is a reply, increment reply count on the root post
     if (replyRoot) {
       await db.query(
         `UPDATE post_engagement SET reply_count = reply_count + 1, updated_at = NOW()
          WHERE post_uri = $1`,
-        [replyRoot]
+        [replyRoot],
       );
     }
 

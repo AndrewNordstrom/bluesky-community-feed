@@ -61,8 +61,14 @@ const EpochsQuerySchema = z.object({
 });
 
 const AuditQuerySchema = z.object({
-  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  start_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  end_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   format: FormatSchema,
 });
 
@@ -76,7 +82,9 @@ const ScoresQueryJsonSchema = zodToJsonSchema(ScoresQuerySchema, { target: 'json
 const EngagementQueryJsonSchema = zodToJsonSchema(EngagementQuerySchema, { target: 'jsonSchema7' });
 const EpochsQueryJsonSchema = zodToJsonSchema(EpochsQuerySchema, { target: 'jsonSchema7' });
 const AuditQueryJsonSchema = zodToJsonSchema(AuditQuerySchema, { target: 'jsonSchema7' });
-const FullDatasetQueryJsonSchema = zodToJsonSchema(FullDatasetQuerySchema, { target: 'jsonSchema7' });
+const FullDatasetQueryJsonSchema = zodToJsonSchema(FullDatasetQuerySchema, {
+  target: 'jsonSchema7',
+});
 
 /** Reusable vote record schema fragment. */
 const voteRecordSchema = {
@@ -129,39 +137,72 @@ const scoreRecordSchema = {
 // ============================================================================
 
 const VOTE_COLUMNS = [
-  'anon_voter_id', 'epoch_id',
-  'recency_weight', 'engagement_weight', 'bridging_weight',
-  'source_diversity_weight', 'relevance_weight',
-  'include_keywords', 'exclude_keywords', 'topic_weight_votes', 'voted_at',
+  'anon_voter_id',
+  'epoch_id',
+  'recency_weight',
+  'engagement_weight',
+  'bridging_weight',
+  'source_diversity_weight',
+  'relevance_weight',
+  'include_keywords',
+  'exclude_keywords',
+  'topic_weight_votes',
+  'voted_at',
 ];
 
 const SCORE_COLUMNS = [
-  'post_uri', 'epoch_id',
-  'recency_score', 'engagement_score', 'bridging_score',
-  'source_diversity_score', 'relevance_score',
-  'recency_weight', 'engagement_weight', 'bridging_weight',
-  'source_diversity_weight', 'relevance_weight',
-  'recency_weighted', 'engagement_weighted', 'bridging_weighted',
-  'source_diversity_weighted', 'relevance_weighted',
-  'total_score', 'topic_vector', 'classification_method', 'scored_at',
+  'post_uri',
+  'epoch_id',
+  'recency_score',
+  'engagement_score',
+  'bridging_score',
+  'source_diversity_score',
+  'relevance_score',
+  'recency_weight',
+  'engagement_weight',
+  'bridging_weight',
+  'source_diversity_weight',
+  'relevance_weight',
+  'recency_weighted',
+  'engagement_weighted',
+  'bridging_weighted',
+  'source_diversity_weighted',
+  'relevance_weighted',
+  'total_score',
+  'topic_vector',
+  'classification_method',
+  'scored_at',
 ];
 
 const ENGAGEMENT_COLUMNS = [
-  'post_uri', 'anon_viewer_id', 'epoch_id',
-  'engagement_type', 'position_in_feed', 'served_at', 'engaged_at',
+  'post_uri',
+  'anon_viewer_id',
+  'epoch_id',
+  'engagement_type',
+  'position_in_feed',
+  'served_at',
+  'engaged_at',
 ];
 
 const EPOCH_COLUMNS = [
-  'id', 'status', 'phase',
-  'recency_weight', 'engagement_weight', 'bridging_weight',
-  'source_diversity_weight', 'relevance_weight',
-  'vote_count', 'content_rules', 'topic_weights', 'created_at', 'closed_at',
-  'voting_started_at', 'voting_closed_at',
+  'id',
+  'status',
+  'phase',
+  'recency_weight',
+  'engagement_weight',
+  'bridging_weight',
+  'source_diversity_weight',
+  'relevance_weight',
+  'vote_count',
+  'content_rules',
+  'topic_weights',
+  'created_at',
+  'closed_at',
+  'voting_started_at',
+  'voting_closed_at',
 ];
 
-const AUDIT_COLUMNS = [
-  'id', 'action', 'anon_actor_id', 'epoch_id', 'details', 'created_at',
-];
+const AUDIT_COLUMNS = ['id', 'action', 'anon_actor_id', 'epoch_id', 'details', 'created_at'];
 
 // ============================================================================
 // Helpers
@@ -242,12 +283,8 @@ function mapEpochRow(row: Record<string, unknown>): ExportEpochRecord {
     topic_weights: (row.topic_weights as Record<string, number>) ?? null,
     created_at: (row.created_at as Date).toISOString(),
     closed_at: row.closed_at ? (row.closed_at as Date).toISOString() : null,
-    voting_started_at: row.voting_started_at
-      ? (row.voting_started_at as Date).toISOString()
-      : null,
-    voting_closed_at: row.voting_closed_at
-      ? (row.voting_closed_at as Date).toISOString()
-      : null,
+    voting_started_at: row.voting_started_at ? (row.voting_started_at as Date).toISOString() : null,
+    voting_closed_at: row.voting_closed_at ? (row.voting_closed_at as Date).toISOString() : null,
   };
 }
 
@@ -256,10 +293,7 @@ function mapEpochRow(row: Record<string, unknown>): ExportEpochRecord {
  * that looks like a DID (starts with "did:"). This prevents raw
  * participant identities from leaking in audit log export details.
  */
-function scrubDidsFromDetails(
-  obj: unknown,
-  anonSalt: string
-): unknown {
+function scrubDidsFromDetails(obj: unknown, anonSalt: string): unknown {
   if (typeof obj === 'string') {
     return obj.startsWith('did:') ? anonymizeDid(obj, anonSalt) : obj;
   }
@@ -282,9 +316,7 @@ function mapAuditRow(row: Record<string, unknown>): ExportAuditRecord {
   return {
     id: row.id as number,
     action: row.action as string,
-    anon_actor_id: row.actor_did
-      ? anonymizeDid(row.actor_did as string, salt)
-      : null,
+    anon_actor_id: row.actor_did ? anonymizeDid(row.actor_did as string, salt) : null,
     epoch_id: (row.epoch_id as number) ?? null,
     details: scrubDidsFromDetails(rawDetails, salt) as Record<string, unknown>,
     created_at: (row.created_at as Date).toISOString(),
@@ -292,7 +324,10 @@ function mapAuditRow(row: Record<string, unknown>): ExportAuditRecord {
 }
 
 /** Flatten an export record to an array of values for CSV. */
-function recordToValues(record: Record<string, unknown>, keys: string[]): (string | number | null | boolean)[] {
+function recordToValues(
+  record: Record<string, unknown>,
+  keys: string[],
+): (string | number | null | boolean)[] {
   return keys.map((key) => {
     const val = record[key];
     if (val === null || val === undefined) return null;
@@ -309,38 +344,41 @@ function recordToValues(record: Record<string, unknown>, keys: string[]): (strin
 /** Register research data export routes. */
 export function registerExportRoutes(app: FastifyInstance): void {
   // ── GET /export/votes ──
-  app.get('/export/votes', {
-    schema: {
-      tags: ['Export'],
-      summary: 'Export anonymized votes',
-      description:
-        'Returns anonymized vote records for a given epoch. Only includes votes from subscribers ' +
-        'with research consent. Supports JSON (default) or CSV format.',
-      security: adminSecurity,
-      querystring: VotesQueryJsonSchema,
-      response: {
-        200: {
-          type: 'object',
-          description: 'JSON response (format=json). CSV format returns text/csv file download.',
-          properties: {
-            epoch_id: { type: 'integer' },
-            total: { type: 'integer' },
-            votes: { type: 'array', items: voteRecordSchema },
+  app.get(
+    '/export/votes',
+    {
+      schema: {
+        tags: ['Export'],
+        summary: 'Export anonymized votes',
+        description:
+          'Returns anonymized vote records for a given epoch. Only includes votes from subscribers ' +
+          'with research consent. Supports JSON (default) or CSV format.',
+        security: adminSecurity,
+        querystring: VotesQueryJsonSchema,
+        response: {
+          200: {
+            type: 'object',
+            description: 'JSON response (format=json). CSV format returns text/csv file download.',
+            properties: {
+              epoch_id: { type: 'integer' },
+              total: { type: 'integer' },
+              votes: { type: 'array', items: voteRecordSchema },
+            },
+            required: ['epoch_id', 'total', 'votes'],
           },
-          required: ['epoch_id', 'total', 'votes'],
+          400: ErrorResponseSchema,
         },
-        400: ErrorResponseSchema,
       },
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const parsed = VotesQuerySchema.safeParse(request.query);
-    if (!parsed.success) {
-      throw Errors.VALIDATION_ERROR('Invalid query parameters', parsed.error.flatten());
-    }
-    const { epoch_id, format } = parsed.data;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const parsed = VotesQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        throw Errors.VALIDATION_ERROR('Invalid query parameters', parsed.error.flatten());
+      }
+      const { epoch_id, format } = parsed.data;
 
-    const result = await db.query(
-      `SELECT gv.voter_did, gv.epoch_id, gv.recency_weight, gv.engagement_weight,
+      const result = await db.query(
+        `SELECT gv.voter_did, gv.epoch_id, gv.recency_weight, gv.engagement_weight,
               bridging_weight, source_diversity_weight, relevance_weight,
               include_keywords, exclude_keywords, topic_weight_votes, voted_at
        FROM governance_votes gv
@@ -348,58 +386,62 @@ export function registerExportRoutes(app: FastifyInstance): void {
        WHERE gv.epoch_id = $1
          AND s.research_consent IS TRUE
        ORDER BY gv.voted_at`,
-      [epoch_id]
-    );
+        [epoch_id],
+      );
 
-    const records = result.rows.map(mapVoteRow);
+      const records = result.rows.map(mapVoteRow);
 
-    if (format === 'csv') {
-      const csv = startCsvStream(reply, `votes-epoch-${epoch_id}.csv`, VOTE_COLUMNS);
-      for (const record of records) {
-        csv.writeRow(recordToValues(record as unknown as Record<string, unknown>, VOTE_COLUMNS));
+      if (format === 'csv') {
+        const csv = startCsvStream(reply, `votes-epoch-${epoch_id}.csv`, VOTE_COLUMNS);
+        for (const record of records) {
+          csv.writeRow(recordToValues(record as unknown as Record<string, unknown>, VOTE_COLUMNS));
+        }
+        csv.end();
+        return;
       }
-      csv.end();
-      return;
-    }
 
-    return reply.send({ epoch_id, total: records.length, votes: records });
-  });
+      return reply.send({ epoch_id, total: records.length, votes: records });
+    },
+  );
 
   // ── GET /export/scores ──
-  app.get('/export/scores', {
-    schema: {
-      tags: ['Export'],
-      summary: 'Export score decomposition',
-      description:
-        'Returns full score decomposition (raw, weight, weighted per component) for an epoch. ' +
-        'Paginated. Supports JSON (default) or CSV format. Golden Rule: all components stored.',
-      security: adminSecurity,
-      querystring: ScoresQueryJsonSchema,
-      response: {
-        200: {
-          type: 'object',
-          description: 'JSON response (format=json). CSV format returns text/csv file download.',
-          properties: {
-            epoch_id: { type: 'integer' },
-            total: { type: 'integer' },
-            limit: { type: 'integer' },
-            offset: { type: 'integer' },
-            scores: { type: 'array', items: scoreRecordSchema },
+  app.get(
+    '/export/scores',
+    {
+      schema: {
+        tags: ['Export'],
+        summary: 'Export score decomposition',
+        description:
+          'Returns full score decomposition (raw, weight, weighted per component) for an epoch. ' +
+          'Paginated. Supports JSON (default) or CSV format. Golden Rule: all components stored.',
+        security: adminSecurity,
+        querystring: ScoresQueryJsonSchema,
+        response: {
+          200: {
+            type: 'object',
+            description: 'JSON response (format=json). CSV format returns text/csv file download.',
+            properties: {
+              epoch_id: { type: 'integer' },
+              total: { type: 'integer' },
+              limit: { type: 'integer' },
+              offset: { type: 'integer' },
+              scores: { type: 'array', items: scoreRecordSchema },
+            },
+            required: ['epoch_id', 'total', 'limit', 'offset', 'scores'],
           },
-          required: ['epoch_id', 'total', 'limit', 'offset', 'scores'],
+          400: ErrorResponseSchema,
         },
-        400: ErrorResponseSchema,
       },
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const parsed = ScoresQuerySchema.safeParse(request.query);
-    if (!parsed.success) {
-      throw Errors.VALIDATION_ERROR('Invalid query parameters', parsed.error.flatten());
-    }
-    const { epoch_id, format, limit, offset } = parsed.data;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const parsed = ScoresQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        throw Errors.VALIDATION_ERROR('Invalid query parameters', parsed.error.flatten());
+      }
+      const { epoch_id, format, limit, offset } = parsed.data;
 
-    const result = await db.query(
-      `SELECT ps.post_uri, ps.epoch_id,
+      const result = await db.query(
+        `SELECT ps.post_uri, ps.epoch_id,
               ps.recency_score, ps.engagement_score, ps.bridging_score,
               ps.source_diversity_score, ps.relevance_score,
               ps.recency_weight, ps.engagement_weight, ps.bridging_weight,
@@ -412,296 +454,312 @@ export function registerExportRoutes(app: FastifyInstance): void {
        WHERE ps.epoch_id = $1
        ORDER BY ps.total_score DESC
        LIMIT $2 OFFSET $3`,
-      [epoch_id, limit, offset]
-    );
+        [epoch_id, limit, offset],
+      );
 
-    const records = result.rows.map(mapScoreRow);
+      const records = result.rows.map(mapScoreRow);
 
-    if (format === 'csv') {
-      const csv = startCsvStream(reply, `scores-epoch-${epoch_id}.csv`, SCORE_COLUMNS);
-      for (const record of records) {
-        csv.writeRow(recordToValues(record as unknown as Record<string, unknown>, SCORE_COLUMNS));
+      if (format === 'csv') {
+        const csv = startCsvStream(reply, `scores-epoch-${epoch_id}.csv`, SCORE_COLUMNS);
+        for (const record of records) {
+          csv.writeRow(recordToValues(record as unknown as Record<string, unknown>, SCORE_COLUMNS));
+        }
+        csv.end();
+        return;
       }
-      csv.end();
-      return;
-    }
 
-    return reply.send({ epoch_id, total: records.length, limit, offset, scores: records });
-  });
+      return reply.send({ epoch_id, total: records.length, limit, offset, scores: records });
+    },
+  );
 
   // ── GET /export/engagement ──
-  app.get('/export/engagement', {
-    schema: {
-      tags: ['Export'],
-      summary: 'Export engagement attributions',
-      description:
-        'Returns anonymized engagement attribution data for an epoch. Only includes records ' +
-        'from subscribers with research consent. Supports JSON (default) or CSV format.',
-      security: adminSecurity,
-      querystring: EngagementQueryJsonSchema,
-      response: {
-        200: {
-          type: 'object',
-          description: 'JSON response (format=json). CSV format returns text/csv file download.',
-          properties: {
-            epoch_id: { type: 'integer' },
-            total: { type: 'integer' },
-            engagement: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  post_uri: { type: 'string' },
-                  anon_viewer_id: { type: 'string' },
-                  epoch_id: { type: 'integer' },
-                  engagement_type: { type: 'string', nullable: true },
-                  position_in_feed: { type: 'integer', nullable: true },
-                  served_at: { type: 'string', format: 'date-time' },
-                  engaged_at: { type: 'string', format: 'date-time', nullable: true },
+  app.get(
+    '/export/engagement',
+    {
+      schema: {
+        tags: ['Export'],
+        summary: 'Export engagement attributions',
+        description:
+          'Returns anonymized engagement attribution data for an epoch. Only includes records ' +
+          'from subscribers with research consent. Supports JSON (default) or CSV format.',
+        security: adminSecurity,
+        querystring: EngagementQueryJsonSchema,
+        response: {
+          200: {
+            type: 'object',
+            description: 'JSON response (format=json). CSV format returns text/csv file download.',
+            properties: {
+              epoch_id: { type: 'integer' },
+              total: { type: 'integer' },
+              engagement: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    post_uri: { type: 'string' },
+                    anon_viewer_id: { type: 'string' },
+                    epoch_id: { type: 'integer' },
+                    engagement_type: { type: 'string', nullable: true },
+                    position_in_feed: { type: 'integer', nullable: true },
+                    served_at: { type: 'string', format: 'date-time' },
+                    engaged_at: { type: 'string', format: 'date-time', nullable: true },
+                  },
                 },
               },
             },
+            required: ['epoch_id', 'total', 'engagement'],
           },
-          required: ['epoch_id', 'total', 'engagement'],
+          400: ErrorResponseSchema,
         },
-        400: ErrorResponseSchema,
       },
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const parsed = EngagementQuerySchema.safeParse(request.query);
-    if (!parsed.success) {
-      throw Errors.VALIDATION_ERROR('Invalid query parameters', parsed.error.flatten());
-    }
-    const { epoch_id, format } = parsed.data;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const parsed = EngagementQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        throw Errors.VALIDATION_ERROR('Invalid query parameters', parsed.error.flatten());
+      }
+      const { epoch_id, format } = parsed.data;
 
-    const result = await db.query(
-      `SELECT ea.post_uri, ea.viewer_did, ea.epoch_id, ea.engagement_type,
+      const result = await db.query(
+        `SELECT ea.post_uri, ea.viewer_did, ea.epoch_id, ea.engagement_type,
               position_in_feed, served_at, engaged_at
        FROM engagement_attributions ea
        JOIN subscribers s ON s.did = ea.viewer_did
        WHERE ea.epoch_id = $1
          AND s.research_consent IS TRUE
        ORDER BY ea.served_at`,
-      [epoch_id]
-    );
+        [epoch_id],
+      );
 
-    const records = result.rows.map(mapEngagementRow);
+      const records = result.rows.map(mapEngagementRow);
 
-    if (format === 'csv') {
-      const csv = startCsvStream(reply, `engagement-epoch-${epoch_id}.csv`, ENGAGEMENT_COLUMNS);
-      for (const record of records) {
-        csv.writeRow(recordToValues(record as unknown as Record<string, unknown>, ENGAGEMENT_COLUMNS));
+      if (format === 'csv') {
+        const csv = startCsvStream(reply, `engagement-epoch-${epoch_id}.csv`, ENGAGEMENT_COLUMNS);
+        for (const record of records) {
+          csv.writeRow(
+            recordToValues(record as unknown as Record<string, unknown>, ENGAGEMENT_COLUMNS),
+          );
+        }
+        csv.end();
+        return;
       }
-      csv.end();
-      return;
-    }
 
-    return reply.send({ epoch_id, total: records.length, engagement: records });
-  });
+      return reply.send({ epoch_id, total: records.length, engagement: records });
+    },
+  );
 
   // ── GET /export/epochs ──
-  app.get('/export/epochs', {
-    schema: {
-      tags: ['Export'],
-      summary: 'Export epoch metadata',
-      description:
-        'Returns metadata for all governance epochs including weights, vote counts, content rules, ' +
-        'and topic weights. Supports JSON (default) or CSV format.',
-      security: adminSecurity,
-      querystring: EpochsQueryJsonSchema,
-      response: {
-        200: {
-          type: 'object',
-          description: 'JSON response (format=json). CSV format returns text/csv file download.',
-          properties: {
-            total: { type: 'integer' },
-            epochs: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'integer' },
-                  status: { type: 'string' },
-                  phase: { type: 'string', nullable: true },
-                  recency_weight: { type: 'number' },
-                  engagement_weight: { type: 'number' },
-                  bridging_weight: { type: 'number' },
-                  source_diversity_weight: { type: 'number' },
-                  relevance_weight: { type: 'number' },
-                  vote_count: { type: 'integer' },
-                  content_rules: { type: 'object', additionalProperties: true, nullable: true },
-                  topic_weights: { type: 'object', additionalProperties: true, nullable: true },
-                  created_at: { type: 'string', format: 'date-time' },
-                  closed_at: { type: 'string', format: 'date-time', nullable: true },
-                  voting_started_at: { type: 'string', format: 'date-time', nullable: true },
-                  voting_closed_at: { type: 'string', format: 'date-time', nullable: true },
+  app.get(
+    '/export/epochs',
+    {
+      schema: {
+        tags: ['Export'],
+        summary: 'Export epoch metadata',
+        description:
+          'Returns metadata for all governance epochs including weights, vote counts, content rules, ' +
+          'and topic weights. Supports JSON (default) or CSV format.',
+        security: adminSecurity,
+        querystring: EpochsQueryJsonSchema,
+        response: {
+          200: {
+            type: 'object',
+            description: 'JSON response (format=json). CSV format returns text/csv file download.',
+            properties: {
+              total: { type: 'integer' },
+              epochs: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'integer' },
+                    status: { type: 'string' },
+                    phase: { type: 'string', nullable: true },
+                    recency_weight: { type: 'number' },
+                    engagement_weight: { type: 'number' },
+                    bridging_weight: { type: 'number' },
+                    source_diversity_weight: { type: 'number' },
+                    relevance_weight: { type: 'number' },
+                    vote_count: { type: 'integer' },
+                    content_rules: { type: 'object', additionalProperties: true, nullable: true },
+                    topic_weights: { type: 'object', additionalProperties: true, nullable: true },
+                    created_at: { type: 'string', format: 'date-time' },
+                    closed_at: { type: 'string', format: 'date-time', nullable: true },
+                    voting_started_at: { type: 'string', format: 'date-time', nullable: true },
+                    voting_closed_at: { type: 'string', format: 'date-time', nullable: true },
+                  },
                 },
               },
             },
+            required: ['total', 'epochs'],
           },
-          required: ['total', 'epochs'],
+          400: ErrorResponseSchema,
         },
-        400: ErrorResponseSchema,
       },
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const parsed = EpochsQuerySchema.safeParse(request.query);
-    if (!parsed.success) {
-      throw Errors.VALIDATION_ERROR('Invalid query parameters', parsed.error.flatten());
-    }
-    const { format } = parsed.data;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const parsed = EpochsQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        throw Errors.VALIDATION_ERROR('Invalid query parameters', parsed.error.flatten());
+      }
+      const { format } = parsed.data;
 
-    const result = await db.query(
-      `SELECT id, status, phase,
+      const result = await db.query(
+        `SELECT id, status, phase,
               recency_weight, engagement_weight, bridging_weight,
               source_diversity_weight, relevance_weight,
               vote_count, content_rules, topic_weights, created_at, closed_at,
               voting_started_at, voting_closed_at
        FROM governance_epochs
-       ORDER BY id DESC`
-    );
+       ORDER BY id DESC`,
+      );
 
-    const records = result.rows.map(mapEpochRow);
+      const records = result.rows.map(mapEpochRow);
 
-    if (format === 'csv') {
-      const csv = startCsvStream(reply, 'epochs.csv', EPOCH_COLUMNS);
-      for (const record of records) {
-        csv.writeRow(recordToValues(record as unknown as Record<string, unknown>, EPOCH_COLUMNS));
+      if (format === 'csv') {
+        const csv = startCsvStream(reply, 'epochs.csv', EPOCH_COLUMNS);
+        for (const record of records) {
+          csv.writeRow(recordToValues(record as unknown as Record<string, unknown>, EPOCH_COLUMNS));
+        }
+        csv.end();
+        return;
       }
-      csv.end();
-      return;
-    }
 
-    return reply.send({ total: records.length, epochs: records });
-  });
+      return reply.send({ total: records.length, epochs: records });
+    },
+  );
 
   // ── GET /export/audit ──
-  app.get('/export/audit', {
-    schema: {
-      tags: ['Export'],
-      summary: 'Export audit log',
-      description:
-        'Returns anonymized governance audit log entries with optional date range filtering. ' +
-        'DIDs are scrubbed from details. Supports JSON (default) or CSV format.',
-      security: adminSecurity,
-      querystring: AuditQueryJsonSchema,
-      response: {
-        200: {
-          type: 'object',
-          description: 'JSON response (format=json). CSV format returns text/csv file download.',
-          properties: {
-            total: { type: 'integer' },
-            audit: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'integer' },
-                  action: { type: 'string' },
-                  anon_actor_id: { type: 'string', nullable: true },
-                  epoch_id: { type: 'integer', nullable: true },
-                  details: { type: 'object', additionalProperties: true },
-                  created_at: { type: 'string', format: 'date-time' },
+  app.get(
+    '/export/audit',
+    {
+      schema: {
+        tags: ['Export'],
+        summary: 'Export audit log',
+        description:
+          'Returns anonymized governance audit log entries with optional date range filtering. ' +
+          'DIDs are scrubbed from details. Supports JSON (default) or CSV format.',
+        security: adminSecurity,
+        querystring: AuditQueryJsonSchema,
+        response: {
+          200: {
+            type: 'object',
+            description: 'JSON response (format=json). CSV format returns text/csv file download.',
+            properties: {
+              total: { type: 'integer' },
+              audit: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'integer' },
+                    action: { type: 'string' },
+                    anon_actor_id: { type: 'string', nullable: true },
+                    epoch_id: { type: 'integer', nullable: true },
+                    details: { type: 'object', additionalProperties: true },
+                    created_at: { type: 'string', format: 'date-time' },
+                  },
                 },
               },
             },
+            required: ['total', 'audit'],
           },
-          required: ['total', 'audit'],
+          400: ErrorResponseSchema,
         },
-        400: ErrorResponseSchema,
       },
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const parsed = AuditQuerySchema.safeParse(request.query);
-    if (!parsed.success) {
-      throw Errors.VALIDATION_ERROR('Invalid query parameters', parsed.error.flatten());
-    }
-    const { start_date, end_date, format } = parsed.data;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const parsed = AuditQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        throw Errors.VALIDATION_ERROR('Invalid query parameters', parsed.error.flatten());
+      }
+      const { start_date, end_date, format } = parsed.data;
 
-    const conditions: string[] = [];
-    const params: unknown[] = [];
-    let paramIdx = 1;
+      const conditions: string[] = [];
+      const params: unknown[] = [];
+      let paramIdx = 1;
 
-    if (start_date) {
-      conditions.push(`created_at >= $${paramIdx}::date`);
-      params.push(start_date);
-      paramIdx++;
-    }
-    if (end_date) {
-      conditions.push(`created_at < ($${paramIdx}::date + interval '1 day')`);
-      params.push(end_date);
-      paramIdx++;
-    }
+      if (start_date) {
+        conditions.push(`created_at >= $${paramIdx}::date`);
+        params.push(start_date);
+        paramIdx++;
+      }
+      if (end_date) {
+        conditions.push(`created_at < ($${paramIdx}::date + interval '1 day')`);
+        params.push(end_date);
+        paramIdx++;
+      }
 
-    const whereClause = conditions.length > 0
-      ? `WHERE ${conditions.join(' AND ')}`
-      : '';
+      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    const result = await db.query(
-      `SELECT id, action, actor_did, epoch_id, details, created_at
+      const result = await db.query(
+        `SELECT id, action, actor_did, epoch_id, details, created_at
        FROM governance_audit_log
        ${whereClause}
        ORDER BY created_at DESC`,
-      params
-    );
+        params,
+      );
 
-    const records = result.rows.map(mapAuditRow);
+      const records = result.rows.map(mapAuditRow);
 
-    if (format === 'csv') {
-      const csv = startCsvStream(reply, 'audit-log.csv', AUDIT_COLUMNS);
-      for (const record of records) {
-        csv.writeRow(recordToValues(record as unknown as Record<string, unknown>, AUDIT_COLUMNS));
+      if (format === 'csv') {
+        const csv = startCsvStream(reply, 'audit-log.csv', AUDIT_COLUMNS);
+        for (const record of records) {
+          csv.writeRow(recordToValues(record as unknown as Record<string, unknown>, AUDIT_COLUMNS));
+        }
+        csv.end();
+        return;
       }
-      csv.end();
-      return;
-    }
 
-    return reply.send({ total: records.length, audit: records });
-  });
+      return reply.send({ total: records.length, audit: records });
+    },
+  );
 
   // ── GET /export/full-dataset ──
-  app.get('/export/full-dataset', {
-    schema: {
-      tags: ['Export'],
-      summary: 'Download full dataset as ZIP',
-      description:
-        'Generates and downloads a ZIP archive containing all anonymized data for an epoch: ' +
-        'votes.csv, scores.csv, engagement.csv, epoch_metadata.json, topics/catalog.json, ' +
-        'and topics/community-weights.json.',
-      security: adminSecurity,
-      querystring: FullDatasetQueryJsonSchema,
-      produces: ['application/zip'],
-      response: {
-        200: {
-          type: 'string',
-          format: 'binary',
-          description: 'ZIP archive containing CSV and JSON files for the epoch',
+  app.get(
+    '/export/full-dataset',
+    {
+      schema: {
+        tags: ['Export'],
+        summary: 'Download full dataset as ZIP',
+        description:
+          'Generates and downloads a ZIP archive containing all anonymized data for an epoch: ' +
+          'votes.csv, scores.csv, engagement.csv, epoch_metadata.json, topics/catalog.json, ' +
+          'and topics/community-weights.json.',
+        security: adminSecurity,
+        querystring: FullDatasetQueryJsonSchema,
+        produces: ['application/zip'],
+        response: {
+          200: {
+            type: 'string',
+            format: 'binary',
+            description: 'ZIP archive containing CSV and JSON files for the epoch',
+          },
+          400: ErrorResponseSchema,
         },
-        400: ErrorResponseSchema,
       },
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const parsed = FullDatasetQuerySchema.safeParse(request.query);
-    if (!parsed.success) {
-      throw Errors.VALIDATION_ERROR('Invalid query parameters', parsed.error.flatten());
-    }
-    const { epoch_id } = parsed.data;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const parsed = FullDatasetQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        throw Errors.VALIDATION_ERROR('Invalid query parameters', parsed.error.flatten());
+      }
+      const { epoch_id } = parsed.data;
 
-    logger.info({ epoch_id }, 'Generating full dataset export');
+      logger.info({ epoch_id }, 'Generating full dataset export');
 
-    // Hijack the response to bypass Fastify serialization
-    reply.hijack();
-    reply.raw.writeHead(200, {
-      'Content-Type': 'application/zip',
-      'Content-Disposition': `attachment; filename="epoch-${epoch_id}-dataset.zip"`,
-    });
+      // Hijack the response to bypass Fastify serialization
+      reply.hijack();
+      reply.raw.writeHead(200, {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="epoch-${epoch_id}-dataset.zip"`,
+      });
 
-    const archive = archiver('zip', { zlib: { level: 6 } });
-    archive.pipe(reply.raw);
+      const archive = archiver('zip', { zlib: { level: 6 } });
+      archive.pipe(reply.raw);
 
-    // 1. Votes CSV
-    const votes = await db.query(
-      `SELECT gv.voter_did, gv.epoch_id, gv.recency_weight, gv.engagement_weight,
+      // 1. Votes CSV
+      const votes = await db.query(
+        `SELECT gv.voter_did, gv.epoch_id, gv.recency_weight, gv.engagement_weight,
               bridging_weight, source_diversity_weight, relevance_weight,
               include_keywords, exclude_keywords, topic_weight_votes, voted_at
        FROM governance_votes gv
@@ -709,18 +767,14 @@ export function registerExportRoutes(app: FastifyInstance): void {
        WHERE gv.epoch_id = $1
          AND s.research_consent IS TRUE
        ORDER BY gv.voted_at`,
-      [epoch_id]
-    );
-    const votesCsv = buildCsvString(
-      VOTE_COLUMNS,
-      votes.rows.map(mapVoteRow),
-      VOTE_COLUMNS
-    );
-    archive.append(votesCsv, { name: 'votes.csv' });
+        [epoch_id],
+      );
+      const votesCsv = buildCsvString(VOTE_COLUMNS, votes.rows.map(mapVoteRow), VOTE_COLUMNS);
+      archive.append(votesCsv, { name: 'votes.csv' });
 
-    // 2. Scores CSV (all rows for this epoch, chunked if needed)
-    const scores = await db.query(
-      `SELECT ps.post_uri, ps.epoch_id,
+      // 2. Scores CSV (all rows for this epoch, chunked if needed)
+      const scores = await db.query(
+        `SELECT ps.post_uri, ps.epoch_id,
               ps.recency_score, ps.engagement_score, ps.bridging_score,
               ps.source_diversity_score, ps.relevance_score,
               ps.recency_weight, ps.engagement_weight, ps.bridging_weight,
@@ -731,80 +785,77 @@ export function registerExportRoutes(app: FastifyInstance): void {
        FROM post_scores ps
        LEFT JOIN posts p ON ps.post_uri = p.uri
        WHERE ps.epoch_id = $1 ORDER BY ps.total_score DESC`,
-      [epoch_id]
-    );
-    const scoresCsv = buildCsvString(
-      SCORE_COLUMNS,
-      scores.rows.map(mapScoreRow),
-      SCORE_COLUMNS
-    );
-    archive.append(scoresCsv, { name: 'scores.csv' });
+        [epoch_id],
+      );
+      const scoresCsv = buildCsvString(SCORE_COLUMNS, scores.rows.map(mapScoreRow), SCORE_COLUMNS);
+      archive.append(scoresCsv, { name: 'scores.csv' });
 
-    // 3. Engagement CSV
-    const engagement = await db.query(
-      `SELECT ea.post_uri, ea.viewer_did, ea.epoch_id, ea.engagement_type,
+      // 3. Engagement CSV
+      const engagement = await db.query(
+        `SELECT ea.post_uri, ea.viewer_did, ea.epoch_id, ea.engagement_type,
               position_in_feed, served_at, engaged_at
        FROM engagement_attributions ea
        JOIN subscribers s ON s.did = ea.viewer_did
        WHERE ea.epoch_id = $1
          AND s.research_consent IS TRUE
        ORDER BY ea.served_at`,
-      [epoch_id]
-    );
-    const engagementCsv = buildCsvString(
-      ENGAGEMENT_COLUMNS,
-      engagement.rows.map(mapEngagementRow),
-      ENGAGEMENT_COLUMNS
-    );
-    archive.append(engagementCsv, { name: 'engagement.csv' });
+        [epoch_id],
+      );
+      const engagementCsv = buildCsvString(
+        ENGAGEMENT_COLUMNS,
+        engagement.rows.map(mapEngagementRow),
+        ENGAGEMENT_COLUMNS,
+      );
+      archive.append(engagementCsv, { name: 'engagement.csv' });
 
-    // 4. Epoch metadata JSON
-    const epoch = await db.query(
-      `SELECT id, status, phase,
+      // 4. Epoch metadata JSON
+      const epoch = await db.query(
+        `SELECT id, status, phase,
               recency_weight, engagement_weight, bridging_weight,
               source_diversity_weight, relevance_weight,
               vote_count, content_rules, topic_weights, created_at, closed_at,
               voting_started_at, voting_closed_at
        FROM governance_epochs WHERE id = $1`,
-      [epoch_id]
-    );
-    const epochData = epoch.rows.length > 0 ? mapEpochRow(epoch.rows[0]) : null;
-    archive.append(JSON.stringify(epochData, null, 2), { name: 'epoch_metadata.json' });
+        [epoch_id],
+      );
+      const epochData = epoch.rows.length > 0 ? mapEpochRow(epoch.rows[0]) : null;
+      archive.append(JSON.stringify(epochData, null, 2), { name: 'epoch_metadata.json' });
 
-    // 5. Topic catalog JSON
-    const topicCatalog = await db.query(
-      `SELECT slug, name, description, parent_slug, terms, context_terms,
+      // 5. Topic catalog JSON
+      const topicCatalog = await db.query(
+        `SELECT slug, name, description, parent_slug, terms, context_terms,
               anti_terms, is_active, created_at
-       FROM topic_catalog ORDER BY slug`
-    );
-    const topicRecords = topicCatalog.rows.map((row: Record<string, unknown>) => ({
-      slug: row.slug,
-      name: row.name,
-      description: row.description ?? null,
-      parent_slug: row.parent_slug ?? null,
-      terms: row.terms ?? [],
-      context_terms: row.context_terms ?? [],
-      anti_terms: row.anti_terms ?? [],
-      is_active: row.is_active,
-      created_at: row.created_at instanceof Date
-        ? row.created_at.toISOString()
-        : row.created_at,
-    }));
-    archive.append(JSON.stringify(topicRecords, null, 2), { name: 'topics/catalog.json' });
+       FROM topic_catalog ORDER BY slug`,
+      );
+      const topicRecords = topicCatalog.rows.map((row: Record<string, unknown>) => ({
+        slug: row.slug,
+        name: row.name,
+        description: row.description ?? null,
+        parent_slug: row.parent_slug ?? null,
+        terms: row.terms ?? [],
+        context_terms: row.context_terms ?? [],
+        anti_terms: row.anti_terms ?? [],
+        is_active: row.is_active,
+        created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+      }));
+      archive.append(JSON.stringify(topicRecords, null, 2), { name: 'topics/catalog.json' });
 
-    // 6. Topic community weights per epoch
-    const topicWeights = await db.query(
-      `SELECT id, topic_weights FROM governance_epochs
-       WHERE topic_weights IS NOT NULL ORDER BY id`
-    );
-    const weightHistory = topicWeights.rows.map((row: Record<string, unknown>) => ({
-      epoch_id: row.id,
-      topic_weights: row.topic_weights,
-    }));
-    archive.append(JSON.stringify(weightHistory, null, 2), { name: 'topics/community-weights.json' });
+      // 6. Topic community weights per epoch
+      const topicWeights = await db.query(
+        `SELECT id, topic_weights FROM governance_epochs
+       WHERE topic_weights IS NOT NULL ORDER BY id`,
+      );
+      const weightHistory = topicWeights.rows.map((row: Record<string, unknown>) => ({
+        epoch_id: row.id,
+        topic_weights: row.topic_weights,
+      }));
+      archive.append(JSON.stringify(weightHistory, null, 2), {
+        name: 'topics/community-weights.json',
+      });
 
-    await archive.finalize();
-  });
+      await archive.finalize();
+    },
+  );
 
   logger.info('Export routes registered');
 }
@@ -813,16 +864,12 @@ export function registerExportRoutes(app: FastifyInstance): void {
  * Build a complete CSV string from records (for ZIP bundling).
  * Unlike startCsvStream, this returns a string instead of streaming.
  */
-function buildCsvString<T extends object>(
-  columns: string[],
-  records: T[],
-  keys: string[]
-): string {
+function buildCsvString<T extends object>(columns: string[], records: T[], keys: string[]): string {
   const header = columns.join(',');
   const rows = records.map((record) =>
     recordToValues(record as unknown as Record<string, unknown>, keys)
       .map(csvEscapeValue)
-      .join(',')
+      .join(','),
   );
   return '\ufeff' + header + '\n' + rows.join('\n') + '\n';
 }

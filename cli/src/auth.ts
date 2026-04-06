@@ -23,7 +23,7 @@ interface SessionData {
 export async function login(
   handle: string,
   appPassword: string,
-  config: CliConfig
+  config: CliConfig,
 ): Promise<string> {
   const res = await fetch(`${config.serverUrl}/api/governance/auth/login`, {
     method: 'POST',

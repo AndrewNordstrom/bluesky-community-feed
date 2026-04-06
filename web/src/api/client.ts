@@ -2,7 +2,8 @@ import axios from 'axios';
 import type { GovernanceWeights } from '../components/WeightSliders';
 
 // API base URL - defaults to same origin in production, localhost in dev
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:3000');
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:3000');
 
 // Create axios instance
 export const api = axios.create({
@@ -128,7 +129,7 @@ export const voteApi = {
   submitVote: async (
     weights: GovernanceWeights | null,
     contentVote?: ContentVote,
-    topicWeights?: Record<string, number> | null
+    topicWeights?: Record<string, number> | null,
   ): Promise<VoteResponse> => {
     const payload: Record<string, unknown> = {};
 
@@ -425,7 +426,7 @@ export interface CounterfactualResponse {
 export const transparencyApi = {
   getPostExplanation: async (uri: string): Promise<PostExplanationResponse> => {
     const response = await api.get<PostExplanationResponse>(
-      `/api/transparency/post/${encodeURIComponent(uri)}`
+      `/api/transparency/post/${encodeURIComponent(uri)}`,
     );
     return response.data;
   },
@@ -437,7 +438,7 @@ export const transparencyApi = {
 
   getCounterfactual: async (
     weights: GovernanceWeights,
-    limit = 50
+    limit = 50,
   ): Promise<CounterfactualResponse> => {
     const response = await api.get<CounterfactualResponse>('/api/transparency/counterfactual', {
       params: {
@@ -452,11 +453,13 @@ export const transparencyApi = {
     return response.data;
   },
 
-  getAuditLog: async (options: {
-    limit?: number;
-    offset?: number;
-    action?: string;
-  } = {}): Promise<AuditLogResponse> => {
+  getAuditLog: async (
+    options: {
+      limit?: number;
+      offset?: number;
+      action?: string;
+    } = {},
+  ): Promise<AuditLogResponse> => {
     const response = await api.get<AuditLogResponse>('/api/transparency/audit', {
       params: options,
     });

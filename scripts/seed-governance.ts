@@ -18,11 +18,11 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const DEFAULT_WEIGHTS = {
-  recency: 0.30,
+  recency: 0.3,
   engagement: 0.25,
-  bridging: 0.20,
+  bridging: 0.2,
   source_diversity: 0.15,
-  relevance: 0.10,
+  relevance: 0.1,
 };
 
 /**
@@ -35,9 +35,20 @@ const DEFAULT_WEIGHTS = {
 const DEFAULT_CONTENT_RULES = {
   includeKeywords: [] as string[],
   excludeKeywords: [
-    'spam', 'nsfw', 'onlyfans', 'porn', 'hentai', 'xxx',
-    'erotic', 'bdsm', 'fetish', 'kink', 'bondage', 'chastity',
-    'nude', 'nudity',
+    'spam',
+    'nsfw',
+    'onlyfans',
+    'porn',
+    'hentai',
+    'xxx',
+    'erotic',
+    'bdsm',
+    'fetish',
+    'kink',
+    'bondage',
+    'chastity',
+    'nude',
+    'nudity',
   ],
 };
 
@@ -69,7 +80,7 @@ async function seedGovernance(): Promise<void> {
         DEFAULT_WEIGHTS.source_diversity,
         DEFAULT_WEIGHTS.relevance,
         JSON.stringify(DEFAULT_CONTENT_RULES),
-      ]
+      ],
     );
 
     const epochId = epochResult.rows[0].id;
@@ -84,7 +95,7 @@ async function seedGovernance(): Promise<void> {
           weights: DEFAULT_WEIGHTS,
           reason: 'Initial bootstrap - default weights',
         }),
-      ]
+      ],
     );
 
     console.log(`Created governance epoch ${epochId} with weights:`);

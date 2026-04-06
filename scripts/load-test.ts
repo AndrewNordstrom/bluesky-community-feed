@@ -25,7 +25,8 @@ const P95_TARGET_MS = parseInt(getArg('target', '50'), 10);
 
 // You'll need to update this with your actual feed URI
 // Format: at://{publisher_did}/app.bsky.feed.generator/{rkey}
-const FEED_URI = process.env.FEED_URI || 'at://did:plc:example/app.bsky.feed.generator/community-gov';
+const FEED_URI =
+  process.env.FEED_URI || 'at://did:plc:example/app.bsky.feed.generator/community-gov';
 
 async function runLoadTest() {
   console.log('='.repeat(60));
@@ -48,7 +49,7 @@ async function runLoadTest() {
     connections: CONNECTIONS,
     duration: DURATION,
     headers: {
-      'Accept': 'application/json',
+      Accept: 'application/json',
     },
   });
 
@@ -85,10 +86,14 @@ async function runLoadTest() {
   // Evaluate pass/fail
   const passed = result.latency.p95 <= P95_TARGET_MS;
   if (passed) {
-    console.log(`\n✅ PASS: p95 latency (${result.latency.p95}ms) is within target (<${P95_TARGET_MS}ms)`);
+    console.log(
+      `\n✅ PASS: p95 latency (${result.latency.p95}ms) is within target (<${P95_TARGET_MS}ms)`,
+    );
     process.exit(0);
   } else {
-    console.log(`\n❌ FAIL: p95 latency (${result.latency.p95}ms) exceeds target (<${P95_TARGET_MS}ms)`);
+    console.log(
+      `\n❌ FAIL: p95 latency (${result.latency.p95}ms) exceeds target (<${P95_TARGET_MS}ms)`,
+    );
     process.exit(1);
   }
 }

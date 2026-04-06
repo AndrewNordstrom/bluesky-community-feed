@@ -72,16 +72,10 @@ export function __resetPipelineState(): void {
  */
 export async function runScoringPipeline(): Promise<void> {
   const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(
-      () => reject(new Error('Scoring pipeline timed out')),
-      SCORING_TIMEOUT_MS
-    );
+    setTimeout(() => reject(new Error('Scoring pipeline timed out')), SCORING_TIMEOUT_MS);
   });
 
-  await Promise.race([
-    runScoringPipelineInternal(),
-    timeoutPromise,
-  ]);
+  await Promise.race([runScoringPipelineInternal(), timeoutPromise]);
 }
 
 /**
@@ -114,7 +108,7 @@ async function runScoringPipelineInternal(): Promise<void> {
     if (fullRescoreDue && !isFirstRun && !epochChanged) {
       logger.info(
         { incrementalRunCount, interval: config.SCORING_FULL_RESCORE_INTERVAL },
-        'Periodic full rescore triggered to refresh recency decay'
+        'Periodic full rescore triggered to refresh recency decay',
       );
     }
 
@@ -129,7 +123,7 @@ async function runScoringPipelineInternal(): Promise<void> {
           includeKeywords: contentRules.includeKeywords.length,
           excludeKeywords: contentRules.excludeKeywords.length,
         },
-        'Incremental candidate posts fetched for scoring'
+        'Incremental candidate posts fetched for scoring',
       );
     } else {
       allPosts = await getPostsForScoring(contentRules);
@@ -138,11 +132,15 @@ async function runScoringPipelineInternal(): Promise<void> {
           mode: 'full',
           postCount: allPosts.length,
           epochId: epoch.id,
-          reason: epochChanged ? 'epoch_changed' : fullRescoreDue ? 'periodic_full_rescore' : 'first_run',
+          reason: epochChanged
+            ? 'epoch_changed'
+            : fullRescoreDue
+              ? 'periodic_full_rescore'
+              : 'first_run',
           includeKeywords: contentRules.includeKeywords.length,
           excludeKeywords: contentRules.excludeKeywords.length,
         },
-        'Full candidate posts fetched for scoring'
+        'Full candidate posts fetched for scoring',
       );
     }
 
@@ -168,18 +166,24 @@ async function runScoringPipelineInternal(): Promise<void> {
           excludeKeywords: contentRules.excludeKeywords.length,
           sqlPrefiltered: true,
         },
-        'Content filtering backup applied'
+        'Content filtering backup applied',
       );
 
       if (posts.length === 0 && !useIncremental) {
-        logger.warn({ epochId: epoch.id }, 'All posts filtered out by content rules, clearing feed');
+        logger.warn(
+          { epochId: epoch.id },
+          'All posts filtered out by content rules, clearing feed',
+        );
       }
     }
 
-    logger.info({ postCount: posts.length, epochId: epoch.id, mode: useIncremental ? 'incremental' : 'full' }, 'Scoring filtered posts');
+    logger.info(
+      { postCount: posts.length, epochId: epoch.id, mode: useIncremental ? 'incremental' : 'full' },
+      'Scoring filtered posts',
+    );
 
     // 3. Score each post
-    const scored = await scoreAllPosts(posts, epoch, runId);
+    await scoreAllPosts(posts, epoch, runId);
 
     // 4. Write the full ranked feed to Redis from stored scores.
     // In incremental mode, only new/changed posts were scored above, but
@@ -189,8 +193,13 @@ async function runScoringPipelineInternal(): Promise<void> {
 
     const elapsed = Date.now() - startTime;
     logger.info(
-      { elapsed, postsScored: posts.length, epochId: epoch.id, mode: useIncremental ? 'incremental' : 'full' },
-      'Scoring pipeline complete'
+      {
+        elapsed,
+        postsScored: posts.length,
+        epochId: epoch.id,
+        mode: useIncremental ? 'incremental' : 'full',
+      },
+      'Scoring pipeline complete',
     );
 
     // Track successful run for health checks
@@ -211,7 +220,13 @@ async function runScoringPipelineInternal(): Promise<void> {
       posts_scored: posts.length,
       posts_filtered: allPosts.length - posts.length,
     });
-    await updateCurrentRunScope(runId, epoch.id, elapsed, posts.length, allPosts.length - posts.length);
+    await updateCurrentRunScope(
+      runId,
+      epoch.id,
+      elapsed,
+      posts.length,
+      allPosts.length - posts.length,
+    );
   } catch (err) {
     logger.error({ err }, 'Scoring pipeline failed');
     throw err;
@@ -223,7 +238,7 @@ async function updateCurrentRunScope(
   epochId: number,
   durationMs: number,
   postsScored: number,
-  postsFiltered: number
+  postsFiltered: number,
 ): Promise<void> {
   await db.query(
     `INSERT INTO system_status (key, value, updated_at)
@@ -238,7 +253,7 @@ async function updateCurrentRunScope(
         posts_scored: postsScored,
         posts_filtered: postsFiltered,
       }),
-    ]
+    ],
   );
 }
 
@@ -247,7 +262,7 @@ async function updateCurrentRunScope(
  * ASCII keywords use explicit boundaries. Symbol/non-ASCII terms fall back to literal substring regex.
  */
 function escapeSqlRegex(value: string): string {
-  return value.replace(/[\\.^$|()?*+\[\]{}]/g, '\\$&');
+  return value.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&');
 }
 
 function escapeSqlLike(value: string): string {
@@ -316,7 +331,7 @@ async function getPostsForScoring(contentRules: ContentRules): Promise<PostForSc
       params.push(regex);
       const regexParamPosition = params.length;
       includePredicates.push(
-        `(p.text IS NOT NULL AND p.text ILIKE $${likeParamPosition} ESCAPE '\\' AND p.text ~* $${regexParamPosition})`
+        `(p.text IS NOT NULL AND p.text ILIKE $${likeParamPosition} ESCAPE '\\' AND p.text ~* $${regexParamPosition})`,
       );
     }
     if (includePredicates.length > 0) {
@@ -337,7 +352,7 @@ async function getPostsForScoring(contentRules: ContentRules): Promise<PostForSc
       params.push(regex);
       const regexParamPosition = params.length;
       excludePredicates.push(
-        `(p.text IS NOT NULL AND p.text ILIKE $${likeParamPosition} ESCAPE '\\' AND p.text ~* $${regexParamPosition})`
+        `(p.text IS NOT NULL AND p.text ILIKE $${likeParamPosition} ESCAPE '\\' AND p.text ~* $${regexParamPosition})`,
       );
     }
     if (excludePredicates.length > 0) {
@@ -359,7 +374,7 @@ async function getPostsForScoring(contentRules: ContentRules): Promise<PostForSc
      WHERE ${clauses.join('\n       AND ')}
      ORDER BY p.created_at DESC
      LIMIT $${params.length}`,
-    params
+    params,
   );
 
   return result.rows.map(toPostForScoring);
@@ -394,7 +409,7 @@ async function getPostsForIncrementalScoring(
       sharedParams.push(regex);
       const regexIdx = sharedParams.length;
       includePredicates.push(
-        `(p.text IS NOT NULL AND p.text ILIKE $${likeIdx} ESCAPE '\\' AND p.text ~* $${regexIdx})`
+        `(p.text IS NOT NULL AND p.text ILIKE $${likeIdx} ESCAPE '\\' AND p.text ~* $${regexIdx})`,
       );
     }
     if (includePredicates.length > 0) {
@@ -413,7 +428,7 @@ async function getPostsForIncrementalScoring(
       sharedParams.push(regex);
       const regexIdx = sharedParams.length;
       excludePredicates.push(
-        `(p.text IS NOT NULL AND p.text ILIKE $${likeIdx} ESCAPE '\\' AND p.text ~* $${regexIdx})`
+        `(p.text IS NOT NULL AND p.text ILIKE $${likeIdx} ESCAPE '\\' AND p.text ~* $${regexIdx})`,
       );
     }
     if (excludePredicates.length > 0) {
@@ -421,18 +436,22 @@ async function getPostsForIncrementalScoring(
     }
   }
 
-  const contentFilterSql = sharedClauses.length > 0
-    ? ' AND ' + sharedClauses.join(' AND ')
-    : '';
+  const contentFilterSql = sharedClauses.length > 0 ? ' AND ' + sharedClauses.join(' AND ') : '';
 
   // Parameters: $1 = cutoff, $2 = epochId, $3 = limit, then shared content filter params
   // We need to offset the shared param indices by 3.
   const baseParamCount = 3;
-  const offsetContentFilterSql = sharedParams.length > 0
-    ? contentFilterSql.replace(/\$(\d+)/g, (_, n) => `$${Number(n) + baseParamCount}`)
-    : '';
+  const offsetContentFilterSql =
+    sharedParams.length > 0
+      ? contentFilterSql.replace(/\$(\d+)/g, (_, n) => `$${Number(n) + baseParamCount}`)
+      : '';
 
-  const params: unknown[] = [cutoff.toISOString(), epochId, SCORING_CANDIDATE_LIMIT, ...sharedParams];
+  const params: unknown[] = [
+    cutoff.toISOString(),
+    epochId,
+    SCORING_CANDIDATE_LIMIT,
+    ...sharedParams,
+  ];
 
   const result = await db.query(
     `(
@@ -470,7 +489,7 @@ async function getPostsForIncrementalScoring(
       ORDER BY p.created_at DESC
       LIMIT $3
     )`,
-    params
+    params,
   );
 
   return result.rows.map(toPostForScoring);
@@ -487,7 +506,7 @@ async function getPostsForIncrementalScoring(
 async function scoreAllPosts(
   posts: PostForScoring[],
   epoch: GovernanceEpoch,
-  runId: string
+  runId: string,
 ): Promise<ScoredPost[]> {
   const scored: ScoredPost[] = [];
   const authorCounts = createAuthorCountMap();
@@ -502,7 +521,8 @@ async function scoreAllPosts(
     try {
       // Classification method is determined at ingestion time and stored on
       // the posts row. The pipeline reads it as-is — no runtime override.
-      const classificationMethod = post.classificationMethod === 'embedding' ? 'embedding' : 'keyword';
+      const classificationMethod =
+        post.classificationMethod === 'embedding' ? 'embedding' : 'keyword';
 
       const scoredPost = await scorePost(post, epoch, context);
       scored.push(scoredPost);
@@ -533,7 +553,7 @@ const WEIGHT_ACCESSORS: Record<GovernanceWeightKey, (e: GovernanceEpoch) => numb
 async function scorePost(
   post: PostForScoring,
   epoch: GovernanceEpoch,
-  context: ScoringContext
+  context: ScoringContext,
 ): Promise<ScoredPost> {
   const raw = {} as ScoreComponents;
   const weights = {} as ScoreComponents;
@@ -571,7 +591,7 @@ async function storeScore(
   scoredPost: ScoredPost,
   epoch: GovernanceEpoch,
   runId: string,
-  classificationMethod: 'keyword' | 'embedding' = 'keyword'
+  classificationMethod: 'keyword' | 'embedding' = 'keyword',
 ): Promise<void> {
   const { uri } = scoredPost;
   const { raw, weights, weighted, total } = scoredPost.score;
@@ -617,7 +637,7 @@ async function storeScore(
       total,
       JSON.stringify({ run_id: runId, classification_method: classificationMethod }),
       classificationMethod,
-    ]
+    ],
   );
 }
 
@@ -651,7 +671,7 @@ async function writeToRedisFromDb(epochId: number, runId: string): Promise<void>
        AND ps.relevance_score >= $4
      ORDER BY ps.total_score DESC
      LIMIT $2`,
-    [epochId, config.FEED_MAX_POSTS, cutoff.toISOString(), config.FEED_MIN_RELEVANCE]
+    [epochId, config.FEED_MAX_POSTS, cutoff.toISOString(), config.FEED_MIN_RELEVANCE],
   );
 
   // URL deduplication: penalize reshares of the same external link.
@@ -663,7 +683,7 @@ async function writeToRedisFromDb(epochId: number, runId: string): Promise<void>
     const DEDUP_DECAY = [1.0, 0.7, 0.5, 0.3];
     const urlCounts = new Map<string, number>();
 
-    const dedupedPosts = result.rows.map(post => {
+    const dedupedPosts = result.rows.map((post) => {
       // No URL or substantial original text → no penalty
       if (!post.embed_url || post.text_length >= config.FEED_DEDUP_MIN_TEXT) {
         return { post_uri: post.post_uri, total_score: post.total_score };
@@ -688,7 +708,7 @@ async function writeToRedisFromDb(epochId: number, runId: string): Promise<void>
 
     topPosts = dedupedPosts;
   } else {
-    topPosts = result.rows.map(post => ({
+    topPosts = result.rows.map((post) => ({
       post_uri: post.post_uri,
       total_score: post.total_score,
     }));

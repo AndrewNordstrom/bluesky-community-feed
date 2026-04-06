@@ -418,15 +418,20 @@ describe('export routes', () => {
       const expectedAnonId = anonymizeDid(did, salt);
 
       dbQueryMock.mockResolvedValueOnce({
-        rows: [{
-          voter_did: did,
-          epoch_id: 1,
-          recency_weight: 0.2, engagement_weight: 0.2,
-          bridging_weight: 0.2, source_diversity_weight: 0.2,
-          relevance_weight: 0.2,
-          include_keywords: [], exclude_keywords: [],
-          voted_at: new Date('2026-01-15T10:00:00Z'),
-        }],
+        rows: [
+          {
+            voter_did: did,
+            epoch_id: 1,
+            recency_weight: 0.2,
+            engagement_weight: 0.2,
+            bridging_weight: 0.2,
+            source_diversity_weight: 0.2,
+            relevance_weight: 0.2,
+            include_keywords: [],
+            exclude_keywords: [],
+            voted_at: new Date('2026-01-15T10:00:00Z'),
+          },
+        ],
       });
 
       const app = Fastify();
@@ -441,15 +446,17 @@ describe('export routes', () => {
       expect(voteAnonId).toBe(expectedAnonId);
 
       dbQueryMock.mockResolvedValueOnce({
-        rows: [{
-          post_uri: 'at://did:plc:x/app.bsky.feed.post/123',
-          viewer_did: did,
-          epoch_id: 1,
-          engagement_type: 'like',
-          position_in_feed: 1,
-          served_at: new Date('2026-01-15T10:00:00Z'),
-          engaged_at: new Date('2026-01-15T10:01:00Z'),
-        }],
+        rows: [
+          {
+            post_uri: 'at://did:plc:x/app.bsky.feed.post/123',
+            viewer_did: did,
+            epoch_id: 1,
+            engagement_type: 'like',
+            position_in_feed: 1,
+            served_at: new Date('2026-01-15T10:00:00Z'),
+            engaged_at: new Date('2026-01-15T10:01:00Z'),
+          },
+        ],
       });
 
       const engResponse = await app.inject({

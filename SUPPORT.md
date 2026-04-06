@@ -26,10 +26,10 @@ Thanks for using the Community-Governed Bluesky Feed project.
 
 Do not post security vulnerabilities in public issues.
 Use private reporting via [SECURITY.md](SECURITY.md):
+
 - https://github.com/andrewnordstrom-eng/bluesky-community-feed/security/advisories/new
 
 ## Response Expectations
 
 - Triage target: within 2 business days
 - Critical production/security reports: prioritized immediately
-

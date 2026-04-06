@@ -7,7 +7,10 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 /** Convert an app.inject() response to an MCP CallToolResult. */
-export function formatInjectResponse(response: { statusCode: number; body: string }): CallToolResult {
+export function formatInjectResponse(response: {
+  statusCode: number;
+  body: string;
+}): CallToolResult {
   const isError = response.statusCode >= 400;
   let text: string;
   try {

@@ -22,18 +22,18 @@ const {
   }));
 
   return {
-  redisMock: {
-    zrevrange: vi.fn(),
-    setex: vi.fn(),
-    get: vi.fn(),
-    pipeline: pipelineMock,
-  },
-  dbQueryMock: vi.fn(),
-  verifyFeedRequesterDidMock: vi.fn(),
-   pipelineMock,
-   pipelineRpushMock,
-   pipelineLtrimMock,
-   pipelineExecMock,
+    redisMock: {
+      zrevrange: vi.fn(),
+      setex: vi.fn(),
+      get: vi.fn(),
+      pipeline: pipelineMock,
+    },
+    dbQueryMock: vi.fn(),
+    verifyFeedRequesterDidMock: vi.fn(),
+    pipelineMock,
+    pipelineRpushMock,
+    pipelineLtrimMock,
+    pipelineExecMock,
   };
 });
 
@@ -138,31 +138,30 @@ describe('getFeedSkeleton tracking', () => {
     await app.close();
   });
 
-  it.each([
-    'Bearer malformed.jwt',
-    'Bearer expired.jwt',
-    'Bearer unverifiable.jwt',
-  ])('logs %s as anonymous when verifier rejects', async (authorization) => {
-    verifyFeedRequesterDidMock.mockResolvedValueOnce(null);
+  it.each(['Bearer malformed.jwt', 'Bearer expired.jwt', 'Bearer unverifiable.jwt'])(
+    'logs %s as anonymous when verifier rejects',
+    async (authorization) => {
+      verifyFeedRequesterDidMock.mockResolvedValueOnce(null);
 
-    const app = buildTestApp();
-    registerFeedSkeleton(app);
+      const app = buildTestApp();
+      registerFeedSkeleton(app);
 
-    const response = await app.inject({
-      method: 'GET',
-      url: `/xrpc/app.bsky.feed.getFeedSkeleton?feed=${encodeURIComponent(feedUri)}&limit=2`,
-      headers: { authorization },
-    });
+      const response = await app.inject({
+        method: 'GET',
+        url: `/xrpc/app.bsky.feed.getFeedSkeleton?feed=${encodeURIComponent(feedUri)}&limit=2`,
+        headers: { authorization },
+      });
 
-    expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(200);
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
+      await new Promise((resolve) => setTimeout(resolve, 20));
 
-    expect(dbQueryMock).not.toHaveBeenCalled();
-    const [, rawLogEntry] = pipelineRpushMock.mock.calls.at(-1) as [string, string];
-    const logEntry = JSON.parse(rawLogEntry);
-    expect(logEntry.viewer_did).toBeNull();
+      expect(dbQueryMock).not.toHaveBeenCalled();
+      const [, rawLogEntry] = pipelineRpushMock.mock.calls.at(-1) as [string, string];
+      const logEntry = JSON.parse(rawLogEntry);
+      expect(logEntry.viewer_did).toBeNull();
 
-    await app.close();
-  });
+      await app.close();
+    },
+  );
 });

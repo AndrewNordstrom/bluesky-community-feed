@@ -9,7 +9,12 @@ import { TabPanel } from '../components/TabPanel';
 import { VoteSkeleton } from '../components/Skeleton';
 import type { GovernanceWeights } from '../components/WeightSliders';
 import { voteApi, weightsApi } from '../api/client';
-import type { EpochResponse, ContentVote, ContentRulesResponse, TopicCatalogEntry } from '../api/client';
+import type {
+  EpochResponse,
+  ContentVote,
+  ContentRulesResponse,
+  TopicCatalogEntry,
+} from '../api/client';
 
 function extractErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === 'object') {
@@ -60,7 +65,9 @@ export function Vote() {
 
     if (currentPhase === 'voting') {
       if (currentEpoch.voting_ends_at) {
-        return `Voting is open now and closes ${new Date(currentEpoch.voting_ends_at).toLocaleString('en-US', {
+        return `Voting is open now and closes ${new Date(
+          currentEpoch.voting_ends_at,
+        ).toLocaleString('en-US', {
           month: 'short',
           day: 'numeric',
           hour: '2-digit',
@@ -224,13 +231,12 @@ export function Vote() {
         setSuccessMessage(
           wasUpdate || result.is_update
             ? 'Your weight vote has been updated!'
-            : 'Your weight vote has been recorded! Thank you for participating.'
+            : 'Your weight vote has been recorded! Thank you for participating.',
         );
       } else if (activeTab === 'content') {
         // Submit content vote
         const hasKeywords =
-          contentVote.includeKeywords.length > 0 ||
-          contentVote.excludeKeywords.length > 0;
+          contentVote.includeKeywords.length > 0 || contentVote.excludeKeywords.length > 0;
         if (!hasKeywords) {
           setError('Please add at least one include or exclude keyword.');
           setIsSubmitting(false);
@@ -242,7 +248,7 @@ export function Vote() {
         setSuccessMessage(
           result.is_update
             ? 'Your content rules vote has been updated!'
-            : 'Your content rules vote has been recorded!'
+            : 'Your content rules vote has been recorded!',
         );
         // Refresh content rules
         const updatedRules = await voteApi.getContentRules();
@@ -299,9 +305,15 @@ export function Vote() {
             <div className="header-left">
               <h1>Community feed</h1>
               <nav className="header-nav">
-                <Link to="/vote" className="nav-link active">Vote</Link>
-                <Link to="/dashboard" className="nav-link">Dashboard</Link>
-                <Link to="/history" className="nav-link">History</Link>
+                <Link to="/vote" className="nav-link active">
+                  Vote
+                </Link>
+                <Link to="/dashboard" className="nav-link">
+                  Dashboard
+                </Link>
+                <Link to="/history" className="nav-link">
+                  History
+                </Link>
               </nav>
             </div>
           </div>
@@ -321,10 +333,20 @@ export function Vote() {
           <div className="header-left">
             <h1>Community feed</h1>
             <nav className="header-nav">
-              <Link to="/vote" className="nav-link active">Vote</Link>
-              <Link to="/dashboard" className="nav-link">Dashboard</Link>
-              <Link to="/history" className="nav-link">History</Link>
-              {isAdmin && <Link to="/admin" className="nav-link">Admin</Link>}
+              <Link to="/vote" className="nav-link active">
+                Vote
+              </Link>
+              <Link to="/dashboard" className="nav-link">
+                Dashboard
+              </Link>
+              <Link to="/history" className="nav-link">
+                History
+              </Link>
+              {isAdmin && (
+                <Link to="/admin" className="nav-link">
+                  Admin
+                </Link>
+              )}
             </nav>
           </div>
           <div className="user-info">
@@ -353,7 +375,8 @@ export function Vote() {
               <strong>{currentEpoch.vote_count}</strong> votes
               {currentEpoch.subscriber_count !== undefined && (
                 <span className="subscriber-count">
-                  {' '}/ {currentEpoch.subscriber_count} subscribers
+                  {' '}
+                  / {currentEpoch.subscriber_count} subscribers
                 </span>
               )}
             </div>
@@ -387,9 +410,7 @@ export function Vote() {
         {error && <div className="error-message">{error}</div>}
         {successMessage && <div className="success-message">{successMessage}</div>}
         {phaseNotice ? (
-          <div className={`phase-notice ${isVotingOpen ? 'open' : 'closed'}`}>
-            {phaseNotice}
-          </div>
+          <div className={`phase-notice ${isVotingOpen ? 'open' : 'closed'}`}>{phaseNotice}</div>
         ) : null}
 
         <div className="tab-panel-wrapper">
@@ -398,9 +419,9 @@ export function Vote() {
             <section className="voting-section">
               <h2>Your vote</h2>
               <p className="vote-description">
-                Adjust the sliders to set your preferred algorithm weights. The sliders
-                are linked and will always sum to 100%. Your vote will influence how
-                the feed ranks posts in future rounds.
+                Adjust the sliders to set your preferred algorithm weights. The sliders are linked
+                and will always sum to 100%. Your vote will influence how the feed ranks posts in
+                future rounds.
               </p>
 
               {weights && (
@@ -417,11 +438,7 @@ export function Vote() {
                   disabled={isSubmitting || !weights || !isVotingOpen}
                   className="submit-button"
                 >
-                  {isSubmitting
-                    ? 'Submitting...'
-                    : hasVoted
-                    ? 'Update vote'
-                    : 'Submit vote'}
+                  {isSubmitting ? 'Submitting...' : hasVoted ? 'Update vote' : 'Submit vote'}
                 </button>
                 {hasVoted && (
                   <span className="voted-indicator">
@@ -444,8 +461,8 @@ export function Vote() {
             <section className="voting-section">
               <h2>Content rules vote</h2>
               <p className="vote-description">
-                Vote on keywords to include or exclude from the feed. Keywords appearing
-                in at least 30% of votes will become active rules for the next epoch.
+                Vote on keywords to include or exclude from the feed. Keywords appearing in at least
+                30% of votes will become active rules for the next epoch.
               </p>
 
               <KeywordInput
@@ -485,12 +502,13 @@ export function Vote() {
                   {isSubmitting
                     ? 'Submitting...'
                     : hasVoted
-                    ? 'Update content vote'
-                    : 'Submit content vote'}
+                      ? 'Update content vote'
+                      : 'Submit content vote'}
                 </button>
                 {hasVoted && lastVoteTime && (
                   <span className="voted-indicator">
-                    Last voted {new Date(lastVoteTime).toLocaleDateString('en-US', {
+                    Last voted{' '}
+                    {new Date(lastVoteTime).toLocaleDateString('en-US', {
                       month: 'short',
                       day: 'numeric',
                       hour: '2-digit',
@@ -553,8 +571,8 @@ export function Vote() {
               <section className="voting-section">
                 <h2>Topic preferences</h2>
                 <p className="vote-description">
-                  Which topics should the feed prioritize? Move sliders to boost
-                  topics you want more of, or reduce topics you want less of.
+                  Which topics should the feed prioritize? Move sliders to boost topics you want
+                  more of, or reduce topics you want less of.
                 </p>
 
                 <TopicSliders
@@ -575,12 +593,13 @@ export function Vote() {
                     {isSubmitting
                       ? 'Submitting...'
                       : hasVoted
-                      ? 'Update topic vote'
-                      : 'Submit topic vote'}
+                        ? 'Update topic vote'
+                        : 'Submit topic vote'}
                   </button>
                   {hasVoted && lastVoteTime && (
                     <span className="voted-indicator">
-                      Last voted {new Date(lastVoteTime).toLocaleDateString('en-US', {
+                      Last voted{' '}
+                      {new Date(lastVoteTime).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
                         hour: '2-digit',
@@ -597,15 +616,17 @@ export function Vote() {
         <section className="current-weights-section">
           <h2>Current algorithm weights</h2>
           <p className="section-description">
-            These are the weights currently being used by the feed algorithm,
-            determined by community votes from the previous epoch.
+            These are the weights currently being used by the feed algorithm, determined by
+            community votes from the previous epoch.
           </p>
           {currentEpoch && (
             <div className="current-weights-grid">
               {Object.entries(currentEpoch.weights).map(([key, value]) => (
                 <div key={key} className="weight-card">
                   <span className="weight-name">
-                    {key === 'source_diversity' ? 'Source diversity' : key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}
+                    {key === 'source_diversity'
+                      ? 'Source diversity'
+                      : key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}
                   </span>
                   <span className="weight-value">{(value * 100).toFixed(0)}%</span>
                 </div>

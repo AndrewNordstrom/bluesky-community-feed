@@ -45,8 +45,10 @@ export const VOTABLE_WEIGHT_PARAMS: readonly VotableWeightParam[] = [
   },
 ] as const;
 
-export const GOVERNANCE_WEIGHT_KEYS = VOTABLE_WEIGHT_PARAMS.map((param) => param.key) as ReadonlyArray<GovernanceWeightKey>;
+export const GOVERNANCE_WEIGHT_KEYS = VOTABLE_WEIGHT_PARAMS.map(
+  (param) => param.key,
+) as ReadonlyArray<GovernanceWeightKey>;
 
 export const DEFAULT_GOVERNANCE_WEIGHTS: GovernanceWeights = Object.fromEntries(
-  VOTABLE_WEIGHT_PARAMS.map((param) => [param.key, param.defaultValue] as const)
+  VOTABLE_WEIGHT_PARAMS.map((param) => [param.key, param.defaultValue] as const),
 ) as unknown as GovernanceWeights;

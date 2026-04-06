@@ -17,17 +17,22 @@
 ## What Was Built (in priority order for the team)
 
 ### 1. The feed actually works now
+
 The scoring pipeline had two critical bugs causing 10-day-old posts to sit at #1. Both are fixed. Posts now decay properly and the feed shows fresh, relevant content.
 
 ### 2. Semantic topic classification
+
 Posts are classified into 25 topics using a two-tier system:
+
 - **Tier 1 (ingestion):** Fast keyword matching via winkNLP (<1ms/post)
 - **Tier 2 (scoring):** Semantic embeddings via all-MiniLM-L6-v2 (~20ms/post)
 
 The embedding classifier eliminates false positives that keyword matching can't handle. "Trump Tower developer" no longer matches "software development." This is running in production right now.
 
 ### 3. Community governance is fully wired
+
 Subscribers can vote on:
+
 - How much weight each scoring component gets (recency, engagement, bridging, source diversity, relevance)
 - Per-topic preferences (boost dogs, penalize politics, etc.)
 - Content inclusion/exclusion keywords
@@ -35,12 +40,14 @@ Subscribers can vote on:
 Votes are aggregated via trimmed mean each epoch. The architecture supports making ANY parameter votable — post lifespan, classifier thresholds, scoring window, etc.
 
 ### 4. Admin toolkit (4 interfaces)
+
 - **Web dashboard** — visual management of epochs, topics, participants, feed health
 - **CLI** — `npm run cli -- topics list`, `feed rescore`, `export votes --epoch 1 --format csv`, etc.
 - **MCP server** — 30 tools for natural-language admin via any MCP-compatible client
 - **REST API** — full CRUD on everything, Zod-validated, audit-logged
 
 ### 5. Research infrastructure
+
 - Anonymized data exports (votes, scores, engagement, epochs, audit logs, full-dataset ZIP)
 - `classification_method` tracking on every score (keyword vs embedding) for classifier comparison studies
 - Private feed mode for IRB-gated participant studies
@@ -48,6 +55,7 @@ Votes are aggregated via trimmed mean each epoch. The architecture supports maki
 - Governance audit log (append-only, DB-enforced)
 
 ### 6. Security audit completed
+
 316 files reviewed, 62,965 lines. 13 findings (9 HIGH, 4 MEDIUM), all fixed. Zero CRITICAL. Documented in `docs/SECURITY_AUDIT.md`.
 
 ---
@@ -70,6 +78,7 @@ Bluesky posts flow in via Jetstream WebSocket → classified by winkNLP at inges
 ## For Developers Joining
 
 Read these files in order:
+
 1. `docs/SYSTEM_OVERVIEW.md` — Detailed system walkthrough
 2. `docs/dev-journal.md` — Chronological record of every change with rationale
 

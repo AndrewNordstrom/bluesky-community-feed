@@ -1,19 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // --- Mocks (vi.hoisted runs before imports) ---
-const {
-  dbQueryMock,
-  dbConnectMock,
-  clientQueryMock,
-  clientReleaseMock,
-  redisZrangeMock,
-} = vi.hoisted(() => ({
-  dbQueryMock: vi.fn(),
-  dbConnectMock: vi.fn(),
-  clientQueryMock: vi.fn(),
-  clientReleaseMock: vi.fn(),
-  redisZrangeMock: vi.fn(),
-}));
+const { dbQueryMock, dbConnectMock, clientQueryMock, clientReleaseMock, redisZrangeMock } =
+  vi.hoisted(() => ({
+    dbQueryMock: vi.fn(),
+    dbConnectMock: vi.fn(),
+    clientQueryMock: vi.fn(),
+    clientReleaseMock: vi.fn(),
+    redisZrangeMock: vi.fn(),
+  }));
 
 vi.mock('../src/db/client.js', () => ({
   db: {
@@ -92,7 +87,8 @@ describe('cleanup job', () => {
 
     // Verify the DELETE query includes NOT EXISTS (post_scores)
     const deleteCall = clientQueryMock.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('DELETE FROM posts')
+      (call: unknown[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('DELETE FROM posts'),
     );
     expect(deleteCall).toBeDefined();
     expect(deleteCall![0]).toContain('NOT EXISTS');
@@ -100,7 +96,10 @@ describe('cleanup job', () => {
   });
 
   it('protects posts in Redis feed snapshot', async () => {
-    const feedUris = ['at://did:plc:abc/app.bsky.feed.post/feed1', 'at://did:plc:abc/app.bsky.feed.post/feed2'];
+    const feedUris = [
+      'at://did:plc:abc/app.bsky.feed.post/feed1',
+      'at://did:plc:abc/app.bsky.feed.post/feed2',
+    ];
     redisZrangeMock.mockResolvedValue(feedUris);
 
     clientQueryMock.mockResolvedValue({ rowCount: 0, rows: [] });
@@ -109,7 +108,8 @@ describe('cleanup job', () => {
 
     // Verify feed URIs were passed as the exclusion parameter
     const deleteCall = clientQueryMock.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('DELETE FROM posts')
+      (call: unknown[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('DELETE FROM posts'),
     );
     expect(deleteCall).toBeDefined();
     expect(deleteCall![1]).toEqual(expect.arrayContaining([feedUris, expect.any(Number)]));
@@ -129,20 +129,36 @@ describe('cleanup job', () => {
         if (postBatch === 1) return { rowCount: 50, rows: Array(50).fill({}) };
         return { rowCount: 0, rows: [] };
       }
-      if (typeof sql === 'string' && sql.includes('DELETE FROM likes') && sql.includes('FROM posts p')) {
+      if (
+        typeof sql === 'string' &&
+        sql.includes('DELETE FROM likes') &&
+        sql.includes('FROM posts p')
+      ) {
         orphanLikeBatch++;
         if (orphanLikeBatch === 1) return { rowCount: 12, rows: Array(12).fill({}) };
         return { rowCount: 0, rows: [] };
       }
-      if (typeof sql === 'string' && sql.includes('DELETE FROM likes') && sql.includes('post_scores')) {
+      if (
+        typeof sql === 'string' &&
+        sql.includes('DELETE FROM likes') &&
+        sql.includes('post_scores')
+      ) {
         return { rowCount: 0, rows: [] };
       }
-      if (typeof sql === 'string' && sql.includes('DELETE FROM reposts') && sql.includes('FROM posts p')) {
+      if (
+        typeof sql === 'string' &&
+        sql.includes('DELETE FROM reposts') &&
+        sql.includes('FROM posts p')
+      ) {
         orphanRepostBatch++;
         if (orphanRepostBatch === 1) return { rowCount: 5, rows: Array(5).fill({}) };
         return { rowCount: 0, rows: [] };
       }
-      if (typeof sql === 'string' && sql.includes('DELETE FROM reposts') && sql.includes('post_scores')) {
+      if (
+        typeof sql === 'string' &&
+        sql.includes('DELETE FROM reposts') &&
+        sql.includes('post_scores')
+      ) {
         return { rowCount: 0, rows: [] };
       }
       if (typeof sql === 'string' && sql.includes('DELETE FROM follows')) {
@@ -196,7 +212,7 @@ describe('cleanup job', () => {
 
     // Verify VACUUM was called
     const vacuumCalls = clientQueryMock.mock.calls.filter(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('VACUUM')
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('VACUUM'),
     );
     expect(vacuumCalls.length).toBeGreaterThan(0);
   });
@@ -232,7 +248,7 @@ describe('cleanup job', () => {
 
     // Verify VACUUM was NOT called
     const vacuumCalls = clientQueryMock.mock.calls.filter(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('VACUUM')
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('VACUUM'),
     );
     expect(vacuumCalls.length).toBe(0);
   });
@@ -294,18 +310,34 @@ describe('cleanup job', () => {
       if (typeof sql === 'string' && sql.includes('DELETE FROM posts')) {
         return { rowCount: 0, rows: [] };
       }
-      if (typeof sql === 'string' && sql.includes('DELETE FROM likes') && sql.includes('FROM posts p')) {
+      if (
+        typeof sql === 'string' &&
+        sql.includes('DELETE FROM likes') &&
+        sql.includes('FROM posts p')
+      ) {
         return { rowCount: 0, rows: [] };
       }
-      if (typeof sql === 'string' && sql.includes('DELETE FROM reposts') && sql.includes('FROM posts p')) {
+      if (
+        typeof sql === 'string' &&
+        sql.includes('DELETE FROM reposts') &&
+        sql.includes('FROM posts p')
+      ) {
         return { rowCount: 0, rows: [] };
       }
-      if (typeof sql === 'string' && sql.includes('DELETE FROM likes') && sql.includes('post_scores')) {
+      if (
+        typeof sql === 'string' &&
+        sql.includes('DELETE FROM likes') &&
+        sql.includes('post_scores')
+      ) {
         staleLikeBatch++;
         if (staleLikeBatch === 1) return { rowCount: 8, rows: Array(8).fill({}) };
         return { rowCount: 0, rows: [] };
       }
-      if (typeof sql === 'string' && sql.includes('DELETE FROM reposts') && sql.includes('post_scores')) {
+      if (
+        typeof sql === 'string' &&
+        sql.includes('DELETE FROM reposts') &&
+        sql.includes('post_scores')
+      ) {
         staleRepostBatch++;
         if (staleRepostBatch === 1) return { rowCount: 4, rows: Array(4).fill({}) };
         return { rowCount: 0, rows: [] };
@@ -329,7 +361,7 @@ describe('cleanup job', () => {
       (call: unknown[]) =>
         typeof call[0] === 'string' &&
         (call[0] as string).includes('DELETE FROM likes') &&
-        (call[0] as string).includes('post_scores')
+        (call[0] as string).includes('post_scores'),
     );
     expect(staleLikeCall).toBeDefined();
     expect(staleLikeCall![0]).toContain("($1::int * INTERVAL '1 day')");
@@ -339,15 +371,14 @@ describe('cleanup job', () => {
       (call: unknown[]) =>
         typeof call[0] === 'string' &&
         (call[0] as string).includes('DELETE FROM reposts') &&
-        (call[0] as string).includes('post_scores')
+        (call[0] as string).includes('post_scores'),
     );
     expect(staleRepostCall).toBeDefined();
     expect(staleRepostCall![0]).toContain("($1::int * INTERVAL '1 day')");
 
     const followsCall = clientQueryMock.mock.calls.find(
       (call: unknown[]) =>
-        typeof call[0] === 'string' &&
-        (call[0] as string).includes('DELETE FROM follows')
+        typeof call[0] === 'string' && (call[0] as string).includes('DELETE FROM follows'),
     );
     expect(followsCall).toBeDefined();
     expect(followsCall![0]).toContain("($1::int * INTERVAL '1 day')");

@@ -85,7 +85,10 @@ function parseTransitionImpact(details: Record<string, unknown>): TransitionImpa
   const oldEpochId = details.oldEpochId ?? null;
   const newEpochId = details.newEpochId ?? null;
 
-  if ((oldEpochId !== null && typeof oldEpochId !== 'number') || (newEpochId !== null && typeof newEpochId !== 'number')) {
+  if (
+    (oldEpochId !== null && typeof oldEpochId !== 'number') ||
+    (newEpochId !== null && typeof newEpochId !== 'number')
+  ) {
     return null;
   }
 
@@ -108,19 +111,13 @@ function ImpactSummary({ details }: { details: Record<string, unknown> }) {
   const parsed = parseTransitionImpact(details);
 
   if (!parsed) {
-    return (
-      <code className="audit-details-code">{JSON.stringify(details)}</code>
-    );
+    return <code className="audit-details-code">{JSON.stringify(details)}</code>;
   }
 
   return (
     <div className="impact-summary-inline">
-      <div>
-        {parsed.postsChangedRank} posts changed rank
-      </div>
-      <div>
-        Avg rank delta {parsed.avgRankChange.toFixed(2)}
-      </div>
+      <div>{parsed.postsChangedRank} posts changed rank</div>
+      <div>Avg rank delta {parsed.avgRankChange.toFixed(2)}</div>
       <div>
         Epoch {parsed.oldEpochId ?? '?'} {'->'} {parsed.newEpochId ?? '?'}
       </div>
@@ -160,7 +157,10 @@ export function AuditLog() {
         entry,
         details: parseTransitionImpact(entry.details),
       }))
-      .filter((entry): entry is { entry: AuditEntry; details: TransitionImpactDetails } => entry.details !== null);
+      .filter(
+        (entry): entry is { entry: AuditEntry; details: TransitionImpactDetails } =>
+          entry.details !== null,
+      );
   }, [entries]);
 
   function handleLoadMore() {
@@ -172,7 +172,14 @@ export function AuditLog() {
       <WeightImpactPanel />
 
       <div className="admin-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '20px',
+          }}
+        >
           <h2 style={{ margin: 0 }}>Audit Log</h2>
           <select
             value={filter.action}
@@ -222,7 +229,10 @@ export function AuditLog() {
                       {entry.actor === 'system' ? (
                         <span style={{ color: '#787c7e', fontStyle: 'italic' }}>System</span>
                       ) : (
-                        <span title={entry.actor} style={{ fontFamily: 'monospace', fontSize: '12px' }}>
+                        <span
+                          title={entry.actor}
+                          style={{ fontFamily: 'monospace', fontSize: '12px' }}
+                        >
                           {truncateDid(entry.actor)}
                         </span>
                       )}
@@ -240,7 +250,11 @@ export function AuditLog() {
             </table>
 
             {total > filter.limit ? (
-              <button className="btn-secondary" style={{ marginTop: '16px', width: '100%' }} onClick={handleLoadMore}>
+              <button
+                className="btn-secondary"
+                style={{ marginTop: '16px', width: '100%' }}
+                onClick={handleLoadMore}
+              >
                 Load More ({total - filter.limit} remaining)
               </button>
             ) : null}

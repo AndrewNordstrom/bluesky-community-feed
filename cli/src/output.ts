@@ -22,7 +22,7 @@ export function printSummary(entries: [string, unknown][]): void {
 export function printTable(headers: string[], rows: (string | number | null)[][]): void {
   const allRows = [headers, ...rows.map((r) => r.map(String))];
   const widths = headers.map((_, col) =>
-    Math.max(...allRows.map((row) => String(row[col] ?? '').length))
+    Math.max(...allRows.map((row) => String(row[col] ?? '').length)),
   );
 
   // Header
@@ -32,9 +32,7 @@ export function printTable(headers: string[], rows: (string | number | null)[][]
 
   // Data rows
   for (const row of rows) {
-    const line = row
-      .map((val, i) => String(val ?? '').padEnd(widths[i]))
-      .join('  ');
+    const line = row.map((val, i) => String(val ?? '').padEnd(widths[i])).join('  ');
     process.stdout.write(line + '\n');
   }
 }

@@ -14,7 +14,7 @@ export function registerParticipantTools(
   server: McpServer,
   app: FastifyInstance,
   token: string,
-  cookieName: string
+  cookieName: string,
 ): void {
   const cookie = `${cookieName}=${token}`;
 
@@ -24,23 +24,26 @@ export function registerParticipantTools(
       description: 'List all approved participants for the private feed mode',
     },
     async () => {
-      const res = await app.inject({ method: 'GET', url: '/api/admin/participants', headers: { cookie } });
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/admin/participants',
+        headers: { cookie },
+      });
       return formatInjectResponse(res);
-    }
+    },
   );
 
   server.registerTool(
     'add_participant',
     {
-      description: 'Add a participant by DID or Bluesky handle. Handles are automatically resolved to DIDs.',
+      description:
+        'Add a participant by DID or Bluesky handle. Handles are automatically resolved to DIDs.',
       inputSchema: {
         identifier: z.string().describe('Bluesky DID (did:plc:...) or handle (user.bsky.social)'),
       },
     },
     async ({ identifier }: { identifier: string }) => {
-      const body = identifier.startsWith('did:')
-        ? { did: identifier }
-        : { handle: identifier };
+      const body = identifier.startsWith('did:') ? { did: identifier } : { handle: identifier };
 
       const res = await app.inject({
         method: 'POST',
@@ -49,7 +52,7 @@ export function registerParticipantTools(
         payload: body,
       });
       return formatInjectResponse(res);
-    }
+    },
   );
 
   server.registerTool(
@@ -67,6 +70,6 @@ export function registerParticipantTools(
         headers: { cookie },
       });
       return formatInjectResponse(res);
-    }
+    },
   );
 }

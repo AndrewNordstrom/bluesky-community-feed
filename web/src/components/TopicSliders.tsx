@@ -73,9 +73,7 @@ export function TopicSliders({
       <div className="topic-groups">
         {sortedGroups.map(([groupSlug, groupTopics]) => (
           <div key={groupSlug ?? '__ungrouped'} className="topic-group">
-            {groupSlug && (
-              <h4 className="topic-group-heading">{prettifySlug(groupSlug)}</h4>
-            )}
+            {groupSlug && <h4 className="topic-group-heading">{prettifySlug(groupSlug)}</h4>}
             <div className="topic-list">
               {groupTopics.map((topic) => {
                 const value = values[topic.slug] ?? 0.5;
@@ -90,7 +88,9 @@ export function TopicSliders({
                   >
                     <div className="topic-slider-label">
                       <span className="topic-name">{topic.name}</span>
-                      <span className={`topic-value ${value < 0.3 ? 'penalize' : value > 0.7 ? 'boost' : 'neutral'}`}>
+                      <span
+                        className={`topic-value ${value < 0.3 ? 'penalize' : value > 0.7 ? 'boost' : 'neutral'}`}
+                      >
                         {percentage}%
                       </span>
                     </div>
@@ -101,9 +101,7 @@ export function TopicSliders({
                         max="100"
                         step="1"
                         value={percentage}
-                        onChange={(e) =>
-                          onChange(topic.slug, parseFloat(e.target.value) / 100)
-                        }
+                        onChange={(e) => onChange(topic.slug, parseFloat(e.target.value) / 100)}
                         disabled={disabled}
                         className="topic-slider-input"
                         aria-label={`${topic.name} preference`}

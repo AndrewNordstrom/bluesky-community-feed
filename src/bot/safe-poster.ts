@@ -47,19 +47,21 @@ export async function postAnnouncementSafe(payload: AnnouncementPayload): Promis
     await redis.lpush(RETRY_QUEUE_KEY, JSON.stringify(retryItem));
 
     // Log failure to audit trail
-    await db.query(
-      `INSERT INTO governance_audit_log (action, details)
+    await db
+      .query(
+        `INSERT INTO governance_audit_log (action, details)
        VALUES ('announcement_failed', $1)`,
-      [
-        JSON.stringify({
-          payload,
-          error: errorMessage,
-          queued_for_retry: true,
-        }),
-      ]
-    ).catch((auditErr) => {
-      logger.error({ err: auditErr }, 'Failed to log announcement failure to audit');
-    });
+        [
+          JSON.stringify({
+            payload,
+            error: errorMessage,
+            queued_for_retry: true,
+          }),
+        ],
+      )
+      .catch((auditErr) => {
+        logger.error({ err: auditErr }, 'Failed to log announcement failure to audit');
+      });
   }
 }
 
@@ -92,20 +94,22 @@ export async function processRetryQueue(): Promise<number> {
     if (item.attempts >= MAX_RETRY_ATTEMPTS) {
       logger.warn(
         { payload: item.payload, attempts: item.attempts },
-        'Announcement retry limit reached, dropping'
+        'Announcement retry limit reached, dropping',
       );
 
-      await db.query(
-        `INSERT INTO governance_audit_log (action, details)
+      await db
+        .query(
+          `INSERT INTO governance_audit_log (action, details)
          VALUES ('announcement_dropped', $1)`,
-        [
-          JSON.stringify({
-            payload: item.payload,
-            attempts: item.attempts,
-            final_error: item.error,
-          }),
-        ]
-      ).catch(() => {});
+          [
+            JSON.stringify({
+              payload: item.payload,
+              attempts: item.attempts,
+              final_error: item.error,
+            }),
+          ],
+        )
+        .catch(() => {});
 
       processed++;
       continue;
@@ -115,14 +119,14 @@ export async function processRetryQueue(): Promise<number> {
       await postAnnouncement(item.payload);
       logger.info(
         { payload: item.payload, attempt: item.attempts + 1 },
-        'Retry announcement succeeded'
+        'Retry announcement succeeded',
       );
       processed++;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       logger.warn(
         { err, payload: item.payload, attempt: item.attempts + 1 },
-        'Retry announcement failed'
+        'Retry announcement failed',
       );
 
       // Re-queue with incremented attempts

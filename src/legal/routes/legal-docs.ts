@@ -49,51 +49,61 @@ const legalDocResponseSchema = {
 };
 
 export function registerLegalDocsRoute(app: FastifyInstance): void {
-  app.get('/api/legal/tos', {
-    schema: {
-      tags: ['Legal'],
-      summary: 'Terms of Service',
-      description: 'Returns the current Terms of Service document in Markdown format with version info.',
-      response: {
-        200: legalDocResponseSchema,
-        404: ErrorResponseSchema,
+  app.get(
+    '/api/legal/tos',
+    {
+      schema: {
+        tags: ['Legal'],
+        summary: 'Terms of Service',
+        description:
+          'Returns the current Terms of Service document in Markdown format with version info.',
+        response: {
+          200: legalDocResponseSchema,
+          404: ErrorResponseSchema,
+        },
       },
     },
-  }, async (_request: FastifyRequest, reply: FastifyReply) => {
-    if (!tosContent) {
-      return reply.code(404).send({ error: 'NotFound', message: 'Document not available' });
-    }
+    async (_request: FastifyRequest, reply: FastifyReply) => {
+      if (!tosContent) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Document not available' });
+      }
 
-    const response: LegalDocResponse = {
-      content: tosContent,
-      document: 'tos',
-      version: VERSION,
-      lastUpdated: LAST_UPDATED,
-    };
-    return reply.send(response);
-  });
+      const response: LegalDocResponse = {
+        content: tosContent,
+        document: 'tos',
+        version: VERSION,
+        lastUpdated: LAST_UPDATED,
+      };
+      return reply.send(response);
+    },
+  );
 
-  app.get('/api/legal/privacy', {
-    schema: {
-      tags: ['Legal'],
-      summary: 'Privacy Policy',
-      description: 'Returns the current Privacy Policy document in Markdown format with version info.',
-      response: {
-        200: legalDocResponseSchema,
-        404: ErrorResponseSchema,
+  app.get(
+    '/api/legal/privacy',
+    {
+      schema: {
+        tags: ['Legal'],
+        summary: 'Privacy Policy',
+        description:
+          'Returns the current Privacy Policy document in Markdown format with version info.',
+        response: {
+          200: legalDocResponseSchema,
+          404: ErrorResponseSchema,
+        },
       },
     },
-  }, async (_request: FastifyRequest, reply: FastifyReply) => {
-    if (!privacyContent) {
-      return reply.code(404).send({ error: 'NotFound', message: 'Document not available' });
-    }
+    async (_request: FastifyRequest, reply: FastifyReply) => {
+      if (!privacyContent) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Document not available' });
+      }
 
-    const response: LegalDocResponse = {
-      content: privacyContent,
-      document: 'privacy',
-      version: VERSION,
-      lastUpdated: LAST_UPDATED,
-    };
-    return reply.send(response);
-  });
+      const response: LegalDocResponse = {
+        content: privacyContent,
+        document: 'privacy',
+        version: VERSION,
+        lastUpdated: LAST_UPDATED,
+      };
+      return reply.send(response);
+    },
+  );
 }

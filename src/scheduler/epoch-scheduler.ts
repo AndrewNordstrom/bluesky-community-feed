@@ -11,7 +11,11 @@ import cron from 'node-cron';
 import type { PoolClient } from 'pg';
 import { db } from '../db/client.js';
 import { aggregateContentVotes, aggregateVotes } from '../governance/aggregation.js';
-import { toContentRules, type ContentRules, type GovernanceWeights } from '../governance/governance.types.js';
+import {
+  toContentRules,
+  type ContentRules,
+  type GovernanceWeights,
+} from '../governance/governance.types.js';
 import {
   announceVotingClosed,
   announceVotingOpen,
@@ -61,14 +65,20 @@ function toPhase(phase: string | null): 'running' | 'voting' | 'results' {
   return 'running';
 }
 
-function toDbContentRules(rules: ContentRules): { include_keywords: string[]; exclude_keywords: string[] } {
+function toDbContentRules(rules: ContentRules): {
+  include_keywords: string[];
+  exclude_keywords: string[];
+} {
   return {
     include_keywords: rules.includeKeywords,
     exclude_keywords: rules.excludeKeywords,
   };
 }
 
-async function getVoteCounts(client: PoolClient, epochId: number): Promise<{ total: number; content: number }> {
+async function getVoteCounts(
+  client: PoolClient,
+  epochId: number,
+): Promise<{ total: number; content: number }> {
   const result = await client.query<{ total: string; content: string }>(
     `SELECT
       COUNT(*)::int AS total,
@@ -80,7 +90,7 @@ async function getVoteCounts(client: PoolClient, epochId: number): Promise<{ tot
       )::int AS content
      FROM governance_votes
      WHERE epoch_id = $1`,
-    [epochId]
+    [epochId],
   );
 
   return {
@@ -95,7 +105,7 @@ async function startDueScheduledVotes(): Promise<{ started: number; errors: numb
      FROM scheduled_votes
      WHERE starts_at <= NOW()
      ORDER BY starts_at ASC
-     LIMIT 20`
+     LIMIT 20`,
   );
 
   let started = 0;
@@ -112,7 +122,7 @@ async function startDueScheduledVotes(): Promise<{ started: number; errors: numb
          WHERE status = 'active'
          ORDER BY id DESC
          LIMIT 1
-         FOR UPDATE`
+         FOR UPDATE`,
       );
 
       const epoch = epochResult.rows[0];
@@ -137,7 +147,7 @@ async function startDueScheduledVotes(): Promise<{ started: number; errors: numb
              proposed_weights = NULL,
              proposed_content_rules = NULL
          WHERE id = $2`,
-        [scheduled.duration_hours, epoch.id]
+        [scheduled.duration_hours, epoch.id],
       );
 
       await client.query(`DELETE FROM scheduled_votes WHERE id = $1`, [scheduled.id]);
@@ -152,7 +162,7 @@ async function startDueScheduledVotes(): Promise<{ started: number; errors: numb
             starts_at: scheduled.starts_at,
             duration_hours: scheduled.duration_hours,
           }),
-        ]
+        ],
       );
 
       await client.query('COMMIT');
@@ -181,7 +191,7 @@ async function closeExpiredVotingWindows(): Promise<{ transitioned: number; erro
        AND voting_ends_at IS NOT NULL
        AND voting_ends_at <= NOW()
      ORDER BY voting_ends_at ASC
-     LIMIT 20`
+     LIMIT 20`,
   );
 
   let transitioned = 0;
@@ -197,7 +207,7 @@ async function closeExpiredVotingWindows(): Promise<{ transitioned: number; erro
          FROM governance_epochs
          WHERE id = $1
          FOR UPDATE`,
-        [row.id]
+        [row.id],
       );
 
       const epoch = epochResult.rows[0];
@@ -208,7 +218,7 @@ async function closeExpiredVotingWindows(): Promise<{ transitioned: number; erro
 
       const voteCounts = await getVoteCounts(client, epoch.id);
       const currentWeights = toWeights(epoch);
-      const currentRules = toContentRules((epoch.content_rules ?? null) as any);
+      const currentRules = toContentRules(epoch.content_rules ?? null);
 
       let proposedWeights = currentWeights;
       let proposedRules = currentRules;
@@ -232,7 +242,11 @@ async function closeExpiredVotingWindows(): Promise<{ transitioned: number; erro
              proposed_weights = $1,
              proposed_content_rules = $2
          WHERE id = $3`,
-        [JSON.stringify(proposedWeights), JSON.stringify(toDbContentRules(proposedRules)), epoch.id]
+        [
+          JSON.stringify(proposedWeights),
+          JSON.stringify(toDbContentRules(proposedRules)),
+          epoch.id,
+        ],
       );
 
       await client.query(
@@ -246,7 +260,7 @@ async function closeExpiredVotingWindows(): Promise<{ transitioned: number; erro
             proposed_weights: proposedWeights,
             proposed_content_rules: toDbContentRules(proposedRules),
           }),
-        ]
+        ],
       );
 
       await client.query('COMMIT');
@@ -272,7 +286,7 @@ async function sendVotingReminders(): Promise<{ reminders: number; errors: numbe
      WHERE status = 'active'
        AND phase = 'voting'
        AND voting_ends_at > NOW() + INTERVAL '23 hours'
-       AND voting_ends_at <= NOW() + INTERVAL '25 hours'`
+       AND voting_ends_at <= NOW() + INTERVAL '25 hours'`,
   );
 
   let reminders = 0;
@@ -286,7 +300,7 @@ async function sendVotingReminders(): Promise<{ reminders: number; errors: numbe
          WHERE epoch_id = $1
            AND action = 'voting_reminder_24h'
          LIMIT 1`,
-        [epoch.id]
+        [epoch.id],
       );
 
       if (alreadySent.rows.length > 0) {
@@ -303,7 +317,7 @@ async function sendVotingReminders(): Promise<{ reminders: number; errors: numbe
           JSON.stringify({
             voting_ends_at: epoch.voting_ends_at,
           }),
-        ]
+        ],
       );
 
       reminders++;

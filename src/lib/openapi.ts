@@ -18,7 +18,8 @@ export function zodToOpenApi<T extends z.ZodType>(schema: T) {
   const result = zodToJsonSchema(schema, { target: 'jsonSchema7' });
 
   if (typeof result === 'object' && result !== null && '$schema' in result) {
-    const { $schema: _, ...rest } = result;
+    const rest = { ...result };
+    delete rest.$schema;
     return rest;
   }
 
@@ -32,7 +33,10 @@ export function zodToOpenApi<T extends z.ZodType>(schema: T) {
 export const ErrorResponseSchema = {
   type: 'object' as const,
   properties: {
-    error: { type: 'string' as const, description: 'Error code (e.g. "ValidationError", "NotFound")' },
+    error: {
+      type: 'string' as const,
+      description: 'Error code (e.g. "ValidationError", "NotFound")',
+    },
     message: { type: 'string' as const, description: 'Human-readable error message' },
     correlationId: { type: 'string' as const, description: 'Request correlation ID for debugging' },
   },

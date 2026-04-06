@@ -147,7 +147,9 @@ describe('admin governance routes', () => {
   it('requires confirmation when removing last include keyword', async () => {
     clientQueryMock
       .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [epochRow({ content_rules: { include_keywords: ['only'], exclude_keywords: [] } })] })
+      .mockResolvedValueOnce({
+        rows: [epochRow({ content_rules: { include_keywords: ['only'], exclude_keywords: [] } })],
+      })
       .mockResolvedValueOnce({ rows: [] });
 
     const app = Fastify();
@@ -225,7 +227,9 @@ describe('admin governance routes', () => {
     clientQueryMock
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [epochRow({ phase: 'voting' })] })
-      .mockResolvedValueOnce({ rows: [epochRow({ phase: 'voting', voting_ends_at: '2026-02-11T00:00:00.000Z' })] })
+      .mockResolvedValueOnce({
+        rows: [epochRow({ phase: 'voting', voting_ends_at: '2026-02-11T00:00:00.000Z' })],
+      })
       .mockResolvedValueOnce({ rows: [{ count: '4' }] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });
@@ -283,7 +287,7 @@ describe('admin governance routes', () => {
     expect(aggregateVotesMock).not.toHaveBeenCalled();
 
     const auditInsert = clientQueryMock.mock.calls.find(
-      (call) => typeof call[0] === 'string' && call[0].includes('INSERT INTO governance_audit_log')
+      (call) => typeof call[0] === 'string' && call[0].includes('INSERT INTO governance_audit_log'),
     );
     expect(auditInsert).toBeTruthy();
 

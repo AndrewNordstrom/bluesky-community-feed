@@ -10,7 +10,7 @@ describe('route rate-limit policy', () => {
     const policy = buildRouteRateLimitConfig(
       '/api/admin/governance/weights',
       'PATCH',
-      noopKeyGenerator
+      noopKeyGenerator,
     );
 
     expect(policy).toMatchObject({
@@ -23,7 +23,7 @@ describe('route rate-limit policy', () => {
     const policy = buildRouteRateLimitConfig(
       '/api/governance/epochs/transition',
       'POST',
-      noopKeyGenerator
+      noopKeyGenerator,
     );
 
     expect(policy).toMatchObject({
@@ -33,21 +33,13 @@ describe('route rate-limit policy', () => {
   });
 
   it('does not attach special policy to governance read-only endpoint', () => {
-    const policy = buildRouteRateLimitConfig(
-      '/api/governance/weights',
-      'GET',
-      noopKeyGenerator
-    );
+    const policy = buildRouteRateLimitConfig('/api/governance/weights', 'GET', noopKeyGenerator);
 
     expect(policy).toBeNull();
   });
 
   it('applies critical limits to MCP transport endpoint', () => {
-    const policy = buildRouteRateLimitConfig(
-      '/mcp',
-      'POST',
-      noopKeyGenerator
-    );
+    const policy = buildRouteRateLimitConfig('/mcp', 'POST', noopKeyGenerator);
 
     expect(policy).toMatchObject({
       max: config.RATE_LIMIT_ADMIN_CRITICAL_MAX,

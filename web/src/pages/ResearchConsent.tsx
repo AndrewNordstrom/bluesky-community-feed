@@ -65,9 +65,9 @@ export function ResearchConsent() {
       <div className="consent-container">
         <h1>Research Participation</h1>
         <p className="consent-description">
-          This feed is part of a research project exploring community algorithmic governance.
-          Your participation in research is <strong>entirely optional</strong> and does not
-          affect your ability to vote or use any features.
+          This feed is part of a research project exploring community algorithmic governance. Your
+          participation in research is <strong>entirely optional</strong> and does not affect your
+          ability to vote or use any features.
         </p>
 
         <div className="consent-details">
@@ -76,19 +76,22 @@ export function ResearchConsent() {
             <li>Your voting data (weights, keywords, timestamps) may be analyzed in aggregate</li>
             <li>Your Bluesky DID will be associated with your votes in the research dataset</li>
             <li>Published findings will use aggregated or de-identified data</li>
-            <li>Individual voting behavior will not be attributed to you without additional consent</li>
+            <li>
+              Individual voting behavior will not be attributed to you without additional consent
+            </li>
           </ul>
 
           <h3>What happens if you decline</h3>
           <ul>
             <li>You retain full access to voting and all governance features</li>
-            <li>Your data is used only for service operation (feed ranking, governance aggregation)</li>
+            <li>
+              Your data is used only for service operation (feed ranking, governance aggregation)
+            </li>
             <li>Your data is excluded from any research analysis or publication</li>
           </ul>
 
           <p className="consent-withdraw">
-            You can change your mind at any time by contacting hello@corgi.network.
-            See our{' '}
+            You can change your mind at any time by contacting hello@corgi.network. See our{' '}
             <a href="/privacy" target="_blank" rel="noopener noreferrer">
               Privacy Policy
             </a>{' '}

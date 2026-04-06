@@ -56,18 +56,14 @@ export function validateRegistry(components: readonly ScoringComponent[]): void 
   // Every component must have a corresponding votable param
   for (const key of componentKeys) {
     if (!paramKeys.has(key)) {
-      throw new Error(
-        `Scoring component "${key}" has no matching votable weight param`
-      );
+      throw new Error(`Scoring component "${key}" has no matching votable weight param`);
     }
   }
 
   // Every votable param must have a corresponding component
   for (const key of paramKeys) {
     if (!componentKeys.has(key)) {
-      throw new Error(
-        `Votable weight param "${key}" has no matching scoring component`
-      );
+      throw new Error(`Votable weight param "${key}" has no matching scoring component`);
     }
   }
 }

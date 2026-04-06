@@ -13,14 +13,13 @@ describe('queue saturation drop counter', () => {
     // Fill all active slots
     await Promise.all(
       Array.from({ length: __testJetstreamQueue.maxConcurrentEvents }, () =>
-        __testJetstreamQueue.acquireSlot()
-      )
+        __testJetstreamQueue.acquireSlot(),
+      ),
     );
 
     // Fill the pending queue to capacity
-    const pendingAcquires = Array.from(
-      { length: __testJetstreamQueue.maxPendingEvents },
-      () => __testJetstreamQueue.acquireSlot()
+    const pendingAcquires = Array.from({ length: __testJetstreamQueue.maxPendingEvents }, () =>
+      __testJetstreamQueue.acquireSlot(),
     );
 
     // This one should be rejected (queue full) — but the counter is

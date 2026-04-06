@@ -1,12 +1,23 @@
 import { config } from './config.js';
 import { logger } from './lib/logger.js';
 import { createServer } from './feed/server.js';
-import { startJetstream, stopJetstream, isJetstreamConnected, getLastEventReceivedAt } from './ingestion/jetstream.js';
+import {
+  startJetstream,
+  stopJetstream,
+  isJetstreamConnected,
+  getLastEventReceivedAt,
+} from './ingestion/jetstream.js';
 import { startScoring, stopScoring, isScoringInProgress } from './scoring/scheduler.js';
 import { getLastScoringRunAt } from './scoring/pipeline.js';
 import { runStartupChecks } from './lib/startup-checks.js';
 import { registerShutdownHandlers } from './lib/shutdown.js';
-import { registerJetstreamHealth, registerScoringHealth, registerDiskHealth, JetstreamHealth, ScoringHealth } from './lib/health.js';
+import {
+  registerJetstreamHealth,
+  registerScoringHealth,
+  registerDiskHealth,
+  JetstreamHealth,
+  ScoringHealth,
+} from './lib/health.js';
 import { getDiskStatus } from './maintenance/disk-monitor.js';
 import { registerBotRoutes } from './bot/server.js';
 import { initializeBot } from './bot/agent.js';
@@ -48,7 +59,7 @@ async function main() {
     });
     logger.info(
       { port: config.FEEDGEN_PORT, host: config.FEEDGEN_LISTENHOST },
-      'Feed generator server started'
+      'Feed generator server started',
     );
 
     // Tell systemd we're ready (Type=notify). No-op outside systemd.
@@ -85,7 +96,10 @@ async function main() {
     try {
       await loadGovernanceGateWeights();
     } catch (err) {
-      logger.warn({ err }, 'Failed to load governance gate weights — gate will be disabled until next cache refresh');
+      logger.warn(
+        { err },
+        'Failed to load governance gate weights — gate will be disabled until next cache refresh',
+      );
     }
   }
 
@@ -179,11 +193,14 @@ async function main() {
   });
 
   // 8. Log startup complete
-  logger.info({
-    serviceDid: config.FEEDGEN_SERVICE_DID,
-    publisherDid: config.FEEDGEN_PUBLISHER_DID,
-    hostname: config.FEEDGEN_HOSTNAME,
-  }, 'All systems operational (Phase 6: Hardening)');
+  logger.info(
+    {
+      serviceDid: config.FEEDGEN_SERVICE_DID,
+      publisherDid: config.FEEDGEN_PUBLISHER_DID,
+      hostname: config.FEEDGEN_HOSTNAME,
+    },
+    'All systems operational (Phase 6: Hardening)',
+  );
 }
 
 // Handle unhandled rejections

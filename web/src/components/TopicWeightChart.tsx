@@ -52,7 +52,10 @@ export function TopicWeightChart({ topics, voterCount }: TopicWeightChartProps) 
 
   // Find most boosted and most penalized
   const mostBoosted = sorted.filter((t) => t.weight > 0.55).slice(0, 2);
-  const mostPenalized = sorted.filter((t) => t.weight < 0.45).reverse().slice(0, 2);
+  const mostPenalized = sorted
+    .filter((t) => t.weight < 0.45)
+    .reverse()
+    .slice(0, 2);
 
   return (
     <div className="topic-weight-chart">

@@ -38,15 +38,20 @@ vi.mock('../src/lib/logger.js', () => ({
   },
 }));
 
-import { checkGovernanceGate, isGovernanceGateReady, loadGovernanceGateWeights, invalidateGovernanceGateCache } from '../src/ingestion/governance-gate.js';
+import {
+  checkGovernanceGate,
+  isGovernanceGateReady,
+  loadGovernanceGateWeights,
+  invalidateGovernanceGateCache,
+} from '../src/ingestion/governance-gate.js';
 
 /** Standard community weights for testing. */
 const COMMUNITY_WEIGHTS: Record<string, number> = {
-  'decentralized-social': 0.90,
+  'decentralized-social': 0.9,
   'open-source': 0.85,
-  'software-development': 0.80,
+  'software-development': 0.8,
   'ai-machine-learning': 0.75,
-  'dogs-pets': 0.50,
+  'dogs-pets': 0.5,
   'politics-governance': 0.05,
   'adult-content': 0.0,
 };
@@ -114,11 +119,11 @@ describe('checkGovernanceGate', () => {
 
   it('passes post matching topic with weight exactly at threshold', async () => {
     // Default INGESTION_MIN_RELEVANCE = 0.10
-    setRedisWeights({ 'edge-topic': 0.10 });
+    setRedisWeights({ 'edge-topic': 0.1 });
     const result = await checkGovernanceGate({ 'edge-topic': 1.0 });
 
     expect(result.passes).toBe(true);
-    expect(result.relevance).toBeCloseTo(0.10, 6);
+    expect(result.relevance).toBeCloseTo(0.1, 6);
   });
 
   it('computes correct weighted average with mixed high/low weight topics', async () => {
@@ -291,7 +296,7 @@ describe('governance gate weight caching', () => {
       'governance_gate:topic_weights',
       JSON.stringify(COMMUNITY_WEIGHTS),
       'EX',
-      300
+      300,
     );
   });
 

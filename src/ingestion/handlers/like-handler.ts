@@ -19,7 +19,7 @@ interface LikeRecord {
 export async function handleLike(
   uri: string,
   authorDid: string,
-  record: Record<string, unknown>
+  record: Record<string, unknown>,
 ): Promise<void> {
   const likeRecord = record as LikeRecord;
 
@@ -40,7 +40,7 @@ export async function handleLike(
        WHERE EXISTS (SELECT 1 FROM posts WHERE uri = $3)
        ON CONFLICT (uri) DO NOTHING
        RETURNING uri`,
-      [uri, authorDid, subjectUri, createdAt]
+      [uri, authorDid, subjectUri, createdAt],
     );
 
     // Only increment counter if this was a new insert (not a duplicate)
@@ -48,7 +48,7 @@ export async function handleLike(
       await db.query(
         `UPDATE post_engagement SET like_count = like_count + 1, updated_at = NOW()
          WHERE post_uri = $1`,
-        [subjectUri]
+        [subjectUri],
       );
 
       // Fire-and-forget: mark engagement attribution if this user was served this post
@@ -67,7 +67,7 @@ export async function handleLike(
            AND ea.viewer_did = $2
            AND ea.epoch_id = active_epoch.id
            AND ea.engaged_at IS NULL`,
-        [subjectUri, authorDid]
+        [subjectUri, authorDid],
       ).catch((err) => logger.warn({ err, subjectUri }, 'Attribution update failed'));
     }
 

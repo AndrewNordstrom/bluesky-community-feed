@@ -59,6 +59,6 @@ export function useAdminStatus() {
     isAdmin: status?.isAdmin ?? false,
     isLoading,
     error,
-    refetch: fetchStatus
+    refetch: fetchStatus,
   };
 }

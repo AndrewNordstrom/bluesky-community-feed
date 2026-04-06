@@ -58,7 +58,9 @@ export function PostExplain() {
         <div className="error-container">
           <h2>Error</h2>
           <p>{error}</p>
-          <Link to="/dashboard" className="back-link">Back to dashboard</Link>
+          <Link to="/dashboard" className="back-link">
+            Back to dashboard
+          </Link>
         </div>
         <style>{styles}</style>
       </div>
@@ -77,9 +79,15 @@ export function PostExplain() {
           <div className="header-left">
             <h1>Community feed</h1>
             <nav className="header-nav">
-              <Link to="/vote" className="nav-link">Vote</Link>
-              <Link to="/dashboard" className="nav-link">Dashboard</Link>
-              <Link to="/history" className="nav-link">History</Link>
+              <Link to="/vote" className="nav-link">
+                Vote
+              </Link>
+              <Link to="/dashboard" className="nav-link">
+                Dashboard
+              </Link>
+              <Link to="/history" className="nav-link">
+                History
+              </Link>
             </nav>
           </div>
         </div>
@@ -89,7 +97,14 @@ export function PostExplain() {
         <div className="page-title">
           <Link to="/dashboard" className="back-link">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M11 1L4 8l7 7" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+              <path
+                d="M11 1L4 8l7 7"
+                stroke="currentColor"
+                strokeWidth="2"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
             Back
           </Link>
@@ -150,7 +165,9 @@ export function PostExplain() {
               {Object.entries(explanation.components).map(([key, component]) => (
                 <tr key={key}>
                   <td className="component-name">
-                    {key === 'source_diversity' ? 'Source diversity' : key.charAt(0).toUpperCase() + key.slice(1)}
+                    {key === 'source_diversity'
+                      ? 'Source diversity'
+                      : key.charAt(0).toUpperCase() + key.slice(1)}
                   </td>
                   <td className="score-cell">{(component.raw_score * 100).toFixed(1)}%</td>
                   <td className="weight-cell">{(component.weight * 100).toFixed(0)}%</td>
@@ -158,18 +175,26 @@ export function PostExplain() {
                     <div className="contribution-bar-container">
                       <div
                         className="contribution-bar"
-                        style={{ width: `${(component.weighted / explanation.total_score) * 100}%` }}
+                        style={{
+                          width: `${(component.weighted / explanation.total_score) * 100}%`,
+                        }}
                       />
                     </div>
-                    <span className="contribution-value">{(component.weighted * 100).toFixed(2)}</span>
+                    <span className="contribution-value">
+                      {(component.weighted * 100).toFixed(2)}
+                    </span>
                   </td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={3}><strong>Total score</strong></td>
-                <td><strong>{(explanation.total_score * 100).toFixed(2)}</strong></td>
+                <td colSpan={3}>
+                  <strong>Total score</strong>
+                </td>
+                <td>
+                  <strong>{(explanation.total_score * 100).toFixed(2)}</strong>
+                </td>
               </tr>
             </tfoot>
           </table>
@@ -177,67 +202,69 @@ export function PostExplain() {
 
         {explanation.components.relevance.topicBreakdown &&
           Object.keys(explanation.components.relevance.topicBreakdown).length > 0 && (
-          <section className="topics-breakdown-section">
-            <h3>Topic matches</h3>
-            <p className="topics-hint">
-              Shows which topics were detected in this post and their community weight.
-            </p>
-            <table className="topic-table">
-              <thead>
-                <tr>
-                  <th>Topic</th>
-                  <th>Match</th>
-                  <th>Community weight</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(explanation.components.relevance.topicBreakdown!)
-                  .sort(([, a], [, b]) => b.contribution - a.contribution)
-                  .map(([slug, entry]) => {
-                    const name = slug
-                      .split('-')
-                      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-                      .join(' ');
-                    const isAboveNeutral = entry.communityWeight > 0.5;
-                    const isBelowNeutral = entry.communityWeight < 0.5;
-                    return (
-                      <tr key={slug}>
-                        <td className="topic-name-cell">{name}</td>
-                        <td className="topic-match-cell">
-                          {(entry.postScore * 100).toFixed(0)}%
-                        </td>
-                        <td className="topic-weight-cell">
-                          <div className="topic-weight-bar-container">
-                            <div
-                              className={`topic-weight-bar ${
-                                isAboveNeutral ? 'boost' : isBelowNeutral ? 'penalize' : 'neutral'
+            <section className="topics-breakdown-section">
+              <h3>Topic matches</h3>
+              <p className="topics-hint">
+                Shows which topics were detected in this post and their community weight.
+              </p>
+              <table className="topic-table">
+                <thead>
+                  <tr>
+                    <th>Topic</th>
+                    <th>Match</th>
+                    <th>Community weight</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(explanation.components.relevance.topicBreakdown!)
+                    .sort(([, a], [, b]) => b.contribution - a.contribution)
+                    .map(([slug, entry]) => {
+                      const name = slug
+                        .split('-')
+                        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                        .join(' ');
+                      const isAboveNeutral = entry.communityWeight > 0.5;
+                      const isBelowNeutral = entry.communityWeight < 0.5;
+                      return (
+                        <tr key={slug}>
+                          <td className="topic-name-cell">{name}</td>
+                          <td className="topic-match-cell">
+                            {(entry.postScore * 100).toFixed(0)}%
+                          </td>
+                          <td className="topic-weight-cell">
+                            <div className="topic-weight-bar-container">
+                              <div
+                                className={`topic-weight-bar ${
+                                  isAboveNeutral ? 'boost' : isBelowNeutral ? 'penalize' : 'neutral'
+                                }`}
+                                style={{
+                                  width: `${entry.communityWeight * 100}%`,
+                                }}
+                              />
+                            </div>
+                            <span
+                              className={`topic-weight-value ${
+                                isAboveNeutral ? 'boost' : isBelowNeutral ? 'penalize' : ''
                               }`}
-                              style={{
-                                width: `${entry.communityWeight * 100}%`,
-                              }}
-                            />
-                          </div>
-                          <span className={`topic-weight-value ${
-                            isAboveNeutral ? 'boost' : isBelowNeutral ? 'penalize' : ''
-                          }`}>
-                            {(entry.communityWeight * 100).toFixed(0)}%
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
-          </section>
-        )}
+                            >
+                              {(entry.communityWeight * 100).toFixed(0)}%
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </section>
+          )}
 
         <section className="counterfactual-section">
           <h3>Governance impact</h3>
           <div className="counterfactual-content">
             <p className="counterfactual-description">
               Without community governance (pure engagement ranking), this post would be ranked{' '}
-              <strong>#{explanation.counterfactual.pure_engagement_rank}</strong>.
-              Community voting has moved it{' '}
+              <strong>#{explanation.counterfactual.pure_engagement_rank}</strong>. Community voting
+              has moved it{' '}
               <strong className={`rank-change ${rankDirection}`}>
                 {rankDiff === 0
                   ? 'no positions'
@@ -250,20 +277,43 @@ export function PostExplain() {
             <div className="rank-comparison">
               <div className="rank-box">
                 <span className="rank-box-label">Pure engagement</span>
-                <span className="rank-box-value">#{explanation.counterfactual.pure_engagement_rank}</span>
+                <span className="rank-box-value">
+                  #{explanation.counterfactual.pure_engagement_rank}
+                </span>
               </div>
               <div className="rank-arrow">
                 {rankDiff > 0 ? (
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 19V5M5 12l7-7 7 7"/>
+                  <svg
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M12 19V5M5 12l7-7 7 7" />
                   </svg>
                 ) : rankDiff < 0 ? (
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 5v14M5 12l7 7 7-7"/>
+                  <svg
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M12 5v14M5 12l7 7 7-7" />
                   </svg>
                 ) : (
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M5 12h14"/>
+                  <svg
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M5 12h14" />
                   </svg>
                 )}
                 <span className="rank-diff">{Math.abs(rankDiff)}</span>
@@ -284,9 +334,7 @@ export function PostExplain() {
           </div>
           <div className="detail-row">
             <span className="detail-label">Last scored</span>
-            <span className="detail-value">
-              {new Date(explanation.scored_at).toLocaleString()}
-            </span>
+            <span className="detail-value">{new Date(explanation.scored_at).toLocaleString()}</span>
           </div>
         </section>
       </main>

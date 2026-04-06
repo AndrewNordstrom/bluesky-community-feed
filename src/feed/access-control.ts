@@ -31,7 +31,7 @@ export async function isParticipantApproved(did: string): Promise<boolean> {
   try {
     const result = await db.query(
       `SELECT 1 FROM approved_participants WHERE did = $1 AND removed_at IS NULL LIMIT 1`,
-      [did]
+      [did],
     );
     const approved = result.rows.length > 0;
 

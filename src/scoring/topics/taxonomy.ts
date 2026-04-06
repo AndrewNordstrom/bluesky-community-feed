@@ -49,7 +49,7 @@ export async function loadTaxonomy(): Promise<Topic[]> {
     `SELECT slug, name, description, parent_slug, terms, context_terms, anti_terms
      FROM topic_catalog
      WHERE is_active = TRUE
-     ORDER BY slug`
+     ORDER BY slug`,
   );
 
   const topics: Topic[] = result.rows.map((row: Record<string, unknown>) => ({
@@ -184,7 +184,7 @@ export async function loadTopicEmbeddings(): Promise<TopicWithEmbedding[]> {
 
   // Load any existing embeddings from DB
   const dbResult = await db.query(
-    `SELECT slug, topic_embedding FROM topic_catalog WHERE is_active = TRUE`
+    `SELECT slug, topic_embedding FROM topic_catalog WHERE is_active = TRUE`,
   );
   const dbEmbeddings = new Map<string, number[] | null>();
   for (const row of dbResult.rows) {
@@ -219,7 +219,7 @@ export async function loadTopicEmbeddings(): Promise<TopicWithEmbedding[]> {
   if (topicsNeedingEmbedding.length > 0) {
     logger.info(
       { count: topicsNeedingEmbedding.length },
-      'Computing embeddings for topics without cached vectors'
+      'Computing embeddings for topics without cached vectors',
     );
 
     // Collect all anchor sentences for batch embedding
@@ -249,15 +249,15 @@ export async function loadTopicEmbeddings(): Promise<TopicWithEmbedding[]> {
 
       // Persist to DB for future startup speed
       const embArray = Array.from(averaged);
-      await db.query(
-        `UPDATE topic_catalog SET topic_embedding = $1 WHERE slug = $2`,
-        [embArray, topic.slug]
-      );
+      await db.query(`UPDATE topic_catalog SET topic_embedding = $1 WHERE slug = $2`, [
+        embArray,
+        topic.slug,
+      ]);
     }
 
     logger.info(
       { computed: topicsNeedingEmbedding.length },
-      'Topic embeddings computed and cached to DB'
+      'Topic embeddings computed and cached to DB',
     );
   }
 

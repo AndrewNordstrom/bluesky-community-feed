@@ -34,29 +34,34 @@ A production Bluesky custom feed where subscribers democratically vote on rankin
 ## Features
 
 **Governance**
+
 - Community voting on 5 ranking components: recency, engagement, bridging, source diversity, relevance
 - Content-rule voting with include/exclude keywords
 - Epoch-based governance lifecycle with trimmed-mean aggregation
 - Append-only audit log (DB-enforced, no edits or deletes)
 
 **Scoring & Transparency**
+
 - Full score decomposition persisted per post per epoch (15 numeric columns: raw, weight, weighted for each component)
 - Transparency endpoints: per-post explanations, counterfactual analysis, feed-level statistics
 - Redis-backed feed serving with snapshot cursors (<50ms response time)
 
 **Feed Intelligence**
+
 - Jetstream ingestion with cursor persistence and automatic reconnection
 - Bluesky `acceptsInteractions` support (See More / See Less feedback buttons)
 - AT Protocol content label filtering (NSFW, moderation labels)
 - Interaction analytics: scroll depth, engagement attribution, keyword performance
 
 **Research Mode**
+
 - Private feed gating: approved participant list for controlled studies
 - Research consent flow with IRB-ready architecture
 - Anonymized data export (deterministic hashing, correlatable across tables)
 - Legal framework: Terms of Service, Privacy Policy, research consent separation
 
 **Admin & Tooling**
+
 - Admin dashboard: governance controls, feed health, interactions, audit log
 - CLI tool (`feed-cli`): full admin operations from any terminal, no VPS access required
 - MCP server: Streamable HTTP admin tools for natural-language feed management
@@ -65,6 +70,7 @@ A production Bluesky custom feed where subscribers democratically vote on rankin
 - Research data export: votes, scores, engagement, epochs, audit log (CSV/JSON)
 
 **Engineering**
+
 - 400+ automated tests (unit, integration, stress) with PR-gated CI
 - Modular scoring component interface (plug in new algorithms without touching the pipeline)
 - Pre-commit hooks (husky + lint-staged + tsc)
@@ -114,21 +120,22 @@ A production Bluesky custom feed where subscribers democratically vote on rankin
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Backend | Node.js 20, TypeScript 5, Fastify 5 |
-| Data | PostgreSQL 16, Redis 7 |
-| Frontend | React 19, Vite 7 |
+| Layer    | Technology                             |
+| -------- | -------------------------------------- |
+| Backend  | Node.js 20, TypeScript 5, Fastify 5    |
+| Data     | PostgreSQL 16, Redis 7                 |
+| Frontend | React 19, Vite 7                       |
 | Protocol | `@atproto/api`, `@atproto/xrpc-server` |
-| NLP | winkNLP (topic classification) |
-| Testing | Vitest, Fastify inject |
-| Deploy | Docker, GitHub Actions CI/CD |
+| NLP      | winkNLP (topic classification)         |
+| Testing  | Vitest, Fastify inject                 |
+| Deploy   | Docker, GitHub Actions CI/CD           |
 
 ---
 
 ## Quickstart
 
 ### Prerequisites
+
 - Node.js >= 20
 - Docker and Docker Compose (for PostgreSQL + Redis)
 - A Bluesky account with an [app password](https://bsky.app/settings/app-passwords)
@@ -194,13 +201,13 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/community_feed" npm 
 
 Five components, each normalized to 0.0–1.0:
 
-| Component | Signal | Method |
-|-----------|--------|--------|
-| Recency | Post age | Exponential decay (18hr half-life) |
-| Engagement | Likes, reposts, replies | Log-scaled (likes×1 + reposts×2 + replies×3) |
-| Bridging | Cross-community appeal | Jaccard distance of engager follow sets |
-| Source Diversity | Author variety | Diminishing returns per author (1.0 → 0.7 → 0.5 → 0.3) |
-| Relevance | Topic match × community preference | Weighted dot product of topic vectors and governance weights |
+| Component        | Signal                             | Method                                                       |
+| ---------------- | ---------------------------------- | ------------------------------------------------------------ |
+| Recency          | Post age                           | Exponential decay (18hr half-life)                           |
+| Engagement       | Likes, reposts, replies            | Log-scaled (likes×1 + reposts×2 + replies×3)                 |
+| Bridging         | Cross-community appeal             | Jaccard distance of engager follow sets                      |
+| Source Diversity | Author variety                     | Diminishing returns per author (1.0 → 0.7 → 0.5 → 0.3)       |
+| Relevance        | Topic match × community preference | Weighted dot product of topic vectors and governance weights |
 
 **Final score:** `total = Σ(component_raw × governance_weight)` where weights sum to 1.0 and are set by community vote.
 
@@ -212,6 +219,7 @@ All 15 numeric values (5× raw, weight, weighted) are persisted per post per epo
 <summary><strong>API Surface</strong></summary>
 
 **Public (no auth)**
+
 - `GET /xrpc/app.bsky.feed.getFeedSkeleton` — Feed skeleton (AT Protocol)
 - `GET /xrpc/app.bsky.feed.describeFeedGenerator` — Feed metadata
 - `POST /xrpc/app.bsky.feed.sendInteractions` — See More/See Less signals
@@ -220,11 +228,13 @@ All 15 numeric values (5× raw, weight, weighted) are persisted per post per epo
 - `GET /docs` — OpenAPI / Swagger UI
 
 **Governance (session auth)**
+
 - `POST /api/governance/auth/login` — Bluesky handle + app password
 - `POST /api/governance/vote` — Submit weight + keyword + topic votes
 - `GET /api/governance/weights`, `/epochs`, `/content-rules` — Current governance state
 
 **Admin (session auth + DID allowlist)**
+
 - `/api/admin/status`, `/epochs`, `/governance/*` — Governance controls
 - `/api/admin/feed/*` — Feed health, rescore, Jetstream reconnect
 - `/api/admin/interactions/*` — Scroll depth, engagement, keyword analytics
@@ -232,6 +242,7 @@ All 15 numeric values (5× raw, weight, weighted) are persisted per post per epo
 - `/api/admin/export/*` — Research data export (votes, scores, engagement, epochs, audit)
 
 **MCP Server**
+
 - `POST /mcp` — Streamable HTTP endpoint for programmatic admin tooling
 
 </details>
@@ -259,24 +270,24 @@ See `npm run cli -- --help` for all commands.
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| [`docs/SYSTEM_OVERVIEW.md`](docs/SYSTEM_OVERVIEW.md) | Architecture and data flow |
-| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Production deployment guide |
-| [`docs/OPS_RUNBOOK.md`](docs/OPS_RUNBOOK.md) | Operations and troubleshooting |
-| [`docs/SECURITY.md`](docs/SECURITY.md) | Security model and threat analysis |
-| [`ROADMAP.md`](ROADMAP.md) | Product and engineering roadmap |
-| [`RELEASING.md`](RELEASING.md) | Semantic versioning and release process |
-| [`docs/ISSUE_TRIAGE.md`](docs/ISSUE_TRIAGE.md) | Issue labels, triage, and newcomer flow |
-| [`docs/MCP_SETUP.md`](docs/MCP_SETUP.md) | MCP server connection guide |
-| [`docs/STABILITY_TEST.md`](docs/STABILITY_TEST.md) | Stability and load testing |
-| [`docs/dev-journal.md`](docs/dev-journal.md) | Development log with decisions |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Contributor guidelines |
-| [`CHANGELOG.md`](CHANGELOG.md) | Version history |
-| [`SECURITY.md`](SECURITY.md) | Vulnerability reporting policy |
-| [`SUPPORT.md`](SUPPORT.md) | Support channels and issue guidance |
-| [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Community code of conduct |
-| [`legal/`](legal/) | Terms of Service, Privacy Policy |
+| Document                                             | Description                             |
+| ---------------------------------------------------- | --------------------------------------- |
+| [`docs/SYSTEM_OVERVIEW.md`](docs/SYSTEM_OVERVIEW.md) | Architecture and data flow              |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)           | Production deployment guide             |
+| [`docs/OPS_RUNBOOK.md`](docs/OPS_RUNBOOK.md)         | Operations and troubleshooting          |
+| [`docs/SECURITY.md`](docs/SECURITY.md)               | Security model and threat analysis      |
+| [`ROADMAP.md`](ROADMAP.md)                           | Product and engineering roadmap         |
+| [`RELEASING.md`](RELEASING.md)                       | Semantic versioning and release process |
+| [`docs/ISSUE_TRIAGE.md`](docs/ISSUE_TRIAGE.md)       | Issue labels, triage, and newcomer flow |
+| [`docs/MCP_SETUP.md`](docs/MCP_SETUP.md)             | MCP server connection guide             |
+| [`docs/STABILITY_TEST.md`](docs/STABILITY_TEST.md)   | Stability and load testing              |
+| [`docs/dev-journal.md`](docs/dev-journal.md)         | Development log with decisions          |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md)                 | Contributor guidelines                  |
+| [`CHANGELOG.md`](CHANGELOG.md)                       | Version history                         |
+| [`SECURITY.md`](SECURITY.md)                         | Vulnerability reporting policy          |
+| [`SUPPORT.md`](SUPPORT.md)                           | Support channels and issue guidance     |
+| [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)           | Community code of conduct               |
+| [`legal/`](legal/)                                   | Terms of Service, Privacy Policy        |
 
 ---
 
@@ -285,6 +296,7 @@ See `npm run cli -- --help` for all commands.
 This project is a research instrument for studying algorithmic governance. It is developed in the context of work on community-governed recommendation systems for decentralized social networks.
 
 The system is designed so that:
+
 - Every ranking decision is decomposable and auditable
 - Community preferences are captured through structured governance votes
 - The effect of governance changes on feed behavior is measurable across epochs

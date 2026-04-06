@@ -7,13 +7,11 @@
 import type { Command } from 'commander';
 import { resolveConfig } from '../config.js';
 import { apiGet, apiPost } from '../http.js';
-import { printJson, printSummary, printTable, printError } from '../output.js';
+import { printJson, printSummary, printError } from '../output.js';
 
 /** Register rules commands on the program. */
 export function registerRulesCommands(program: Command): void {
-  const rules = program
-    .command('rules')
-    .description('Manage content filter rules');
+  const rules = program.command('rules').description('Manage content filter rules');
 
   // ── List ──
   rules
@@ -22,10 +20,7 @@ export function registerRulesCommands(program: Command): void {
     .action(async () => {
       try {
         const config = resolveConfig(program.opts());
-        const data = await apiGet<Record<string, unknown>>(
-          '/api/admin/governance/status',
-          config
-        );
+        const data = await apiGet<Record<string, unknown>>('/api/admin/governance/status', config);
 
         if (config.json) {
           printJson(data);
@@ -59,7 +54,7 @@ export function registerRulesCommands(program: Command): void {
         const data = await apiPost<Record<string, unknown>>(
           '/api/admin/governance/content-rules',
           body,
-          config
+          config,
         );
 
         if (config.json) {
@@ -83,7 +78,7 @@ export function registerRulesCommands(program: Command): void {
         const data = await apiPost<Record<string, unknown>>(
           '/api/admin/governance/content-rules/apply',
           {},
-          config
+          config,
         );
 
         if (config.json) {

@@ -28,27 +28,19 @@ const MAX_FEED_CONTEXT_LENGTH = 512;
 const INTERACTION_EVENT_PATTERN = /^app\.bsky\.feed\.defs#[a-zA-Z][a-zA-Z0-9]{1,63}$/;
 
 const InteractionSchema = z.object({
-  item: z
-    .string()
-    .trim()
-    .min(1)
-    .max(MAX_URI_LENGTH)
-    .startsWith('at://'),
+  item: z.string().trim().min(1).max(MAX_URI_LENGTH).startsWith('at://'),
   event: z
     .string()
     .trim()
     .regex(
       INTERACTION_EVENT_PATTERN,
-      'Interaction event must use app.bsky.feed.defs#<EventName> format'
+      'Interaction event must use app.bsky.feed.defs#<EventName> format',
     ),
   feedContext: z.string().trim().max(MAX_FEED_CONTEXT_LENGTH).optional(),
 });
 
 const SendInteractionsBodySchema = z.object({
-  interactions: z
-    .array(InteractionSchema)
-    .min(1)
-    .max(MAX_INTERACTIONS_PER_REQUEST),
+  interactions: z.array(InteractionSchema).min(1).max(MAX_INTERACTIONS_PER_REQUEST),
 });
 
 /** JSON Schema for Fastify route definition (consumed by @fastify/swagger for OpenAPI). */
@@ -83,9 +75,7 @@ export function registerSendInteractions(app: FastifyInstance): void {
     },
     async (request: FastifyRequest, reply) => {
       // Auth is mandatory for sendInteractions
-      const requesterDid = await verifyFeedRequesterDid(
-        request.headers.authorization
-      );
+      const requesterDid = await verifyFeedRequesterDid(request.headers.authorization);
       if (!requesterDid) {
         throw Errors.UNAUTHORIZED('Valid JWT required');
       }
@@ -101,10 +91,7 @@ export function registerSendInteractions(app: FastifyInstance): void {
       // Validate body
       const parseResult = SendInteractionsBodySchema.safeParse(request.body);
       if (!parseResult.success) {
-        throw Errors.VALIDATION_ERROR(
-          'Invalid interactions payload',
-          parseResult.error.issues
-        );
+        throw Errors.VALIDATION_ERROR('Invalid interactions payload', parseResult.error.issues);
       }
 
       const { interactions } = parseResult.data;
@@ -127,15 +114,13 @@ export function registerSendInteractions(app: FastifyInstance): void {
       for (let i = 0; i < interactions.length; i++) {
         const interaction = interactions[i];
         const base = i * 5;
-        placeholders.push(
-          `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`
-        );
+        placeholders.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`);
         values.push(
           requesterDid,
           interaction.item,
           interaction.event,
           interaction.feedContext ?? null,
-          epochId
+          epochId,
         );
       }
 
@@ -144,19 +129,22 @@ export function registerSendInteractions(app: FastifyInstance): void {
           `INSERT INTO feed_interactions (requester_did, post_uri, interaction_type, feed_context, epoch_id)
            VALUES ${placeholders.join(', ')}
            ON CONFLICT DO NOTHING`,
-          values
+          values,
         );
       } catch (err) {
-        logger.error({ err, requesterDid, count: interactions.length }, 'Failed to store feed interactions');
+        logger.error(
+          { err, requesterDid, count: interactions.length },
+          'Failed to store feed interactions',
+        );
         throw Errors.DATABASE_ERROR('Failed to store interactions');
       }
 
       logger.info(
         { requesterDid, count: interactions.length, epochId },
-        'Stored feed interactions'
+        'Stored feed interactions',
       );
 
       return reply.send({});
-    }
+    },
   );
 }

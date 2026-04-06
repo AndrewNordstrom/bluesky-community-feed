@@ -7,13 +7,13 @@ describe('jetstream backpressure queue', () => {
 
     const activeAcquires = await Promise.all(
       Array.from({ length: __testJetstreamQueue.maxConcurrentEvents }, () =>
-        __testJetstreamQueue.acquireSlot()
-      )
+        __testJetstreamQueue.acquireSlot(),
+      ),
     );
     expect(activeAcquires.every(Boolean)).toBe(true);
 
     const pendingAcquires = Array.from({ length: __testJetstreamQueue.maxPendingEvents }, () =>
-      __testJetstreamQueue.acquireSlot()
+      __testJetstreamQueue.acquireSlot(),
     );
 
     expect(__testJetstreamQueue.getState()).toEqual({
@@ -40,8 +40,8 @@ describe('jetstream backpressure queue', () => {
 
     await Promise.all(
       Array.from({ length: __testJetstreamQueue.maxConcurrentEvents }, () =>
-        __testJetstreamQueue.acquireSlot()
-      )
+        __testJetstreamQueue.acquireSlot(),
+      ),
     );
 
     const queuedA = __testJetstreamQueue.acquireSlot();

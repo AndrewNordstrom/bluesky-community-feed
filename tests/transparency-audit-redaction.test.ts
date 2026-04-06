@@ -20,40 +20,38 @@ describe('audit log redaction', () => {
   });
 
   it('redacts identity and vote payload details on public transparency route', async () => {
-    dbQueryMock
-      .mockResolvedValueOnce({ rows: [{ total: '2' }] })
-      .mockResolvedValueOnce({
-        rows: [
-          {
-            id: 10,
-            action: 'vote_cast',
-            actor_did: 'did:plc:voter',
-            epoch_id: 7,
-            details: {
-              weights: {
-                recency: 0.3,
-                engagement: 0.2,
-              },
-              content_vote: {
-                include_keywords: ['atproto', 'pds'],
-                exclude_keywords: ['nsfw'],
-              },
+    dbQueryMock.mockResolvedValueOnce({ rows: [{ total: '2' }] }).mockResolvedValueOnce({
+      rows: [
+        {
+          id: 10,
+          action: 'vote_cast',
+          actor_did: 'did:plc:voter',
+          epoch_id: 7,
+          details: {
+            weights: {
+              recency: 0.3,
+              engagement: 0.2,
             },
-            created_at: '2026-02-10T00:00:00.000Z',
-          },
-          {
-            id: 11,
-            action: 'epoch_transition',
-            actor_did: 'did:plc:admin',
-            epoch_id: 7,
-            details: {
-              from_epoch: 6,
-              to_epoch: 7,
+            content_vote: {
+              include_keywords: ['atproto', 'pds'],
+              exclude_keywords: ['nsfw'],
             },
-            created_at: '2026-02-10T00:01:00.000Z',
           },
-        ],
-      });
+          created_at: '2026-02-10T00:00:00.000Z',
+        },
+        {
+          id: 11,
+          action: 'epoch_transition',
+          actor_did: 'did:plc:admin',
+          epoch_id: 7,
+          details: {
+            from_epoch: 6,
+            to_epoch: 7,
+          },
+          created_at: '2026-02-10T00:01:00.000Z',
+        },
+      ],
+    });
 
     const app = Fastify();
     app.setValidatorCompiler(() => () => true);

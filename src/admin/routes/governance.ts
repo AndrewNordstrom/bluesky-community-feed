@@ -62,7 +62,7 @@ const WeightPatchSchema = z
       value.bridging !== undefined ||
       value.sourceDiversity !== undefined ||
       value.relevance !== undefined,
-    { message: 'At least one weight override is required' }
+    { message: 'At least one weight override is required' },
   );
 
 const ExtendVotingSchema = z.object({
@@ -189,7 +189,10 @@ function toWeights(row: GovernanceEpochRow): GovernanceWeights {
   };
 }
 
-function toDbContentRules(rules: ContentRules): { include_keywords: string[]; exclude_keywords: string[] } {
+function toDbContentRules(rules: ContentRules): {
+  include_keywords: string[];
+  exclude_keywords: string[];
+} {
   return {
     include_keywords: rules.includeKeywords,
     exclude_keywords: rules.excludeKeywords,
@@ -217,8 +220,7 @@ function toProposedWeights(raw: unknown): GovernanceWeights | null {
   const recency = typeof value.recency === 'number' ? value.recency : null;
   const engagement = typeof value.engagement === 'number' ? value.engagement : null;
   const bridging = typeof value.bridging === 'number' ? value.bridging : null;
-  const sourceDiversity =
-    typeof value.sourceDiversity === 'number' ? value.sourceDiversity : null;
+  const sourceDiversity = typeof value.sourceDiversity === 'number' ? value.sourceDiversity : null;
   const relevance = typeof value.relevance === 'number' ? value.relevance : null;
 
   if (
@@ -245,10 +247,13 @@ function toProposedContentRules(raw: unknown): ContentRules | null {
     return null;
   }
 
-  return toContentRules(raw as any);
+  return toContentRules(raw);
 }
 
-function toContentRulesPayload(rules: ContentRules): { include_keywords: string[]; exclude_keywords: string[] } {
+function toContentRulesPayload(rules: ContentRules): {
+  include_keywords: string[];
+  exclude_keywords: string[];
+} {
   return {
     include_keywords: rules.includeKeywords,
     exclude_keywords: rules.excludeKeywords,
@@ -280,7 +285,7 @@ function sanitizeSingleKeyword(rawKeyword: string): string {
 }
 
 function mapRound(row: GovernanceEpochRow, voteCount: number) {
-  const contentRules = toContentRules((row.content_rules ?? null) as any);
+  const contentRules = toContentRules(row.content_rules ?? null);
 
   return {
     id: row.id,
@@ -312,7 +317,7 @@ async function getCurrentEpochForUpdate(client: PoolClient): Promise<GovernanceE
      WHERE status IN ('active', 'voting')
      ORDER BY id DESC
      LIMIT 1
-     FOR UPDATE`
+     FOR UPDATE`,
   );
 
   return result.rows[0] ?? null;
@@ -328,7 +333,10 @@ async function triggerManualRescore(reason: string): Promise<boolean> {
   return triggered;
 }
 
-async function getVoteCounts(client: PoolClient, epochId: number): Promise<{ total: number; content: number }> {
+async function getVoteCounts(
+  client: PoolClient,
+  epochId: number,
+): Promise<{ total: number; content: number }> {
   const result = await client.query<{ total: string; content: string }>(
     `SELECT
       COUNT(*)::int AS total,
@@ -340,7 +348,7 @@ async function getVoteCounts(client: PoolClient, epochId: number): Promise<{ tot
       )::int AS content
      FROM governance_votes
      WHERE epoch_id = $1`,
-    [epochId]
+    [epochId],
   );
 
   return {
@@ -361,30 +369,34 @@ function mapScheduledVote(row: ScheduledVoteRow) {
 }
 
 export function registerGovernanceRoutes(app: FastifyInstance): void {
-  app.get('/governance', {
-    schema: {
-      tags: ['Admin'],
-      summary: 'Governance overview',
-      description: 'Returns a full governance overview: the current round, all recent rounds (up to 30), current weights, content keywords, and voting schedule.',
-      security: adminSecurity,
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            currentRound: { ...roundSchema, nullable: true },
-            rounds: { type: 'array', items: roundSchema },
-            weights: { ...weightsSchema, nullable: true },
-            includeKeywords: { type: 'array', items: { type: 'string' } },
-            excludeKeywords: { type: 'array', items: { type: 'string' } },
-            votingEndsAt: { type: 'string', format: 'date-time', nullable: true },
-            autoTransition: { type: 'boolean' },
+  app.get(
+    '/governance',
+    {
+      schema: {
+        tags: ['Admin'],
+        summary: 'Governance overview',
+        description:
+          'Returns a full governance overview: the current round, all recent rounds (up to 30), current weights, content keywords, and voting schedule.',
+        security: adminSecurity,
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              currentRound: { ...roundSchema, nullable: true },
+              rounds: { type: 'array', items: roundSchema },
+              weights: { ...weightsSchema, nullable: true },
+              includeKeywords: { type: 'array', items: { type: 'string' } },
+              excludeKeywords: { type: 'array', items: { type: 'string' } },
+              votingEndsAt: { type: 'string', format: 'date-time', nullable: true },
+              autoTransition: { type: 'boolean' },
+            },
           },
         },
       },
     },
-  }, async (_request: FastifyRequest, reply: FastifyReply) => {
-    const roundsResult = await db.query<GovernanceEpochRow & { vote_count: string }>(
-      `SELECT
+    async (_request: FastifyRequest, reply: FastifyReply) => {
+      const roundsResult = await db.query<GovernanceEpochRow & { vote_count: string }>(
+        `SELECT
         e.id,
         e.status,
         e.phase,
@@ -409,88 +421,93 @@ export function registerGovernanceRoutes(app: FastifyInstance): void {
        LEFT JOIN governance_votes v ON v.epoch_id = e.id
        GROUP BY e.id
        ORDER BY e.id DESC
-       LIMIT 30`
-    );
+       LIMIT 30`,
+      );
 
-    const rounds = roundsResult.rows.map((row) => mapRound(row, parseInt(row.vote_count, 10)));
-    const currentRound = rounds.find((round) => round.status === 'active' || round.status === 'voting') ?? null;
+      const rounds = roundsResult.rows.map((row) => mapRound(row, parseInt(row.vote_count, 10)));
+      const currentRound =
+        rounds.find((round) => round.status === 'active' || round.status === 'voting') ?? null;
 
-    return reply.send({
-      currentRound,
-      rounds,
-      weights: currentRound?.weights ?? null,
-      includeKeywords: currentRound?.contentRules.includeKeywords ?? [],
-      excludeKeywords: currentRound?.contentRules.excludeKeywords ?? [],
-      votingEndsAt: currentRound?.votingEndsAt ?? null,
-      autoTransition: currentRound?.autoTransition ?? false,
-    });
-  });
+      return reply.send({
+        currentRound,
+        rounds,
+        weights: currentRound?.weights ?? null,
+        includeKeywords: currentRound?.contentRules.includeKeywords ?? [],
+        excludeKeywords: currentRound?.contentRules.excludeKeywords ?? [],
+        votingEndsAt: currentRound?.votingEndsAt ?? null,
+        autoTransition: currentRound?.autoTransition ?? false,
+      });
+    },
+  );
 
-  app.post('/governance/start-voting', {
-    schema: {
-      tags: ['Admin'],
-      summary: 'Start voting period',
-      description: 'Opens a voting period on the current round. Optionally announces to Bluesky.',
-      security: adminSecurity,
-      body: StartVotingJsonSchema,
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            round: roundSchema,
+  app.post(
+    '/governance/start-voting',
+    {
+      schema: {
+        tags: ['Admin'],
+        summary: 'Start voting period',
+        description: 'Opens a voting period on the current round. Optionally announces to Bluesky.',
+        security: adminSecurity,
+        body: StartVotingJsonSchema,
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              round: roundSchema,
+            },
+            required: ['success'],
           },
-          required: ['success'],
+          400: ErrorResponseSchema,
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+          500: ErrorResponseSchema,
         },
-        400: ErrorResponseSchema,
-        404: ErrorResponseSchema,
-        409: ErrorResponseSchema,
-        500: ErrorResponseSchema,
       },
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const adminDid = getAdminDid(request);
-    const parseResult = StartVotingSchema.safeParse(request.body ?? {});
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const adminDid = getAdminDid(request);
+      const parseResult = StartVotingSchema.safeParse(request.body ?? {});
 
-    if (!parseResult.success) {
-      return reply.code(400).send({
-        error: 'ValidationError',
-        message: 'Invalid start-voting request',
-        details: parseResult.error.issues,
-      });
-    }
-
-    const { durationHours, announce } = parseResult.data;
-    const client = await db.connect();
-
-    try {
-      await client.query('BEGIN');
-
-      const epoch = await getCurrentEpochForUpdate(client);
-      if (!epoch) {
-        await client.query('ROLLBACK');
-        return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
-      }
-
-      const phase = toPhase(epoch);
-      if (phase === 'voting') {
-        await client.query('ROLLBACK');
-        return reply.code(409).send({
-          error: 'AlreadyVoting',
-          message: 'A voting period is already open for the current round',
+      if (!parseResult.success) {
+        return reply.code(400).send({
+          error: 'ValidationError',
+          message: 'Invalid start-voting request',
+          details: parseResult.error.issues,
         });
       }
 
-      if (phase === 'results') {
-        await client.query('ROLLBACK');
-        return reply.code(409).send({
-          error: 'ResultsPending',
-          message: 'Current round is awaiting results approval/rejection',
-        });
-      }
+      const { durationHours, announce } = parseResult.data;
+      const client = await db.connect();
 
-      const updatedResult = await client.query<GovernanceEpochRow>(
-        `UPDATE governance_epochs
+      try {
+        await client.query('BEGIN');
+
+        const epoch = await getCurrentEpochForUpdate(client);
+        if (!epoch) {
+          await client.query('ROLLBACK');
+          return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
+        }
+
+        const phase = toPhase(epoch);
+        if (phase === 'voting') {
+          await client.query('ROLLBACK');
+          return reply.code(409).send({
+            error: 'AlreadyVoting',
+            message: 'A voting period is already open for the current round',
+          });
+        }
+
+        if (phase === 'results') {
+          await client.query('ROLLBACK');
+          return reply.code(409).send({
+            error: 'ResultsPending',
+            message: 'Current round is awaiting results approval/rejection',
+          });
+        }
+
+        const updatedResult = await client.query<GovernanceEpochRow>(
+          `UPDATE governance_epochs
          SET phase = 'voting',
              status = 'active',
              voting_started_at = NOW(),
@@ -503,124 +520,129 @@ export function registerGovernanceRoutes(app: FastifyInstance): void {
              proposed_content_rules = NULL
          WHERE id = $2
          RETURNING *`,
-        [durationHours, epoch.id]
-      );
+          [durationHours, epoch.id],
+        );
 
-      const voteCounts = await getVoteCounts(client, epoch.id);
+        const voteCounts = await getVoteCounts(client, epoch.id);
 
-      await client.query(
-        `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
+        await client.query(
+          `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
          VALUES ('admin_start_voting', $1, $2, $3)`,
-        [
-          adminDid,
-          epoch.id,
-          JSON.stringify({
-            duration_hours: durationHours,
-            announce,
-          }),
-        ]
-      );
+          [
+            adminDid,
+            epoch.id,
+            JSON.stringify({
+              duration_hours: durationHours,
+              announce,
+            }),
+          ],
+        );
 
-      await client.query('COMMIT');
+        await client.query('COMMIT');
 
-      if (announce) {
-        await announceVotingOpen({ id: epoch.id }, `${durationHours} hour(s)`);
+        if (announce) {
+          await announceVotingOpen({ id: epoch.id }, `${durationHours} hour(s)`);
+        }
+
+        return reply.send({
+          success: true,
+          round: mapRound(updatedResult.rows[0], voteCounts.total),
+        });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        logger.error({ error, adminDid }, 'Failed to start voting period');
+        return reply.code(500).send({
+          error: 'StartVotingFailed',
+          message: 'Failed to start voting period',
+        });
+      } finally {
+        client.release();
       }
+    },
+  );
 
-      return reply.send({
-        success: true,
-        round: mapRound(updatedResult.rows[0], voteCounts.total),
-      });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      logger.error({ error, adminDid }, 'Failed to start voting period');
-      return reply.code(500).send({
-        error: 'StartVotingFailed',
-        message: 'Failed to start voting period',
-      });
-    } finally {
-      client.release();
-    }
-  });
-
-  app.post('/governance/end-voting', {
-    schema: {
-      tags: ['Admin'],
-      summary: 'End voting period',
-      description: 'Closes the current voting period, aggregates votes, and moves the round to results phase. Optionally announces to Bluesky.',
-      security: adminSecurity,
-      body: EndVotingJsonSchema,
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            voteCount: { type: 'integer' },
-            proposedWeights: weightsSchema,
-            proposedContentRules: contentRulesSchema,
-            round: roundSchema,
+  app.post(
+    '/governance/end-voting',
+    {
+      schema: {
+        tags: ['Admin'],
+        summary: 'End voting period',
+        description:
+          'Closes the current voting period, aggregates votes, and moves the round to results phase. Optionally announces to Bluesky.',
+        security: adminSecurity,
+        body: EndVotingJsonSchema,
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              voteCount: { type: 'integer' },
+              proposedWeights: weightsSchema,
+              proposedContentRules: contentRulesSchema,
+              round: roundSchema,
+            },
+            required: ['success'],
           },
-          required: ['success'],
+          400: ErrorResponseSchema,
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+          500: ErrorResponseSchema,
         },
-        400: ErrorResponseSchema,
-        404: ErrorResponseSchema,
-        409: ErrorResponseSchema,
-        500: ErrorResponseSchema,
       },
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const adminDid = getAdminDid(request);
-    const parseResult = EndVotingSchema.safeParse(request.body ?? {});
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const adminDid = getAdminDid(request);
+      const parseResult = EndVotingSchema.safeParse(request.body ?? {});
 
-    if (!parseResult.success) {
-      return reply.code(400).send({
-        error: 'ValidationError',
-        message: 'Invalid end-voting request',
-        details: parseResult.error.issues,
-      });
-    }
-
-    const { announce } = parseResult.data;
-    const client = await db.connect();
-
-    try {
-      await client.query('BEGIN');
-
-      const epoch = await getCurrentEpochForUpdate(client);
-      if (!epoch) {
-        await client.query('ROLLBACK');
-        return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
-      }
-
-      const phase = toPhase(epoch);
-      if (phase !== 'voting') {
-        await client.query('ROLLBACK');
-        return reply.code(409).send({
-          error: 'VotingNotOpen',
-          message: 'Voting is not currently open for this round',
+      if (!parseResult.success) {
+        return reply.code(400).send({
+          error: 'ValidationError',
+          message: 'Invalid end-voting request',
+          details: parseResult.error.issues,
         });
       }
 
-      const voteCounts = await getVoteCounts(client, epoch.id);
-      const previousWeights = toWeights(epoch);
-      const previousRules = toContentRules((epoch.content_rules ?? null) as any);
+      const { announce } = parseResult.data;
+      const client = await db.connect();
 
-      let proposedWeights = previousWeights;
-      let proposedRules = previousRules;
+      try {
+        await client.query('BEGIN');
 
-      if (voteCounts.total > 0) {
-        const aggregatedWeights = await aggregateVotes(epoch.id);
-        if (aggregatedWeights) {
-          proposedWeights = aggregatedWeights;
+        const epoch = await getCurrentEpochForUpdate(client);
+        if (!epoch) {
+          await client.query('ROLLBACK');
+          return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
         }
-      }
 
-      if (voteCounts.content > 0) {
-        proposedRules = await aggregateContentVotes(epoch.id);
-      }
+        const phase = toPhase(epoch);
+        if (phase !== 'voting') {
+          await client.query('ROLLBACK');
+          return reply.code(409).send({
+            error: 'VotingNotOpen',
+            message: 'Voting is not currently open for this round',
+          });
+        }
 
-      const updatedResult = await client.query<GovernanceEpochRow>(
-        `UPDATE governance_epochs
+        const voteCounts = await getVoteCounts(client, epoch.id);
+        const previousWeights = toWeights(epoch);
+        const previousRules = toContentRules(epoch.content_rules ?? null);
+
+        let proposedWeights = previousWeights;
+        let proposedRules = previousRules;
+
+        if (voteCounts.total > 0) {
+          const aggregatedWeights = await aggregateVotes(epoch.id);
+          if (aggregatedWeights) {
+            proposedWeights = aggregatedWeights;
+          }
+        }
+
+        if (voteCounts.content > 0) {
+          proposedRules = await aggregateContentVotes(epoch.id);
+        }
+
+        const updatedResult = await client.query<GovernanceEpochRow>(
+          `UPDATE governance_epochs
          SET phase = 'results',
              voting_closed_at = NOW(),
              auto_transition = FALSE,
@@ -628,114 +650,124 @@ export function registerGovernanceRoutes(app: FastifyInstance): void {
              proposed_content_rules = $2
          WHERE id = $3
          RETURNING *`,
-        [JSON.stringify(proposedWeights), JSON.stringify(toDbContentRules(proposedRules)), epoch.id]
-      );
+          [
+            JSON.stringify(proposedWeights),
+            JSON.stringify(toDbContentRules(proposedRules)),
+            epoch.id,
+          ],
+        );
 
-      await client.query(
-        `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
+        await client.query(
+          `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
          VALUES ('admin_end_voting', $1, $2, $3)`,
-        [
-          adminDid,
-          epoch.id,
-          JSON.stringify({
-            vote_count: voteCounts.total,
-            content_vote_count: voteCounts.content,
-            proposed_weights: proposedWeights,
-            proposed_content_rules: toDbContentRules(proposedRules),
-            announce,
-          }),
-        ]
-      );
+          [
+            adminDid,
+            epoch.id,
+            JSON.stringify({
+              vote_count: voteCounts.total,
+              content_vote_count: voteCounts.content,
+              proposed_weights: proposedWeights,
+              proposed_content_rules: toDbContentRules(proposedRules),
+              announce,
+            }),
+          ],
+        );
 
-      await client.query('COMMIT');
+        await client.query('COMMIT');
 
-      if (announce) {
-        await announceVotingClosed({ id: epoch.id }, voteCounts.total);
+        if (announce) {
+          await announceVotingClosed({ id: epoch.id }, voteCounts.total);
+        }
+
+        return reply.send({
+          success: true,
+          voteCount: voteCounts.total,
+          proposedWeights,
+          proposedContentRules: proposedRules,
+          round: mapRound(updatedResult.rows[0], voteCounts.total),
+        });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        logger.error({ error, adminDid }, 'Failed to end voting period');
+        return reply.code(500).send({
+          error: 'EndVotingFailed',
+          message: 'Failed to end voting period',
+        });
+      } finally {
+        client.release();
       }
+    },
+  );
 
-      return reply.send({
-        success: true,
-        voteCount: voteCounts.total,
-        proposedWeights,
-        proposedContentRules: proposedRules,
-        round: mapRound(updatedResult.rows[0], voteCounts.total),
-      });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      logger.error({ error, adminDid }, 'Failed to end voting period');
-      return reply.code(500).send({
-        error: 'EndVotingFailed',
-        message: 'Failed to end voting period',
-      });
-    } finally {
-      client.release();
-    }
-  });
-
-  app.post('/governance/approve-results', {
-    schema: {
-      tags: ['Admin'],
-      summary: 'Approve voting results',
-      description: 'Approves aggregated voting results, applying the proposed weights and content rules to the active epoch. Triggers a rescore.',
-      security: adminSecurity,
-      body: ApproveResultsJsonSchema,
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            weights: weightsSchema,
-            contentRules: contentRulesSchema,
-            rescoreTriggered: { type: 'boolean' },
-            round: roundSchema,
+  app.post(
+    '/governance/approve-results',
+    {
+      schema: {
+        tags: ['Admin'],
+        summary: 'Approve voting results',
+        description:
+          'Approves aggregated voting results, applying the proposed weights and content rules to the active epoch. Triggers a rescore.',
+        security: adminSecurity,
+        body: ApproveResultsJsonSchema,
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              weights: weightsSchema,
+              contentRules: contentRulesSchema,
+              rescoreTriggered: { type: 'boolean' },
+              round: roundSchema,
+            },
+            required: ['success'],
           },
-          required: ['success'],
+          400: ErrorResponseSchema,
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+          500: ErrorResponseSchema,
         },
-        400: ErrorResponseSchema,
-        404: ErrorResponseSchema,
-        409: ErrorResponseSchema,
-        500: ErrorResponseSchema,
       },
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const adminDid = getAdminDid(request);
-    const parseResult = ApproveResultsSchema.safeParse(request.body ?? {});
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const adminDid = getAdminDid(request);
+      const parseResult = ApproveResultsSchema.safeParse(request.body ?? {});
 
-    if (!parseResult.success) {
-      return reply.code(400).send({
-        error: 'ValidationError',
-        message: 'Invalid approve-results request',
-        details: parseResult.error.issues,
-      });
-    }
-
-    const { announce } = parseResult.data;
-    const client = await db.connect();
-
-    try {
-      await client.query('BEGIN');
-
-      const epoch = await getCurrentEpochForUpdate(client);
-      if (!epoch) {
-        await client.query('ROLLBACK');
-        return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
-      }
-
-      if (toPhase(epoch) !== 'results') {
-        await client.query('ROLLBACK');
-        return reply.code(409).send({
-          error: 'ResultsNotPending',
-          message: 'No pending results to approve',
+      if (!parseResult.success) {
+        return reply.code(400).send({
+          error: 'ValidationError',
+          message: 'Invalid approve-results request',
+          details: parseResult.error.issues,
         });
       }
 
-      const oldWeights = toWeights(epoch);
-      const oldContentRules = toContentRules((epoch.content_rules ?? null) as any);
-      const newWeights = toProposedWeights(epoch.proposed_weights) ?? oldWeights;
-      const newContentRules = toProposedContentRules(epoch.proposed_content_rules) ?? oldContentRules;
+      const { announce } = parseResult.data;
+      const client = await db.connect();
 
-      const updatedResult = await client.query<GovernanceEpochRow>(
-        `UPDATE governance_epochs
+      try {
+        await client.query('BEGIN');
+
+        const epoch = await getCurrentEpochForUpdate(client);
+        if (!epoch) {
+          await client.query('ROLLBACK');
+          return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
+        }
+
+        if (toPhase(epoch) !== 'results') {
+          await client.query('ROLLBACK');
+          return reply.code(409).send({
+            error: 'ResultsNotPending',
+            message: 'No pending results to approve',
+          });
+        }
+
+        const oldWeights = toWeights(epoch);
+        const oldContentRules = toContentRules(epoch.content_rules ?? null);
+        const newWeights = toProposedWeights(epoch.proposed_weights) ?? oldWeights;
+        const newContentRules =
+          toProposedContentRules(epoch.proposed_content_rules) ?? oldContentRules;
+
+        const updatedResult = await client.query<GovernanceEpochRow>(
+          `UPDATE governance_epochs
          SET recency_weight = $1,
              engagement_weight = $2,
              bridging_weight = $3,
@@ -751,115 +783,120 @@ export function registerGovernanceRoutes(app: FastifyInstance): void {
              results_approved_by = $7
          WHERE id = $8
          RETURNING *`,
-        [
-          newWeights.recency,
-          newWeights.engagement,
-          newWeights.bridging,
-          newWeights.sourceDiversity,
-          newWeights.relevance,
-          JSON.stringify(toDbContentRules(newContentRules)),
-          adminDid,
-          epoch.id,
-        ]
-      );
-
-      const voteCounts = await getVoteCounts(client, epoch.id);
-
-      await client.query(
-        `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
-         VALUES ('admin_approve_results', $1, $2, $3)`,
-        [
-          adminDid,
-          epoch.id,
-          JSON.stringify({
-            old_weights: oldWeights,
-            new_weights: newWeights,
-            old_content_rules: toDbContentRules(oldContentRules),
-            new_content_rules: toDbContentRules(newContentRules),
-            announce,
-          }),
-        ]
-      );
-
-      await client.query('COMMIT');
-
-      await invalidateContentRulesCache();
-      const rescoreTriggered = await triggerManualRescore('admin_approve_results');
-
-      if (announce) {
-        await announceResultsApproved(
-          { id: epoch.id },
-          {
-            oldWeights,
-            newWeights,
-            oldContentRules,
-            newContentRules,
-          }
+          [
+            newWeights.recency,
+            newWeights.engagement,
+            newWeights.bridging,
+            newWeights.sourceDiversity,
+            newWeights.relevance,
+            JSON.stringify(toDbContentRules(newContentRules)),
+            adminDid,
+            epoch.id,
+          ],
         );
+
+        const voteCounts = await getVoteCounts(client, epoch.id);
+
+        await client.query(
+          `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
+         VALUES ('admin_approve_results', $1, $2, $3)`,
+          [
+            adminDid,
+            epoch.id,
+            JSON.stringify({
+              old_weights: oldWeights,
+              new_weights: newWeights,
+              old_content_rules: toDbContentRules(oldContentRules),
+              new_content_rules: toDbContentRules(newContentRules),
+              announce,
+            }),
+          ],
+        );
+
+        await client.query('COMMIT');
+
+        await invalidateContentRulesCache();
+        const rescoreTriggered = await triggerManualRescore('admin_approve_results');
+
+        if (announce) {
+          await announceResultsApproved(
+            { id: epoch.id },
+            {
+              oldWeights,
+              newWeights,
+              oldContentRules,
+              newContentRules,
+            },
+          );
+        }
+
+        return reply.send({
+          success: true,
+          weights: newWeights,
+          contentRules: newContentRules,
+          rescoreTriggered,
+          round: mapRound(updatedResult.rows[0], voteCounts.total),
+        });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        logger.error({ error, adminDid }, 'Failed to approve voting results');
+        return reply.code(500).send({
+          error: 'ApproveResultsFailed',
+          message: 'Failed to approve voting results',
+        });
+      } finally {
+        client.release();
       }
+    },
+  );
 
-      return reply.send({
-        success: true,
-        weights: newWeights,
-        contentRules: newContentRules,
-        rescoreTriggered,
-        round: mapRound(updatedResult.rows[0], voteCounts.total),
-      });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      logger.error({ error, adminDid }, 'Failed to approve voting results');
-      return reply.code(500).send({
-        error: 'ApproveResultsFailed',
-        message: 'Failed to approve voting results',
-      });
-    } finally {
-      client.release();
-    }
-  });
-
-  app.post('/governance/reject-results', {
-    schema: {
-      tags: ['Admin'],
-      summary: 'Reject voting results',
-      description: 'Rejects the proposed voting results and returns the round to running phase. Weights remain unchanged.',
-      security: adminSecurity,
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            round: roundSchema,
+  app.post(
+    '/governance/reject-results',
+    {
+      schema: {
+        tags: ['Admin'],
+        summary: 'Reject voting results',
+        description:
+          'Rejects the proposed voting results and returns the round to running phase. Weights remain unchanged.',
+        security: adminSecurity,
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              round: roundSchema,
+            },
+            required: ['success'],
           },
-          required: ['success'],
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+          500: ErrorResponseSchema,
         },
-        404: ErrorResponseSchema,
-        409: ErrorResponseSchema,
-        500: ErrorResponseSchema,
       },
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const adminDid = getAdminDid(request);
-    const client = await db.connect();
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const adminDid = getAdminDid(request);
+      const client = await db.connect();
 
-    try {
-      await client.query('BEGIN');
+      try {
+        await client.query('BEGIN');
 
-      const epoch = await getCurrentEpochForUpdate(client);
-      if (!epoch) {
-        await client.query('ROLLBACK');
-        return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
-      }
+        const epoch = await getCurrentEpochForUpdate(client);
+        if (!epoch) {
+          await client.query('ROLLBACK');
+          return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
+        }
 
-      if (toPhase(epoch) !== 'results') {
-        await client.query('ROLLBACK');
-        return reply.code(409).send({
-          error: 'ResultsNotPending',
-          message: 'No pending results to reject',
-        });
-      }
+        if (toPhase(epoch) !== 'results') {
+          await client.query('ROLLBACK');
+          return reply.code(409).send({
+            error: 'ResultsNotPending',
+            message: 'No pending results to reject',
+          });
+        }
 
-      const updatedResult = await client.query<GovernanceEpochRow>(
-        `UPDATE governance_epochs
+        const updatedResult = await client.query<GovernanceEpochRow>(
+          `UPDATE governance_epochs
          SET phase = 'running',
              voting_ends_at = NULL,
              auto_transition = FALSE,
@@ -867,145 +904,58 @@ export function registerGovernanceRoutes(app: FastifyInstance): void {
              proposed_content_rules = NULL
          WHERE id = $1
          RETURNING *`,
-        [epoch.id]
-      );
+          [epoch.id],
+        );
 
-      const voteCounts = await getVoteCounts(client, epoch.id);
+        const voteCounts = await getVoteCounts(client, epoch.id);
 
-      await client.query(
-        `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
+        await client.query(
+          `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
          VALUES ('admin_reject_results', $1, $2, $3)`,
-        [
-          adminDid,
-          epoch.id,
-          JSON.stringify({
-            rejected_at: new Date().toISOString(),
-          }),
-        ]
-      );
+          [
+            adminDid,
+            epoch.id,
+            JSON.stringify({
+              rejected_at: new Date().toISOString(),
+            }),
+          ],
+        );
 
-      await client.query('COMMIT');
+        await client.query('COMMIT');
 
-      return reply.send({
-        success: true,
-        round: mapRound(updatedResult.rows[0], voteCounts.total),
-      });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      logger.error({ error, adminDid }, 'Failed to reject voting results');
-      return reply.code(500).send({
-        error: 'RejectResultsFailed',
-        message: 'Failed to reject voting results',
-      });
-    } finally {
-      client.release();
-    }
-  });
-
-  app.post('/governance/schedule-vote', {
-    schema: {
-      tags: ['Admin'],
-      summary: 'Schedule a future vote',
-      description: 'Schedules a voting period to start automatically at a future time. Announces the schedule to Bluesky.',
-      security: adminSecurity,
-      body: ScheduleVoteJsonSchema,
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            scheduledVote: {
-              type: 'object',
-              properties: {
-                id: { type: 'integer' },
-                startsAt: { type: 'string', format: 'date-time' },
-                durationHours: { type: 'integer' },
-                announced: { type: 'boolean' },
-                createdBy: { type: 'string' },
-                createdAt: { type: 'string', format: 'date-time' },
-              },
-            },
-          },
-          required: ['success'],
-        },
-        400: ErrorResponseSchema,
-        500: ErrorResponseSchema,
-      },
+        return reply.send({
+          success: true,
+          round: mapRound(updatedResult.rows[0], voteCounts.total),
+        });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        logger.error({ error, adminDid }, 'Failed to reject voting results');
+        return reply.code(500).send({
+          error: 'RejectResultsFailed',
+          message: 'Failed to reject voting results',
+        });
+      } finally {
+        client.release();
+      }
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const adminDid = getAdminDid(request);
-    const parseResult = ScheduleVoteSchema.safeParse(request.body ?? {});
+  );
 
-    if (!parseResult.success) {
-      return reply.code(400).send({
-        error: 'ValidationError',
-        message: 'Invalid schedule-vote request',
-        details: parseResult.error.issues,
-      });
-    }
-
-    const startsAt = new Date(parseResult.data.startsAt);
-    if (Number.isNaN(startsAt.getTime())) {
-      return reply.code(400).send({
-        error: 'ValidationError',
-        message: 'startsAt must be a valid ISO datetime string',
-      });
-    }
-
-    if (startsAt.getTime() <= Date.now()) {
-      return reply.code(400).send({
-        error: 'ValidationError',
-        message: 'startsAt must be in the future',
-      });
-    }
-
-    const result = await db.query<ScheduledVoteRow>(
-      `INSERT INTO scheduled_votes (starts_at, duration_hours, created_by)
-       VALUES ($1, $2, $3)
-       RETURNING id, starts_at, duration_hours, announced, created_by, created_at`,
-      [startsAt.toISOString(), parseResult.data.durationHours, adminDid]
-    );
-
-    const scheduledVote = mapScheduledVote(result.rows[0]);
-
-    await db.query(
-      `INSERT INTO governance_audit_log (action, actor_did, details)
-       VALUES ('admin_schedule_vote', $1, $2)`,
-      [
-        adminDid,
-        JSON.stringify({
-          scheduled_vote_id: scheduledVote.id,
-          starts_at: scheduledVote.startsAt,
-          duration_hours: scheduledVote.durationHours,
-        }),
-      ]
-    );
-
-    await announceVoteScheduled({
-      id: scheduledVote.id,
-      startsAt: scheduledVote.startsAt,
-      durationHours: scheduledVote.durationHours,
-    });
-
-    return reply.send({
-      success: true,
-      scheduledVote,
-    });
-  });
-
-  app.get('/governance/schedule', {
-    schema: {
-      tags: ['Admin'],
-      summary: 'List scheduled votes',
-      description: 'Returns upcoming and recently past scheduled voting periods.',
-      security: adminSecurity,
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            scheduledVotes: {
-              type: 'array',
-              items: {
+  app.post(
+    '/governance/schedule-vote',
+    {
+      schema: {
+        tags: ['Admin'],
+        summary: 'Schedule a future vote',
+        description:
+          'Schedules a voting period to start automatically at a future time. Announces the schedule to Bluesky.',
+        security: adminSecurity,
+        body: ScheduleVoteJsonSchema,
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              scheduledVote: {
                 type: 'object',
                 properties: {
                   id: { type: 'integer' },
@@ -1017,667 +967,796 @@ export function registerGovernanceRoutes(app: FastifyInstance): void {
                 },
               },
             },
+            required: ['success'],
           },
+          400: ErrorResponseSchema,
+          500: ErrorResponseSchema,
         },
       },
     },
-  }, async (_request: FastifyRequest, reply: FastifyReply) => {
-    const result = await db.query<ScheduledVoteRow>(
-      `SELECT id, starts_at, duration_hours, announced, created_by, created_at
-       FROM scheduled_votes
-       WHERE starts_at >= NOW() - INTERVAL '1 hour'
-       ORDER BY starts_at ASC`
-    );
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const adminDid = getAdminDid(request);
+      const parseResult = ScheduleVoteSchema.safeParse(request.body ?? {});
 
-    return reply.send({
-      scheduledVotes: result.rows.map(mapScheduledVote),
-    });
-  });
-
-  app.patch('/governance/content-rules', {
-    schema: {
-      tags: ['Admin'],
-      summary: 'Override content rules',
-      description: 'Admin override of include/exclude keyword lists on the current epoch. Triggers a rescore.',
-      security: adminSecurity,
-      body: {
-        type: 'object',
-        properties: {
-          includeKeywords: { type: 'array', items: { type: 'string' } },
-          excludeKeywords: { type: 'array', items: { type: 'string' } },
-        },
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            rules: contentRulesSchema,
-            rescoreTriggered: { type: 'boolean' },
-          },
-          required: ['success'],
-        },
-        400: ErrorResponseSchema,
-        404: ErrorResponseSchema,
-        500: ErrorResponseSchema,
-      },
-    },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const adminDid = getAdminDid(request);
-    const parseResult = ContentRulesPatchSchema.safeParse(request.body);
-
-    if (!parseResult.success) {
-      return reply.code(400).send({
-        error: 'ValidationError',
-        message: 'Invalid content rules payload',
-        details: parseResult.error.issues,
-      });
-    }
-
-    const client = await db.connect();
-
-    try {
-      await client.query('BEGIN');
-
-      const epoch = await getCurrentEpochForUpdate(client);
-      if (!epoch) {
-        await client.query('ROLLBACK');
-        return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
-      }
-
-      const previousRules = toContentRules((epoch.content_rules ?? null) as any);
-      const includeKeywords =
-        parseResult.data.includeKeywords !== undefined
-          ? sanitizeKeywordList(parseResult.data.includeKeywords)
-          : previousRules.includeKeywords;
-      const excludeKeywords =
-        parseResult.data.excludeKeywords !== undefined
-          ? sanitizeKeywordList(parseResult.data.excludeKeywords)
-          : previousRules.excludeKeywords;
-
-      const updatedRules: ContentRules = { includeKeywords, excludeKeywords };
-
-      await client.query(
-        `UPDATE governance_epochs
-         SET content_rules = $1
-         WHERE id = $2`,
-        [JSON.stringify(toContentRulesPayload(updatedRules)), epoch.id]
-      );
-
-      await client.query(
-        `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
-         VALUES ('admin_rules_override', $1, $2, $3)`,
-        [
-          adminDid,
-          epoch.id,
-          JSON.stringify({
-            old_content_rules: toContentRulesPayload(previousRules),
-            new_content_rules: toContentRulesPayload(updatedRules),
-          }),
-        ]
-      );
-
-      await client.query('COMMIT');
-
-      await invalidateContentRulesCache();
-      const rescoreTriggered = await triggerManualRescore('admin_rules_override');
-
-      return reply.send({
-        success: true,
-        rules: updatedRules,
-        rescoreTriggered,
-      });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      logger.error({ error, adminDid }, 'Failed to update content rules');
-
-      const message = error instanceof Error ? error.message : 'Failed to update content rules';
-      return reply.code(500).send({ error: 'UpdateFailed', message });
-    } finally {
-      client.release();
-    }
-  });
-
-  app.post('/governance/content-rules/keyword', {
-    schema: {
-      tags: ['Admin'],
-      summary: 'Add a keyword',
-      description: 'Adds a single keyword to either the include or exclude list. Triggers a rescore.',
-      security: adminSecurity,
-      body: KeywordActionJsonSchema,
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            rules: contentRulesSchema,
-            rescoreTriggered: { type: 'boolean' },
-          },
-          required: ['success'],
-        },
-        400: ErrorResponseSchema,
-        404: ErrorResponseSchema,
-        409: ErrorResponseSchema,
-        500: ErrorResponseSchema,
-      },
-    },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const adminDid = getAdminDid(request);
-    const parseResult = KeywordActionSchema.safeParse(request.body);
-
-    if (!parseResult.success) {
-      return reply.code(400).send({
-        error: 'ValidationError',
-        message: 'Invalid keyword request',
-        details: parseResult.error.issues,
-      });
-    }
-
-    const { type } = parseResult.data;
-    let keyword: string;
-
-    try {
-      keyword = sanitizeSingleKeyword(parseResult.data.keyword);
-    } catch (error) {
-      return reply.code(400).send({
-        error: 'ValidationError',
-        message: error instanceof Error ? error.message : 'Invalid keyword',
-      });
-    }
-
-    const client = await db.connect();
-
-    try {
-      await client.query('BEGIN');
-
-      const epoch = await getCurrentEpochForUpdate(client);
-      if (!epoch) {
-        await client.query('ROLLBACK');
-        return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
-      }
-
-      const previousRules = toContentRules((epoch.content_rules ?? null) as any);
-      const nextRules: ContentRules = {
-        includeKeywords: [...previousRules.includeKeywords],
-        excludeKeywords: [...previousRules.excludeKeywords],
-      };
-
-      const target = type === 'include' ? nextRules.includeKeywords : nextRules.excludeKeywords;
-
-      if (target.includes(keyword)) {
-        await client.query('ROLLBACK');
-        return reply.code(409).send({
-          error: 'Conflict',
-          message: 'Keyword already exists in this rule set',
-        });
-      }
-
-      if (target.length >= 20) {
-        await client.query('ROLLBACK');
+      if (!parseResult.success) {
         return reply.code(400).send({
           error: 'ValidationError',
-          message: 'Maximum 20 keywords allowed per rule set',
+          message: 'Invalid schedule-vote request',
+          details: parseResult.error.issues,
         });
       }
 
-      target.push(keyword);
+      const startsAt = new Date(parseResult.data.startsAt);
+      if (Number.isNaN(startsAt.getTime())) {
+        return reply.code(400).send({
+          error: 'ValidationError',
+          message: 'startsAt must be a valid ISO datetime string',
+        });
+      }
 
-      await client.query(
-        `UPDATE governance_epochs
-         SET content_rules = $1
-         WHERE id = $2`,
-        [JSON.stringify(toContentRulesPayload(nextRules)), epoch.id]
+      if (startsAt.getTime() <= Date.now()) {
+        return reply.code(400).send({
+          error: 'ValidationError',
+          message: 'startsAt must be in the future',
+        });
+      }
+
+      const result = await db.query<ScheduledVoteRow>(
+        `INSERT INTO scheduled_votes (starts_at, duration_hours, created_by)
+       VALUES ($1, $2, $3)
+       RETURNING id, starts_at, duration_hours, announced, created_by, created_at`,
+        [startsAt.toISOString(), parseResult.data.durationHours, adminDid],
       );
 
-      await client.query(
-        `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
+      const scheduledVote = mapScheduledVote(result.rows[0]);
+
+      await db.query(
+        `INSERT INTO governance_audit_log (action, actor_did, details)
+       VALUES ('admin_schedule_vote', $1, $2)`,
+        [
+          adminDid,
+          JSON.stringify({
+            scheduled_vote_id: scheduledVote.id,
+            starts_at: scheduledVote.startsAt,
+            duration_hours: scheduledVote.durationHours,
+          }),
+        ],
+      );
+
+      await announceVoteScheduled({
+        id: scheduledVote.id,
+        startsAt: scheduledVote.startsAt,
+        durationHours: scheduledVote.durationHours,
+      });
+
+      return reply.send({
+        success: true,
+        scheduledVote,
+      });
+    },
+  );
+
+  app.get(
+    '/governance/schedule',
+    {
+      schema: {
+        tags: ['Admin'],
+        summary: 'List scheduled votes',
+        description: 'Returns upcoming and recently past scheduled voting periods.',
+        security: adminSecurity,
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              scheduledVotes: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'integer' },
+                    startsAt: { type: 'string', format: 'date-time' },
+                    durationHours: { type: 'integer' },
+                    announced: { type: 'boolean' },
+                    createdBy: { type: 'string' },
+                    createdAt: { type: 'string', format: 'date-time' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (_request: FastifyRequest, reply: FastifyReply) => {
+      const result = await db.query<ScheduledVoteRow>(
+        `SELECT id, starts_at, duration_hours, announced, created_by, created_at
+       FROM scheduled_votes
+       WHERE starts_at >= NOW() - INTERVAL '1 hour'
+       ORDER BY starts_at ASC`,
+      );
+
+      return reply.send({
+        scheduledVotes: result.rows.map(mapScheduledVote),
+      });
+    },
+  );
+
+  app.patch(
+    '/governance/content-rules',
+    {
+      schema: {
+        tags: ['Admin'],
+        summary: 'Override content rules',
+        description:
+          'Admin override of include/exclude keyword lists on the current epoch. Triggers a rescore.',
+        security: adminSecurity,
+        body: {
+          type: 'object',
+          properties: {
+            includeKeywords: { type: 'array', items: { type: 'string' } },
+            excludeKeywords: { type: 'array', items: { type: 'string' } },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              rules: contentRulesSchema,
+              rescoreTriggered: { type: 'boolean' },
+            },
+            required: ['success'],
+          },
+          400: ErrorResponseSchema,
+          404: ErrorResponseSchema,
+          500: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const adminDid = getAdminDid(request);
+      const parseResult = ContentRulesPatchSchema.safeParse(request.body);
+
+      if (!parseResult.success) {
+        return reply.code(400).send({
+          error: 'ValidationError',
+          message: 'Invalid content rules payload',
+          details: parseResult.error.issues,
+        });
+      }
+
+      const client = await db.connect();
+
+      try {
+        await client.query('BEGIN');
+
+        const epoch = await getCurrentEpochForUpdate(client);
+        if (!epoch) {
+          await client.query('ROLLBACK');
+          return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
+        }
+
+        const previousRules = toContentRules(epoch.content_rules ?? null);
+        const includeKeywords =
+          parseResult.data.includeKeywords !== undefined
+            ? sanitizeKeywordList(parseResult.data.includeKeywords)
+            : previousRules.includeKeywords;
+        const excludeKeywords =
+          parseResult.data.excludeKeywords !== undefined
+            ? sanitizeKeywordList(parseResult.data.excludeKeywords)
+            : previousRules.excludeKeywords;
+
+        const updatedRules: ContentRules = { includeKeywords, excludeKeywords };
+
+        await client.query(
+          `UPDATE governance_epochs
+         SET content_rules = $1
+         WHERE id = $2`,
+          [JSON.stringify(toContentRulesPayload(updatedRules)), epoch.id],
+        );
+
+        await client.query(
+          `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
+         VALUES ('admin_rules_override', $1, $2, $3)`,
+          [
+            adminDid,
+            epoch.id,
+            JSON.stringify({
+              old_content_rules: toContentRulesPayload(previousRules),
+              new_content_rules: toContentRulesPayload(updatedRules),
+            }),
+          ],
+        );
+
+        await client.query('COMMIT');
+
+        await invalidateContentRulesCache();
+        const rescoreTriggered = await triggerManualRescore('admin_rules_override');
+
+        return reply.send({
+          success: true,
+          rules: updatedRules,
+          rescoreTriggered,
+        });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        logger.error({ error, adminDid }, 'Failed to update content rules');
+
+        const message = error instanceof Error ? error.message : 'Failed to update content rules';
+        return reply.code(500).send({ error: 'UpdateFailed', message });
+      } finally {
+        client.release();
+      }
+    },
+  );
+
+  app.post(
+    '/governance/content-rules/keyword',
+    {
+      schema: {
+        tags: ['Admin'],
+        summary: 'Add a keyword',
+        description:
+          'Adds a single keyword to either the include or exclude list. Triggers a rescore.',
+        security: adminSecurity,
+        body: KeywordActionJsonSchema,
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              rules: contentRulesSchema,
+              rescoreTriggered: { type: 'boolean' },
+            },
+            required: ['success'],
+          },
+          400: ErrorResponseSchema,
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+          500: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const adminDid = getAdminDid(request);
+      const parseResult = KeywordActionSchema.safeParse(request.body);
+
+      if (!parseResult.success) {
+        return reply.code(400).send({
+          error: 'ValidationError',
+          message: 'Invalid keyword request',
+          details: parseResult.error.issues,
+        });
+      }
+
+      const { type } = parseResult.data;
+      let keyword: string;
+
+      try {
+        keyword = sanitizeSingleKeyword(parseResult.data.keyword);
+      } catch (error) {
+        return reply.code(400).send({
+          error: 'ValidationError',
+          message: error instanceof Error ? error.message : 'Invalid keyword',
+        });
+      }
+
+      const client = await db.connect();
+
+      try {
+        await client.query('BEGIN');
+
+        const epoch = await getCurrentEpochForUpdate(client);
+        if (!epoch) {
+          await client.query('ROLLBACK');
+          return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
+        }
+
+        const previousRules = toContentRules(epoch.content_rules ?? null);
+        const nextRules: ContentRules = {
+          includeKeywords: [...previousRules.includeKeywords],
+          excludeKeywords: [...previousRules.excludeKeywords],
+        };
+
+        const target = type === 'include' ? nextRules.includeKeywords : nextRules.excludeKeywords;
+
+        if (target.includes(keyword)) {
+          await client.query('ROLLBACK');
+          return reply.code(409).send({
+            error: 'Conflict',
+            message: 'Keyword already exists in this rule set',
+          });
+        }
+
+        if (target.length >= 20) {
+          await client.query('ROLLBACK');
+          return reply.code(400).send({
+            error: 'ValidationError',
+            message: 'Maximum 20 keywords allowed per rule set',
+          });
+        }
+
+        target.push(keyword);
+
+        await client.query(
+          `UPDATE governance_epochs
+         SET content_rules = $1
+         WHERE id = $2`,
+          [JSON.stringify(toContentRulesPayload(nextRules)), epoch.id],
+        );
+
+        await client.query(
+          `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
          VALUES ('admin_keyword_added', $1, $2, $3)`,
-        [
-          adminDid,
-          epoch.id,
-          JSON.stringify({
-            type,
-            keyword,
-            old_content_rules: toContentRulesPayload(previousRules),
-            new_content_rules: toContentRulesPayload(nextRules),
-          }),
-        ]
-      );
+          [
+            adminDid,
+            epoch.id,
+            JSON.stringify({
+              type,
+              keyword,
+              old_content_rules: toContentRulesPayload(previousRules),
+              new_content_rules: toContentRulesPayload(nextRules),
+            }),
+          ],
+        );
 
-      await client.query('COMMIT');
+        await client.query('COMMIT');
 
-      await invalidateContentRulesCache();
-      const rescoreTriggered = await triggerManualRescore('admin_keyword_added');
+        await invalidateContentRulesCache();
+        const rescoreTriggered = await triggerManualRescore('admin_keyword_added');
 
-      return reply.send({
-        success: true,
-        rules: nextRules,
-        rescoreTriggered,
-      });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      logger.error({ error, adminDid, type }, 'Failed to add keyword');
+        return reply.send({
+          success: true,
+          rules: nextRules,
+          rescoreTriggered,
+        });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        logger.error({ error, adminDid, type }, 'Failed to add keyword');
 
-      return reply.code(500).send({
-        error: 'KeywordAddFailed',
-        message: 'Failed to add keyword',
-      });
-    } finally {
-      client.release();
-    }
-  });
+        return reply.code(500).send({
+          error: 'KeywordAddFailed',
+          message: 'Failed to add keyword',
+        });
+      } finally {
+        client.release();
+      }
+    },
+  );
 
-  app.delete('/governance/content-rules/keyword', {
-    schema: {
-      tags: ['Admin'],
-      summary: 'Remove a keyword',
-      description: 'Removes a keyword from the include or exclude list. Removing the last include keyword requires confirm=true. Triggers a rescore.',
-      security: adminSecurity,
-      body: KeywordActionJsonSchema,
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            rules: contentRulesSchema,
-            rescoreTriggered: { type: 'boolean' },
+  app.delete(
+    '/governance/content-rules/keyword',
+    {
+      schema: {
+        tags: ['Admin'],
+        summary: 'Remove a keyword',
+        description:
+          'Removes a keyword from the include or exclude list. Removing the last include keyword requires confirm=true. Triggers a rescore.',
+        security: adminSecurity,
+        body: KeywordActionJsonSchema,
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              rules: contentRulesSchema,
+              rescoreTriggered: { type: 'boolean' },
+            },
+            required: ['success'],
           },
-          required: ['success'],
+          400: ErrorResponseSchema,
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+          500: ErrorResponseSchema,
         },
-        400: ErrorResponseSchema,
-        404: ErrorResponseSchema,
-        409: ErrorResponseSchema,
-        500: ErrorResponseSchema,
       },
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const adminDid = getAdminDid(request);
-    const parseResult = KeywordActionSchema.safeParse(request.body);
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const adminDid = getAdminDid(request);
+      const parseResult = KeywordActionSchema.safeParse(request.body);
 
-    if (!parseResult.success) {
-      return reply.code(400).send({
-        error: 'ValidationError',
-        message: 'Invalid keyword request',
-        details: parseResult.error.issues,
-      });
-    }
-
-    const { type, confirm } = parseResult.data;
-    let keyword: string;
-
-    try {
-      keyword = sanitizeSingleKeyword(parseResult.data.keyword);
-    } catch (error) {
-      return reply.code(400).send({
-        error: 'ValidationError',
-        message: error instanceof Error ? error.message : 'Invalid keyword',
-      });
-    }
-
-    const client = await db.connect();
-
-    try {
-      await client.query('BEGIN');
-
-      const epoch = await getCurrentEpochForUpdate(client);
-      if (!epoch) {
-        await client.query('ROLLBACK');
-        return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
-      }
-
-      const previousRules = toContentRules((epoch.content_rules ?? null) as any);
-      const nextRules: ContentRules = {
-        includeKeywords: [...previousRules.includeKeywords],
-        excludeKeywords: [...previousRules.excludeKeywords],
-      };
-
-      const target = type === 'include' ? nextRules.includeKeywords : nextRules.excludeKeywords;
-      const index = target.indexOf(keyword);
-
-      if (index === -1) {
-        await client.query('ROLLBACK');
-        return reply.code(404).send({
-          error: 'NotFound',
-          message: 'Keyword not found in this rule set',
+      if (!parseResult.success) {
+        return reply.code(400).send({
+          error: 'ValidationError',
+          message: 'Invalid keyword request',
+          details: parseResult.error.issues,
         });
       }
 
-      if (type === 'include' && target.length === 1 && confirm !== true) {
-        await client.query('ROLLBACK');
-        return reply.code(409).send({
-          error: 'ConfirmationRequired',
-          message: 'Removing the last include keyword requires confirm=true',
+      const { type, confirm } = parseResult.data;
+      let keyword: string;
+
+      try {
+        keyword = sanitizeSingleKeyword(parseResult.data.keyword);
+      } catch (error) {
+        return reply.code(400).send({
+          error: 'ValidationError',
+          message: error instanceof Error ? error.message : 'Invalid keyword',
         });
       }
 
-      target.splice(index, 1);
+      const client = await db.connect();
 
-      await client.query(
-        `UPDATE governance_epochs
+      try {
+        await client.query('BEGIN');
+
+        const epoch = await getCurrentEpochForUpdate(client);
+        if (!epoch) {
+          await client.query('ROLLBACK');
+          return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
+        }
+
+        const previousRules = toContentRules(epoch.content_rules ?? null);
+        const nextRules: ContentRules = {
+          includeKeywords: [...previousRules.includeKeywords],
+          excludeKeywords: [...previousRules.excludeKeywords],
+        };
+
+        const target = type === 'include' ? nextRules.includeKeywords : nextRules.excludeKeywords;
+        const index = target.indexOf(keyword);
+
+        if (index === -1) {
+          await client.query('ROLLBACK');
+          return reply.code(404).send({
+            error: 'NotFound',
+            message: 'Keyword not found in this rule set',
+          });
+        }
+
+        if (type === 'include' && target.length === 1 && confirm !== true) {
+          await client.query('ROLLBACK');
+          return reply.code(409).send({
+            error: 'ConfirmationRequired',
+            message: 'Removing the last include keyword requires confirm=true',
+          });
+        }
+
+        target.splice(index, 1);
+
+        await client.query(
+          `UPDATE governance_epochs
          SET content_rules = $1
          WHERE id = $2`,
-        [JSON.stringify(toContentRulesPayload(nextRules)), epoch.id]
-      );
+          [JSON.stringify(toContentRulesPayload(nextRules)), epoch.id],
+        );
 
-      await client.query(
-        `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
+        await client.query(
+          `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
          VALUES ('admin_keyword_removed', $1, $2, $3)`,
-        [
-          adminDid,
-          epoch.id,
-          JSON.stringify({
-            type,
-            keyword,
-            old_content_rules: toContentRulesPayload(previousRules),
-            new_content_rules: toContentRulesPayload(nextRules),
-          }),
-        ]
-      );
+          [
+            adminDid,
+            epoch.id,
+            JSON.stringify({
+              type,
+              keyword,
+              old_content_rules: toContentRulesPayload(previousRules),
+              new_content_rules: toContentRulesPayload(nextRules),
+            }),
+          ],
+        );
 
-      await client.query('COMMIT');
+        await client.query('COMMIT');
 
-      await invalidateContentRulesCache();
-      const rescoreTriggered = await triggerManualRescore('admin_keyword_removed');
+        await invalidateContentRulesCache();
+        const rescoreTriggered = await triggerManualRescore('admin_keyword_removed');
 
-      return reply.send({
-        success: true,
-        rules: nextRules,
-        rescoreTriggered,
-      });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      logger.error({ error, adminDid, type }, 'Failed to remove keyword');
+        return reply.send({
+          success: true,
+          rules: nextRules,
+          rescoreTriggered,
+        });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        logger.error({ error, adminDid, type }, 'Failed to remove keyword');
 
-      return reply.code(500).send({
-        error: 'KeywordRemoveFailed',
-        message: 'Failed to remove keyword',
-      });
-    } finally {
-      client.release();
-    }
-  });
+        return reply.code(500).send({
+          error: 'KeywordRemoveFailed',
+          message: 'Failed to remove keyword',
+        });
+      } finally {
+        client.release();
+      }
+    },
+  );
 
-  app.patch('/governance/weights', {
-    schema: {
-      tags: ['Admin'],
-      summary: 'Override weights',
-      description: 'Admin override of governance weights on the current epoch. Partial updates supported — omitted weights keep their current value. Result is normalized to sum to 1.0. Triggers a rescore.',
-      security: adminSecurity,
-      body: {
-        type: 'object',
-        properties: {
-          recency: { type: 'number', minimum: 0, maximum: 1 },
-          engagement: { type: 'number', minimum: 0, maximum: 1 },
-          bridging: { type: 'number', minimum: 0, maximum: 1 },
-          sourceDiversity: { type: 'number', minimum: 0, maximum: 1 },
-          relevance: { type: 'number', minimum: 0, maximum: 1 },
-        },
-      },
-      response: {
-        200: {
+  app.patch(
+    '/governance/weights',
+    {
+      schema: {
+        tags: ['Admin'],
+        summary: 'Override weights',
+        description:
+          'Admin override of governance weights on the current epoch. Partial updates supported — omitted weights keep their current value. Result is normalized to sum to 1.0. Triggers a rescore.',
+        security: adminSecurity,
+        body: {
           type: 'object',
           properties: {
-            success: { type: 'boolean' },
-            weights: weightsSchema,
-            rescoreTriggered: { type: 'boolean' },
+            recency: { type: 'number', minimum: 0, maximum: 1 },
+            engagement: { type: 'number', minimum: 0, maximum: 1 },
+            bridging: { type: 'number', minimum: 0, maximum: 1 },
+            sourceDiversity: { type: 'number', minimum: 0, maximum: 1 },
+            relevance: { type: 'number', minimum: 0, maximum: 1 },
           },
-          required: ['success'],
         },
-        400: ErrorResponseSchema,
-        404: ErrorResponseSchema,
-        500: ErrorResponseSchema,
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              weights: weightsSchema,
+              rescoreTriggered: { type: 'boolean' },
+            },
+            required: ['success'],
+          },
+          400: ErrorResponseSchema,
+          404: ErrorResponseSchema,
+          500: ErrorResponseSchema,
+        },
       },
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const adminDid = getAdminDid(request);
-    const parseResult = WeightPatchSchema.safeParse(request.body);
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const adminDid = getAdminDid(request);
+      const parseResult = WeightPatchSchema.safeParse(request.body);
 
-    if (!parseResult.success) {
-      return reply.code(400).send({
-        error: 'ValidationError',
-        message: 'Invalid weight override payload',
-        details: parseResult.error.issues,
-      });
-    }
-
-    const client = await db.connect();
-
-    try {
-      await client.query('BEGIN');
-
-      const epoch = await getCurrentEpochForUpdate(client);
-      if (!epoch) {
-        await client.query('ROLLBACK');
-        return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
+      if (!parseResult.success) {
+        return reply.code(400).send({
+          error: 'ValidationError',
+          message: 'Invalid weight override payload',
+          details: parseResult.error.issues,
+        });
       }
 
-      const previousWeights = toWeights(epoch);
-      const mergedWeights: GovernanceWeights = {
-        recency: parseResult.data.recency ?? previousWeights.recency,
-        engagement: parseResult.data.engagement ?? previousWeights.engagement,
-        bridging: parseResult.data.bridging ?? previousWeights.bridging,
-        sourceDiversity: parseResult.data.sourceDiversity ?? previousWeights.sourceDiversity,
-        relevance: parseResult.data.relevance ?? previousWeights.relevance,
-      };
+      const client = await db.connect();
 
-      const normalizedWeights = normalizeWeights(mergedWeights);
+      try {
+        await client.query('BEGIN');
 
-      await client.query(
-        `UPDATE governance_epochs
+        const epoch = await getCurrentEpochForUpdate(client);
+        if (!epoch) {
+          await client.query('ROLLBACK');
+          return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
+        }
+
+        const previousWeights = toWeights(epoch);
+        const mergedWeights: GovernanceWeights = {
+          recency: parseResult.data.recency ?? previousWeights.recency,
+          engagement: parseResult.data.engagement ?? previousWeights.engagement,
+          bridging: parseResult.data.bridging ?? previousWeights.bridging,
+          sourceDiversity: parseResult.data.sourceDiversity ?? previousWeights.sourceDiversity,
+          relevance: parseResult.data.relevance ?? previousWeights.relevance,
+        };
+
+        const normalizedWeights = normalizeWeights(mergedWeights);
+
+        await client.query(
+          `UPDATE governance_epochs
          SET recency_weight = $1,
              engagement_weight = $2,
              bridging_weight = $3,
              source_diversity_weight = $4,
              relevance_weight = $5
          WHERE id = $6`,
-        [
-          normalizedWeights.recency,
-          normalizedWeights.engagement,
-          normalizedWeights.bridging,
-          normalizedWeights.sourceDiversity,
-          normalizedWeights.relevance,
-          epoch.id,
-        ]
-      );
+          [
+            normalizedWeights.recency,
+            normalizedWeights.engagement,
+            normalizedWeights.bridging,
+            normalizedWeights.sourceDiversity,
+            normalizedWeights.relevance,
+            epoch.id,
+          ],
+        );
 
-      await client.query(
-        `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
+        await client.query(
+          `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
          VALUES ('admin_weights_override', $1, $2, $3)`,
-        [
-          adminDid,
-          epoch.id,
-          JSON.stringify({
-            old_weights: previousWeights,
-            new_weights: normalizedWeights,
-            override: parseResult.data,
-          }),
-        ]
-      );
+          [
+            adminDid,
+            epoch.id,
+            JSON.stringify({
+              old_weights: previousWeights,
+              new_weights: normalizedWeights,
+              override: parseResult.data,
+            }),
+          ],
+        );
 
-      await client.query('COMMIT');
+        await client.query('COMMIT');
 
-      const rescoreTriggered = await triggerManualRescore('admin_weights_override');
+        const rescoreTriggered = await triggerManualRescore('admin_weights_override');
 
-      return reply.send({
-        success: true,
-        weights: normalizedWeights,
-        rescoreTriggered,
-      });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      logger.error({ error, adminDid }, 'Failed to update governance weights');
+        return reply.send({
+          success: true,
+          weights: normalizedWeights,
+          rescoreTriggered,
+        });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        logger.error({ error, adminDid }, 'Failed to update governance weights');
 
-      const message = error instanceof Error ? error.message : 'Failed to update weights';
-      return reply.code(500).send({
-        error: 'WeightUpdateFailed',
-        message,
-      });
-    } finally {
-      client.release();
-    }
-  });
+        const message = error instanceof Error ? error.message : 'Failed to update weights';
+        return reply.code(500).send({
+          error: 'WeightUpdateFailed',
+          message,
+        });
+      } finally {
+        client.release();
+      }
+    },
+  );
 
-  app.post('/governance/extend-voting', {
-    schema: {
-      tags: ['Admin'],
-      summary: 'Extend voting period',
-      description: 'Extends the current voting period by the specified number of hours. Only works while voting is open.',
-      security: adminSecurity,
-      body: ExtendVotingJsonSchema,
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            round: roundSchema,
+  app.post(
+    '/governance/extend-voting',
+    {
+      schema: {
+        tags: ['Admin'],
+        summary: 'Extend voting period',
+        description:
+          'Extends the current voting period by the specified number of hours. Only works while voting is open.',
+        security: adminSecurity,
+        body: ExtendVotingJsonSchema,
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              round: roundSchema,
+            },
+            required: ['success'],
           },
-          required: ['success'],
+          400: ErrorResponseSchema,
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+          500: ErrorResponseSchema,
         },
-        400: ErrorResponseSchema,
-        404: ErrorResponseSchema,
-        409: ErrorResponseSchema,
-        500: ErrorResponseSchema,
       },
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const adminDid = getAdminDid(request);
-    const parseResult = ExtendVotingSchema.safeParse(request.body);
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const adminDid = getAdminDid(request);
+      const parseResult = ExtendVotingSchema.safeParse(request.body);
 
-    if (!parseResult.success) {
-      return reply.code(400).send({
-        error: 'ValidationError',
-        message: 'Invalid extend-voting request',
-        details: parseResult.error.issues,
-      });
-    }
-
-    const { hours } = parseResult.data;
-    const client = await db.connect();
-
-    try {
-      await client.query('BEGIN');
-
-      const epoch = await getCurrentEpochForUpdate(client);
-      if (!epoch) {
-        await client.query('ROLLBACK');
-        return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
-      }
-
-      if (toPhase(epoch) !== 'voting') {
-        await client.query('ROLLBACK');
-        return reply.code(409).send({
-          error: 'VotingClosed',
-          message: 'Voting can only be extended while the round is in voting phase.',
+      if (!parseResult.success) {
+        return reply.code(400).send({
+          error: 'ValidationError',
+          message: 'Invalid extend-voting request',
+          details: parseResult.error.issues,
         });
       }
 
-      const updatedResult = await client.query<GovernanceEpochRow>(
-        `UPDATE governance_epochs
+      const { hours } = parseResult.data;
+      const client = await db.connect();
+
+      try {
+        await client.query('BEGIN');
+
+        const epoch = await getCurrentEpochForUpdate(client);
+        if (!epoch) {
+          await client.query('ROLLBACK');
+          return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
+        }
+
+        if (toPhase(epoch) !== 'voting') {
+          await client.query('ROLLBACK');
+          return reply.code(409).send({
+            error: 'VotingClosed',
+            message: 'Voting can only be extended while the round is in voting phase.',
+          });
+        }
+
+        const updatedResult = await client.query<GovernanceEpochRow>(
+          `UPDATE governance_epochs
          SET voting_ends_at = COALESCE(voting_ends_at, NOW()) + make_interval(hours => $1)
          WHERE id = $2
          RETURNING *`,
-        [hours, epoch.id]
-      );
+          [hours, epoch.id],
+        );
 
-      const voteCountResult = await client.query<{ count: string }>(
-        `SELECT COUNT(*)::int AS count FROM governance_votes WHERE epoch_id = $1`,
-        [epoch.id]
-      );
-      const voteCount = parseInt(voteCountResult.rows[0]?.count ?? '0', 10);
+        const voteCountResult = await client.query<{ count: string }>(
+          `SELECT COUNT(*)::int AS count FROM governance_votes WHERE epoch_id = $1`,
+          [epoch.id],
+        );
+        const voteCount = parseInt(voteCountResult.rows[0]?.count ?? '0', 10);
 
-      await client.query(
-        `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
+        await client.query(
+          `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
          VALUES ('admin_extend_voting', $1, $2, $3)`,
-        [
-          adminDid,
-          epoch.id,
-          JSON.stringify({
-            hours,
-            previous_voting_ends_at: epoch.voting_ends_at,
-            new_voting_ends_at: updatedResult.rows[0].voting_ends_at,
-          }),
-        ]
-      );
+          [
+            adminDid,
+            epoch.id,
+            JSON.stringify({
+              hours,
+              previous_voting_ends_at: epoch.voting_ends_at,
+              new_voting_ends_at: updatedResult.rows[0].voting_ends_at,
+            }),
+          ],
+        );
 
-      await client.query('COMMIT');
+        await client.query('COMMIT');
 
-      return reply.send({
-        success: true,
-        round: mapRound(updatedResult.rows[0], voteCount),
-      });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      logger.error({ error, adminDid }, 'Failed to extend voting');
+        return reply.send({
+          success: true,
+          round: mapRound(updatedResult.rows[0], voteCount),
+        });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        logger.error({ error, adminDid }, 'Failed to extend voting');
 
-      return reply.code(500).send({
-        error: 'ExtendVotingFailed',
-        message: 'Failed to extend voting',
-      });
-    } finally {
-      client.release();
-    }
-  });
+        return reply.code(500).send({
+          error: 'ExtendVotingFailed',
+          message: 'Failed to extend voting',
+        });
+      } finally {
+        client.release();
+      }
+    },
+  );
 
-  app.post('/governance/apply-results', {
-    schema: {
-      tags: ['Admin'],
-      summary: 'Apply results directly',
-      description: 'Aggregates votes and applies results in a single step, bypassing the approve/reject flow. Triggers a rescore.',
-      security: adminSecurity,
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            voteCount: { type: 'integer' },
-            appliedWeights: { type: 'boolean', description: 'Whether aggregated weights were applied (false if no votes)' },
-            weights: weightsSchema,
-            contentRules: contentRulesSchema,
-            round: roundSchema,
-            rescoreTriggered: { type: 'boolean' },
+  app.post(
+    '/governance/apply-results',
+    {
+      schema: {
+        tags: ['Admin'],
+        summary: 'Apply results directly',
+        description:
+          'Aggregates votes and applies results in a single step, bypassing the approve/reject flow. Triggers a rescore.',
+        security: adminSecurity,
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              voteCount: { type: 'integer' },
+              appliedWeights: {
+                type: 'boolean',
+                description: 'Whether aggregated weights were applied (false if no votes)',
+              },
+              weights: weightsSchema,
+              contentRules: contentRulesSchema,
+              round: roundSchema,
+              rescoreTriggered: { type: 'boolean' },
+            },
+            required: ['success'],
           },
-          required: ['success'],
+          404: ErrorResponseSchema,
+          500: ErrorResponseSchema,
         },
-        404: ErrorResponseSchema,
-        500: ErrorResponseSchema,
       },
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const adminDid = getAdminDid(request);
-    const client = await db.connect();
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const adminDid = getAdminDid(request);
+      const client = await db.connect();
 
-    try {
-      await client.query('BEGIN');
+      try {
+        await client.query('BEGIN');
 
-      const epoch = await getCurrentEpochForUpdate(client);
-      if (!epoch) {
-        await client.query('ROLLBACK');
-        return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
-      }
-
-      const voteCountResult = await client.query<{ count: string }>(
-        `SELECT COUNT(*)::int AS count FROM governance_votes WHERE epoch_id = $1`,
-        [epoch.id]
-      );
-      const voteCount = parseInt(voteCountResult.rows[0]?.count ?? '0', 10);
-
-      const previousWeights = toWeights(epoch);
-      const previousRules = toContentRules((epoch.content_rules ?? null) as any);
-
-      let nextWeights = previousWeights;
-      let nextRules = previousRules;
-
-      if (voteCount > 0) {
-        const aggregatedWeights = await aggregateVotes(epoch.id);
-        if (aggregatedWeights) {
-          nextWeights = aggregatedWeights;
+        const epoch = await getCurrentEpochForUpdate(client);
+        if (!epoch) {
+          await client.query('ROLLBACK');
+          return reply.code(404).send({ error: 'NoActiveRound', message: 'No active round found' });
         }
 
-        nextRules = await aggregateContentVotes(epoch.id);
-      }
+        const voteCountResult = await client.query<{ count: string }>(
+          `SELECT COUNT(*)::int AS count FROM governance_votes WHERE epoch_id = $1`,
+          [epoch.id],
+        );
+        const voteCount = parseInt(voteCountResult.rows[0]?.count ?? '0', 10);
 
-      const updatedResult = await client.query<GovernanceEpochRow>(
-        `UPDATE governance_epochs
+        const previousWeights = toWeights(epoch);
+        const previousRules = toContentRules(epoch.content_rules ?? null);
+
+        let nextWeights = previousWeights;
+        let nextRules = previousRules;
+
+        if (voteCount > 0) {
+          const aggregatedWeights = await aggregateVotes(epoch.id);
+          if (aggregatedWeights) {
+            nextWeights = aggregatedWeights;
+          }
+
+          nextRules = await aggregateContentVotes(epoch.id);
+        }
+
+        const updatedResult = await client.query<GovernanceEpochRow>(
+          `UPDATE governance_epochs
          SET recency_weight = $1,
              engagement_weight = $2,
              bridging_weight = $3,
@@ -1695,203 +1774,216 @@ export function registerGovernanceRoutes(app: FastifyInstance): void {
              results_approved_by = $8
          WHERE id = $9
          RETURNING *`,
-        [
-          nextWeights.recency,
-          nextWeights.engagement,
-          nextWeights.bridging,
-          nextWeights.sourceDiversity,
-          nextWeights.relevance,
-          JSON.stringify(toContentRulesPayload(nextRules)),
-          voteCount,
-          adminDid,
-          epoch.id,
-        ]
-      );
+          [
+            nextWeights.recency,
+            nextWeights.engagement,
+            nextWeights.bridging,
+            nextWeights.sourceDiversity,
+            nextWeights.relevance,
+            JSON.stringify(toContentRulesPayload(nextRules)),
+            voteCount,
+            adminDid,
+            epoch.id,
+          ],
+        );
 
-      await client.query(
-        `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
+        await client.query(
+          `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
          VALUES ('admin_apply_results', $1, $2, $3)`,
-        [
-          adminDid,
-          epoch.id,
-          JSON.stringify({
-            vote_count: voteCount,
-            old_weights: previousWeights,
-            new_weights: nextWeights,
-            old_content_rules: toContentRulesPayload(previousRules),
-            new_content_rules: toContentRulesPayload(nextRules),
-          }),
-        ]
-      );
+          [
+            adminDid,
+            epoch.id,
+            JSON.stringify({
+              vote_count: voteCount,
+              old_weights: previousWeights,
+              new_weights: nextWeights,
+              old_content_rules: toContentRulesPayload(previousRules),
+              new_content_rules: toContentRulesPayload(nextRules),
+            }),
+          ],
+        );
 
-      await client.query('COMMIT');
+        await client.query('COMMIT');
 
-      await invalidateContentRulesCache();
-      const rescoreTriggered = await triggerManualRescore('admin_apply_results');
+        await invalidateContentRulesCache();
+        const rescoreTriggered = await triggerManualRescore('admin_apply_results');
 
-      return reply.send({
-        success: true,
-        voteCount,
-        appliedWeights: voteCount > 0,
-        weights: nextWeights,
-        contentRules: nextRules,
-        round: mapRound(updatedResult.rows[0], voteCount),
-        rescoreTriggered,
-      });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      logger.error({ error, adminDid }, 'Failed to apply round results');
+        return reply.send({
+          success: true,
+          voteCount,
+          appliedWeights: voteCount > 0,
+          weights: nextWeights,
+          contentRules: nextRules,
+          round: mapRound(updatedResult.rows[0], voteCount),
+          rescoreTriggered,
+        });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        logger.error({ error, adminDid }, 'Failed to apply round results');
 
-      return reply.code(500).send({
-        error: 'ApplyResultsFailed',
-        message: 'Failed to apply results',
-      });
-    } finally {
-      client.release();
-    }
-  });
+        return reply.code(500).send({
+          error: 'ApplyResultsFailed',
+          message: 'Failed to apply results',
+        });
+      } finally {
+        client.release();
+      }
+    },
+  );
 
-  app.get('/governance/rounds/:id', {
-    schema: {
-      tags: ['Admin'],
-      summary: 'Get round detail',
-      description: 'Returns full detail for a specific governance round including starting/ending weights, vote configurations, duration, and audit trail.',
-      security: adminSecurity,
-      params: RoundIdParamsJsonSchema,
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            round: roundSchema,
-            startingWeights: weightsSchema,
-            endingWeights: weightsSchema,
-            startingRules: contentRulesSchema,
-            endingRules: contentRulesSchema,
-            voteCount: { type: 'integer' },
-            weightConfigurations: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  count: { type: 'integer' },
-                  weights: { ...weightsSchema, nullable: true },
+  app.get(
+    '/governance/rounds/:id',
+    {
+      schema: {
+        tags: ['Admin'],
+        summary: 'Get round detail',
+        description:
+          'Returns full detail for a specific governance round including starting/ending weights, vote configurations, duration, and audit trail.',
+        security: adminSecurity,
+        params: RoundIdParamsJsonSchema,
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              round: roundSchema,
+              startingWeights: weightsSchema,
+              endingWeights: weightsSchema,
+              startingRules: contentRulesSchema,
+              endingRules: contentRulesSchema,
+              voteCount: { type: 'integer' },
+              weightConfigurations: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    count: { type: 'integer' },
+                    weights: { ...weightsSchema, nullable: true },
+                  },
                 },
               },
-            },
-            duration: {
-              type: 'object',
-              properties: {
-                startedAt: { type: 'string', format: 'date-time' },
-                endedAt: { type: 'string', format: 'date-time', nullable: true },
-                durationMs: { type: 'integer' },
-              },
-            },
-            auditTrail: {
-              type: 'array',
-              items: {
+              duration: {
                 type: 'object',
                 properties: {
-                  action: { type: 'string' },
-                  details: { type: 'object', additionalProperties: true },
-                  created_at: { type: 'string', format: 'date-time' },
+                  startedAt: { type: 'string', format: 'date-time' },
+                  endedAt: { type: 'string', format: 'date-time', nullable: true },
+                  durationMs: { type: 'integer' },
+                },
+              },
+              auditTrail: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    action: { type: 'string' },
+                    details: { type: 'object', additionalProperties: true },
+                    created_at: { type: 'string', format: 'date-time' },
+                  },
                 },
               },
             },
           },
+          400: ErrorResponseSchema,
+          404: ErrorResponseSchema,
         },
-        400: ErrorResponseSchema,
-        404: ErrorResponseSchema,
       },
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const parseResult = RoundIdParamsSchema.safeParse(request.params);
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const parseResult = RoundIdParamsSchema.safeParse(request.params);
 
-    if (!parseResult.success) {
-      return reply.code(400).send({
-        error: 'ValidationError',
-        message: 'Round id must be a positive integer',
-        details: parseResult.error.issues,
-      });
-    }
+      if (!parseResult.success) {
+        return reply.code(400).send({
+          error: 'ValidationError',
+          message: 'Round id must be a positive integer',
+          details: parseResult.error.issues,
+        });
+      }
 
-    const roundId = parseResult.data.id;
+      const roundId = parseResult.data.id;
 
-    const roundResult = await db.query<GovernanceEpochRow>(
-      `SELECT * FROM governance_epochs WHERE id = $1`,
-      [roundId]
-    );
+      const roundResult = await db.query<GovernanceEpochRow>(
+        `SELECT * FROM governance_epochs WHERE id = $1`,
+        [roundId],
+      );
 
-    if (roundResult.rows.length === 0) {
-      return reply.code(404).send({
-        error: 'RoundNotFound',
-        message: `Round ${roundId} not found`,
-      });
-    }
+      if (roundResult.rows.length === 0) {
+        return reply.code(404).send({
+          error: 'RoundNotFound',
+          message: `Round ${roundId} not found`,
+        });
+      }
 
-    const round = roundResult.rows[0];
-    const endingWeights = toWeights(round);
-    const endingRules = toContentRules((round.content_rules ?? null) as any);
+      const round = roundResult.rows[0];
+      const endingWeights = toWeights(round);
+      const endingRules = toContentRules(round.content_rules ?? null);
 
-    const auditResult = await db.query<{ action: string; details: unknown; created_at: string }>(
-      `SELECT action, details, created_at
+      const auditResult = await db.query<{ action: string; details: unknown; created_at: string }>(
+        `SELECT action, details, created_at
        FROM governance_audit_log
        WHERE epoch_id = $1
        ORDER BY created_at ASC`,
-      [roundId]
-    );
+        [roundId],
+      );
 
-    let startingWeights = endingWeights;
-    let startingRules = endingRules;
-    let foundStartingWeights = false;
-    let foundStartingRules = false;
+      let startingWeights = endingWeights;
+      let startingRules = endingRules;
+      let foundStartingWeights = false;
+      let foundStartingRules = false;
 
-    for (const entry of auditResult.rows) {
-      const details = (entry.details ?? null) as Record<string, unknown> | null;
-      if (!details || typeof details !== 'object') {
-        continue;
-      }
+      for (const entry of auditResult.rows) {
+        const details = (entry.details ?? null) as Record<string, unknown> | null;
+        if (!details || typeof details !== 'object') {
+          continue;
+        }
 
-      if (!foundStartingWeights && details.old_weights && typeof details.old_weights === 'object') {
-        const oldWeights = details.old_weights as Record<string, number>;
         if (
-          oldWeights.recency !== undefined &&
-          oldWeights.engagement !== undefined &&
-          oldWeights.bridging !== undefined &&
-          oldWeights.sourceDiversity !== undefined &&
-          oldWeights.relevance !== undefined
+          !foundStartingWeights &&
+          details.old_weights &&
+          typeof details.old_weights === 'object'
         ) {
-          startingWeights = {
-            recency: oldWeights.recency,
-            engagement: oldWeights.engagement,
-            bridging: oldWeights.bridging,
-            sourceDiversity: oldWeights.sourceDiversity,
-            relevance: oldWeights.relevance,
-          };
-          foundStartingWeights = true;
+          const oldWeights = details.old_weights as Record<string, number>;
+          if (
+            oldWeights.recency !== undefined &&
+            oldWeights.engagement !== undefined &&
+            oldWeights.bridging !== undefined &&
+            oldWeights.sourceDiversity !== undefined &&
+            oldWeights.relevance !== undefined
+          ) {
+            startingWeights = {
+              recency: oldWeights.recency,
+              engagement: oldWeights.engagement,
+              bridging: oldWeights.bridging,
+              sourceDiversity: oldWeights.sourceDiversity,
+              relevance: oldWeights.relevance,
+            };
+            foundStartingWeights = true;
+          }
+        }
+
+        if (
+          !foundStartingRules &&
+          details.old_content_rules &&
+          typeof details.old_content_rules === 'object'
+        ) {
+          startingRules = toContentRules(details.old_content_rules);
+          foundStartingRules = true;
         }
       }
 
-      if (!foundStartingRules && details.old_content_rules && typeof details.old_content_rules === 'object') {
-        startingRules = toContentRules(details.old_content_rules as any);
-        foundStartingRules = true;
-      }
-    }
+      const voteCountResult = await db.query<{ count: string }>(
+        `SELECT COUNT(*)::int AS count FROM governance_votes WHERE epoch_id = $1`,
+        [roundId],
+      );
+      const voteCount = parseInt(voteCountResult.rows[0]?.count ?? '0', 10);
 
-    const voteCountResult = await db.query<{ count: string }>(
-      `SELECT COUNT(*)::int AS count FROM governance_votes WHERE epoch_id = $1`,
-      [roundId]
-    );
-    const voteCount = parseInt(voteCountResult.rows[0]?.count ?? '0', 10);
-
-    const groupedVotesResult = await db.query<{
-      recency_weight: number | null;
-      engagement_weight: number | null;
-      bridging_weight: number | null;
-      source_diversity_weight: number | null;
-      relevance_weight: number | null;
-      count: string;
-    }>(
-      `SELECT
+      const groupedVotesResult = await db.query<{
+        recency_weight: number | null;
+        engagement_weight: number | null;
+        bridging_weight: number | null;
+        source_diversity_weight: number | null;
+        relevance_weight: number | null;
+        count: string;
+      }>(
+        `SELECT
         recency_weight,
         engagement_weight,
         bridging_weight,
@@ -1902,121 +1994,127 @@ export function registerGovernanceRoutes(app: FastifyInstance): void {
        WHERE epoch_id = $1
        GROUP BY recency_weight, engagement_weight, bridging_weight, source_diversity_weight, relevance_weight
        ORDER BY count DESC`,
-      [roundId]
-    );
-
-    const nowMs = Date.now();
-    const startMs = new Date(round.created_at).getTime();
-    const endMs = round.closed_at ? new Date(round.closed_at).getTime() : nowMs;
-    const durationMs = Math.max(0, endMs - startMs);
-
-    return reply.send({
-      round: mapRound(round, voteCount),
-      startingWeights,
-      endingWeights,
-      startingRules,
-      endingRules,
-      voteCount,
-      weightConfigurations: groupedVotesResult.rows.map((row) => ({
-        count: parseInt(row.count, 10),
-        weights:
-          row.recency_weight === null ||
-          row.engagement_weight === null ||
-          row.bridging_weight === null ||
-          row.source_diversity_weight === null ||
-          row.relevance_weight === null
-            ? null
-            : {
-                recency: row.recency_weight,
-                engagement: row.engagement_weight,
-                bridging: row.bridging_weight,
-                sourceDiversity: row.source_diversity_weight,
-                relevance: row.relevance_weight,
-              },
-      })),
-      duration: {
-        startedAt: round.created_at,
-        endedAt: round.closed_at,
-        durationMs,
-      },
-      auditTrail: auditResult.rows,
-    });
-  });
-
-  app.post('/governance/end-round', {
-    schema: {
-      tags: ['Admin'],
-      summary: 'End round and start new one',
-      description: 'Closes the current epoch and creates a new one with current weights carried forward. Use force=true to skip validation checks.',
-      security: adminSecurity,
-      body: {
-        type: 'object',
-        properties: {
-          force: { type: 'boolean', default: false },
-        },
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            newRoundId: { type: 'integer' },
-          },
-          required: ['success'],
-        },
-        400: ErrorResponseSchema,
-        409: ErrorResponseSchema,
-        500: ErrorResponseSchema,
-      },
-    },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const adminDid = getAdminDid(request);
-    const parseResult = z
-      .object({ force: z.boolean().optional().default(false) })
-      .safeParse(request.body ?? {});
-
-    if (!parseResult.success) {
-      return reply.code(400).send({
-        error: 'ValidationError',
-        message: 'Invalid end-round payload',
-        details: parseResult.error.issues,
-      });
-    }
-
-    const { force } = parseResult.data;
-
-    try {
-      let newEpochId: number | undefined;
-
-      if (force) {
-        newEpochId = await forceEpochTransition();
-      } else {
-        const result = await triggerEpochTransition();
-        if (!result.success || !result.newEpochId) {
-          return reply.code(409).send({
-            error: 'TransitionBlocked',
-            message: result.error ?? 'Unable to transition round without force',
-          });
-        }
-        newEpochId = result.newEpochId;
-      }
-
-      await db.query(
-        `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
-         VALUES ('admin_end_round', $1, $2, $3)`,
-        [adminDid, newEpochId, JSON.stringify({ force })]
+        [roundId],
       );
 
+      const nowMs = Date.now();
+      const startMs = new Date(round.created_at).getTime();
+      const endMs = round.closed_at ? new Date(round.closed_at).getTime() : nowMs;
+      const durationMs = Math.max(0, endMs - startMs);
+
       return reply.send({
-        success: true,
-        newRoundId: newEpochId,
+        round: mapRound(round, voteCount),
+        startingWeights,
+        endingWeights,
+        startingRules,
+        endingRules,
+        voteCount,
+        weightConfigurations: groupedVotesResult.rows.map((row) => ({
+          count: parseInt(row.count, 10),
+          weights:
+            row.recency_weight === null ||
+            row.engagement_weight === null ||
+            row.bridging_weight === null ||
+            row.source_diversity_weight === null ||
+            row.relevance_weight === null
+              ? null
+              : {
+                  recency: row.recency_weight,
+                  engagement: row.engagement_weight,
+                  bridging: row.bridging_weight,
+                  sourceDiversity: row.source_diversity_weight,
+                  relevance: row.relevance_weight,
+                },
+        })),
+        duration: {
+          startedAt: round.created_at,
+          endedAt: round.closed_at,
+          durationMs,
+        },
+        auditTrail: auditResult.rows,
       });
-    } catch (error) {
-      logger.error({ error, adminDid }, 'Failed to end and start round');
-      return reply.code(500).send({
-        error: 'RoundTransitionFailed',
-        message: 'Failed to end current round and start a new one',
-      });
-    }
-  });
+    },
+  );
+
+  app.post(
+    '/governance/end-round',
+    {
+      schema: {
+        tags: ['Admin'],
+        summary: 'End round and start new one',
+        description:
+          'Closes the current epoch and creates a new one with current weights carried forward. Use force=true to skip validation checks.',
+        security: adminSecurity,
+        body: {
+          type: 'object',
+          properties: {
+            force: { type: 'boolean', default: false },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              newRoundId: { type: 'integer' },
+            },
+            required: ['success'],
+          },
+          400: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+          500: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const adminDid = getAdminDid(request);
+      const parseResult = z
+        .object({ force: z.boolean().optional().default(false) })
+        .safeParse(request.body ?? {});
+
+      if (!parseResult.success) {
+        return reply.code(400).send({
+          error: 'ValidationError',
+          message: 'Invalid end-round payload',
+          details: parseResult.error.issues,
+        });
+      }
+
+      const { force } = parseResult.data;
+
+      try {
+        let newEpochId: number | undefined;
+
+        if (force) {
+          newEpochId = await forceEpochTransition();
+        } else {
+          const result = await triggerEpochTransition();
+          if (!result.success || !result.newEpochId) {
+            return reply.code(409).send({
+              error: 'TransitionBlocked',
+              message: result.error ?? 'Unable to transition round without force',
+            });
+          }
+          newEpochId = result.newEpochId;
+        }
+
+        await db.query(
+          `INSERT INTO governance_audit_log (action, actor_did, epoch_id, details)
+         VALUES ('admin_end_round', $1, $2, $3)`,
+          [adminDid, newEpochId, JSON.stringify({ force })],
+        );
+
+        return reply.send({
+          success: true,
+          newRoundId: newEpochId,
+        });
+      } catch (error) {
+        logger.error({ error, adminDid }, 'Failed to end and start round');
+        return reply.code(500).send({
+          error: 'RoundTransitionFailed',
+          message: 'Failed to end current round and start a new one',
+        });
+      }
+    },
+  );
 }

@@ -11,14 +11,14 @@ const { redisMock, dbQueryMock, verifyFeedRequesterDidMock } = vi.hoisted(() => 
   }));
 
   return {
-  redisMock: {
-    zrevrange: vi.fn(),
-    setex: vi.fn(),
-    get: vi.fn(),
-    pipeline: pipelineMock,
-  },
-  dbQueryMock: vi.fn(),
-  verifyFeedRequesterDidMock: vi.fn(),
+    redisMock: {
+      zrevrange: vi.fn(),
+      setex: vi.fn(),
+      get: vi.fn(),
+      pipeline: pipelineMock,
+    },
+    dbQueryMock: vi.fn(),
+    verifyFeedRequesterDidMock: vi.fn(),
   };
 });
 

@@ -12,8 +12,17 @@
 
 import { useState, useEffect } from 'react';
 import {
-  AreaChart, Area, BarChart, Bar, LineChart, Line,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
 import { adminApi } from '../../api/admin';
@@ -92,12 +101,27 @@ export function InteractionsPanel() {
                   dataKey="date"
                   stroke="#787c7e"
                   fontSize={12}
-                  tickFormatter={(d) => new Date(String(d)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  tickFormatter={(d) =>
+                    new Date(String(d)).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                    })
+                  }
                 />
                 <YAxis stroke="#787c7e" fontSize={12} />
                 <Tooltip
-                  contentStyle={{ background: '#1e1f21', border: '1px solid #2a2b2d', borderRadius: '8px' }}
-                  labelFormatter={(d) => new Date(String(d)).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                  contentStyle={{
+                    background: '#1e1f21',
+                    border: '1px solid #2a2b2d',
+                    borderRadius: '8px',
+                  }}
+                  labelFormatter={(d) =>
+                    new Date(String(d)).toLocaleDateString('en-US', {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                    })
+                  }
                 />
                 <Area
                   type="monotone"
@@ -132,7 +156,11 @@ export function InteractionsPanel() {
                 <XAxis dataKey="bucket" stroke="#787c7e" fontSize={12} />
                 <YAxis stroke="#787c7e" fontSize={12} />
                 <Tooltip
-                  contentStyle={{ background: '#1e1f21', border: '1px solid #2a2b2d', borderRadius: '8px' }}
+                  contentStyle={{
+                    background: '#1e1f21',
+                    border: '1px solid #2a2b2d',
+                    borderRadius: '8px',
+                  }}
                 />
                 <Bar dataKey="sessionCount" fill="#1083fe" name="Sessions" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -152,15 +180,21 @@ export function InteractionsPanel() {
             </div>
             <div className="stat-item">
               <span className="stat-label">Posts Engaged</span>
-              <span className="stat-number">{engagement.overall.totalEngaged.toLocaleString()}</span>
+              <span className="stat-number">
+                {engagement.overall.totalEngaged.toLocaleString()}
+              </span>
             </div>
             <div className="stat-item">
               <span className="stat-label">Engagement Rate</span>
-              <span className="stat-number">{(engagement.overall.engagementRate * 100).toFixed(1)}%</span>
+              <span className="stat-number">
+                {(engagement.overall.engagementRate * 100).toFixed(1)}%
+              </span>
             </div>
             <div className="stat-item">
               <span className="stat-label">Likes / Reposts</span>
-              <span className="stat-number">{engagement.overall.likes} / {engagement.overall.reposts}</span>
+              <span className="stat-number">
+                {engagement.overall.likes} / {engagement.overall.reposts}
+              </span>
             </div>
           </div>
           {engagement.byPosition.length > 0 && (
@@ -171,7 +205,11 @@ export function InteractionsPanel() {
                   <XAxis dataKey="bucket" stroke="#787c7e" fontSize={12} />
                   <YAxis stroke="#787c7e" fontSize={12} />
                   <Tooltip
-                    contentStyle={{ background: '#1e1f21', border: '1px solid #2a2b2d', borderRadius: '8px' }}
+                    contentStyle={{
+                      background: '#1e1f21',
+                      border: '1px solid #2a2b2d',
+                      borderRadius: '8px',
+                    }}
                   />
                   <Bar dataKey="served" fill="#2a2b2d" name="Served" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="engaged" fill="#10b981" name="Engaged" radius={[4, 4, 0, 0]} />
@@ -202,7 +240,11 @@ export function InteractionsPanel() {
                   tickFormatter={(v) => `${(Number(v) * 100).toFixed(0)}%`}
                 />
                 <Tooltip
-                  contentStyle={{ background: '#1e1f21', border: '1px solid #2a2b2d', borderRadius: '8px' }}
+                  contentStyle={{
+                    background: '#1e1f21',
+                    border: '1px solid #2a2b2d',
+                    borderRadius: '8px',
+                  }}
                   formatter={(v) => `${(Number(v) * 100).toFixed(1)}%`}
                   labelFormatter={(id) => `Epoch ${id}`}
                 />
@@ -229,9 +271,15 @@ export function InteractionsPanel() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #2a2b2d' }}>
-                  <th style={{ textAlign: 'left', padding: '0.5rem', color: '#787c7e' }}>Keyword</th>
-                  <th style={{ textAlign: 'right', padding: '0.5rem', color: '#787c7e' }}>Served</th>
-                  <th style={{ textAlign: 'right', padding: '0.5rem', color: '#787c7e' }}>Engaged</th>
+                  <th style={{ textAlign: 'left', padding: '0.5rem', color: '#787c7e' }}>
+                    Keyword
+                  </th>
+                  <th style={{ textAlign: 'right', padding: '0.5rem', color: '#787c7e' }}>
+                    Served
+                  </th>
+                  <th style={{ textAlign: 'right', padding: '0.5rem', color: '#787c7e' }}>
+                    Engaged
+                  </th>
                   <th style={{ textAlign: 'right', padding: '0.5rem', color: '#787c7e' }}>Rate</th>
                 </tr>
               </thead>
@@ -239,13 +287,19 @@ export function InteractionsPanel() {
                 {keywordPerf.keywords.map((kw) => (
                   <tr key={kw.keyword} style={{ borderBottom: '1px solid #2a2b2d' }}>
                     <td style={{ padding: '0.5rem', color: '#f1f3f5' }}>{kw.keyword}</td>
-                    <td style={{ textAlign: 'right', padding: '0.5rem', color: '#f1f3f5' }}>{kw.served}</td>
-                    <td style={{ textAlign: 'right', padding: '0.5rem', color: '#f1f3f5' }}>{kw.engaged}</td>
-                    <td style={{
-                      textAlign: 'right',
-                      padding: '0.5rem',
-                      color: kw.rate === 0 ? '#f59e0b' : '#10b981',
-                    }}>
+                    <td style={{ textAlign: 'right', padding: '0.5rem', color: '#f1f3f5' }}>
+                      {kw.served}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '0.5rem', color: '#f1f3f5' }}>
+                      {kw.engaged}
+                    </td>
+                    <td
+                      style={{
+                        textAlign: 'right',
+                        padding: '0.5rem',
+                        color: kw.rate === 0 ? '#f59e0b' : '#10b981',
+                      }}
+                    >
                       {(kw.rate * 100).toFixed(1)}%
                     </td>
                   </tr>
@@ -257,13 +311,18 @@ export function InteractionsPanel() {
       )}
 
       {/* Empty state */}
-      {overview && overview.today.totalRequests === 0 && (!scrollDepth || scrollDepth.histogram.length === 0) && (
-        <div className="admin-card" style={{ marginTop: '1.5rem', textAlign: 'center', padding: '3rem' }}>
-          <p style={{ color: '#787c7e', fontSize: '1.1rem' }}>
-            No interaction data yet. Data will appear after feed requests are processed.
-          </p>
-        </div>
-      )}
+      {overview &&
+        overview.today.totalRequests === 0 &&
+        (!scrollDepth || scrollDepth.histogram.length === 0) && (
+          <div
+            className="admin-card"
+            style={{ marginTop: '1.5rem', textAlign: 'center', padding: '3rem' }}
+          >
+            <p style={{ color: '#787c7e', fontSize: '1.1rem' }}>
+              No interaction data yet. Data will appear after feed requests are processed.
+            </p>
+          </div>
+        )}
     </div>
   );
 }

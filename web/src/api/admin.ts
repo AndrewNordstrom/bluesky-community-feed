@@ -430,19 +430,25 @@ export const adminApi = {
     return response.data;
   },
 
-  async addKeyword(type: 'include' | 'exclude', keyword: string): Promise<{
+  async addKeyword(
+    type: 'include' | 'exclude',
+    keyword: string,
+  ): Promise<{
     success: boolean;
     rules: ContentRules;
     rescoreTriggered: boolean;
   }> {
-    const response = await api.post('/api/admin/governance/content-rules/keyword', { type, keyword });
+    const response = await api.post('/api/admin/governance/content-rules/keyword', {
+      type,
+      keyword,
+    });
     return response.data;
   },
 
   async removeKeyword(
     type: 'include' | 'exclude',
     keyword: string,
-    confirm?: boolean
+    confirm?: boolean,
   ): Promise<{ success: boolean; rules: ContentRules; rescoreTriggered: boolean }> {
     const response = await api.delete('/api/admin/governance/content-rules/keyword', {
       data: { type, keyword, confirm },
@@ -487,7 +493,10 @@ export const adminApi = {
     return response.data;
   },
 
-  async startVoting(durationHours: number, announce = true): Promise<{ success: boolean; round: RoundSummary }> {
+  async startVoting(
+    durationHours: number,
+    announce = true,
+  ): Promise<{ success: boolean; round: RoundSummary }> {
     const response = await api.post('/api/admin/governance/start-voting', {
       durationHours,
       announce,
@@ -526,7 +535,10 @@ export const adminApi = {
     return response.data;
   },
 
-  async scheduleVote(startsAt: string, durationHours: number): Promise<{
+  async scheduleVote(
+    startsAt: string,
+    durationHours: number,
+  ): Promise<{
     success: boolean;
     scheduledVote: ScheduledVote;
   }> {
@@ -574,11 +586,10 @@ export const adminApi = {
     return response.data;
   },
 
-  async addParticipant(data: {
-    did?: string;
-    handle?: string;
-    notes?: string;
-  }): Promise<{ success: boolean; participant: { did: string; handle: string | null; notes: string | null } }> {
+  async addParticipant(data: { did?: string; handle?: string; notes?: string }): Promise<{
+    success: boolean;
+    participant: { did: string; handle: string | null; notes: string | null };
+  }> {
     const response = await api.post('/api/admin/participants', data);
     return response.data;
   },
@@ -607,12 +618,15 @@ export const adminApi = {
     return response.data;
   },
 
-  async updateTopic(slug: string, data: {
-    name?: string;
-    terms?: string[];
-    contextTerms?: string[];
-    antiTerms?: string[];
-  }): Promise<{ success: boolean }> {
+  async updateTopic(
+    slug: string,
+    data: {
+      name?: string;
+      terms?: string[];
+      contextTerms?: string[];
+      antiTerms?: string[];
+    },
+  ): Promise<{ success: boolean }> {
     const response = await api.patch(`/api/admin/topics/${encodeURIComponent(slug)}`, data);
     return response.data;
   },

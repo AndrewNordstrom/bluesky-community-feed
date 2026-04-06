@@ -26,9 +26,7 @@ interface AdminTopic {
 
 /** Register topic commands on the program. */
 export function registerTopicCommands(program: Command): void {
-  const topics = program
-    .command('topics')
-    .description('Manage topic catalog');
+  const topics = program.command('topics').description('Manage topic catalog');
 
   // ── List ──
   topics
@@ -54,7 +52,7 @@ export function registerTopicCommands(program: Command): void {
           ]);
           printTable(['Topic', 'Posts', 'Weight', 'Terms'], rows);
 
-          const activeCount = data.filter(t => t.isActive).length;
+          const activeCount = data.filter((t) => t.isActive).length;
           const totalPosts = data.reduce((sum, t) => sum + t.postCount, 0);
           console.log(`\n${activeCount} active topics, ${totalPosts} classified posts`);
         }
@@ -84,20 +82,25 @@ export function registerTopicCommands(program: Command): void {
           name: opts.name,
           description: opts.description,
           parentSlug: opts.parent,
-          terms: opts.terms.split(',').map((t: string) => t.trim()).filter(Boolean),
+          terms: opts.terms
+            .split(',')
+            .map((t: string) => t.trim())
+            .filter(Boolean),
           contextTerms: opts.contextTerms
-            ? opts.contextTerms.split(',').map((t: string) => t.trim()).filter(Boolean)
+            ? opts.contextTerms
+                .split(',')
+                .map((t: string) => t.trim())
+                .filter(Boolean)
             : [],
           antiTerms: opts.antiTerms
-            ? opts.antiTerms.split(',').map((t: string) => t.trim()).filter(Boolean)
+            ? opts.antiTerms
+                .split(',')
+                .map((t: string) => t.trim())
+                .filter(Boolean)
             : [],
         };
 
-        const data = await apiPost<Record<string, unknown>>(
-          '/api/admin/topics',
-          body,
-          config
-        );
+        const data = await apiPost<Record<string, unknown>>('/api/admin/topics', body, config);
 
         if (config.json) {
           printJson(data);
@@ -129,11 +132,14 @@ export function registerTopicCommands(program: Command): void {
         if (opts.name) body.name = opts.name;
 
         if (opts.terms) {
-          body.terms = opts.terms.split(',').map((t: string) => t.trim()).filter(Boolean);
+          body.terms = opts.terms
+            .split(',')
+            .map((t: string) => t.trim())
+            .filter(Boolean);
         } else if (opts.addTerms || opts.removeTerms) {
           // Fetch current topic to merge terms
           const all = await apiGet<AdminTopic[]>('/api/admin/topics', config);
-          const current = all.find(t => t.slug === slug);
+          const current = all.find((t) => t.slug === slug);
           if (!current) {
             printError(`Topic "${slug}" not found`);
             process.exitCode = 1;
@@ -142,12 +148,18 @@ export function registerTopicCommands(program: Command): void {
 
           const termSet = new Set(current.terms);
           if (opts.addTerms) {
-            for (const t of opts.addTerms.split(',').map((s: string) => s.trim()).filter(Boolean)) {
+            for (const t of opts.addTerms
+              .split(',')
+              .map((s: string) => s.trim())
+              .filter(Boolean)) {
               termSet.add(t.toLowerCase());
             }
           }
           if (opts.removeTerms) {
-            for (const t of opts.removeTerms.split(',').map((s: string) => s.trim()).filter(Boolean)) {
+            for (const t of opts.removeTerms
+              .split(',')
+              .map((s: string) => s.trim())
+              .filter(Boolean)) {
               termSet.delete(t.toLowerCase());
             }
           }
@@ -155,10 +167,16 @@ export function registerTopicCommands(program: Command): void {
         }
 
         if (opts.contextTerms) {
-          body.contextTerms = opts.contextTerms.split(',').map((t: string) => t.trim()).filter(Boolean);
+          body.contextTerms = opts.contextTerms
+            .split(',')
+            .map((t: string) => t.trim())
+            .filter(Boolean);
         }
         if (opts.antiTerms) {
-          body.antiTerms = opts.antiTerms.split(',').map((t: string) => t.trim()).filter(Boolean);
+          body.antiTerms = opts.antiTerms
+            .split(',')
+            .map((t: string) => t.trim())
+            .filter(Boolean);
         }
 
         if (Object.keys(body).length === 0) {
@@ -170,7 +188,7 @@ export function registerTopicCommands(program: Command): void {
         const data = await apiPatch<Record<string, unknown>>(
           `/api/admin/topics/${encodeURIComponent(slug)}`,
           body,
-          config
+          config,
         );
 
         if (config.json) {
@@ -194,7 +212,7 @@ export function registerTopicCommands(program: Command): void {
         const config = resolveConfig(program.opts());
         const data = await apiDelete<Record<string, unknown>>(
           `/api/admin/topics/${encodeURIComponent(slug)}`,
-          config
+          config,
         );
 
         if (config.json) {
@@ -217,8 +235,8 @@ export function registerTopicCommands(program: Command): void {
         const config = resolveConfig(program.opts());
         const data = await apiGet<AdminTopic[]>('/api/admin/topics', config);
 
-        const active = data.filter(t => t.isActive);
-        const withPosts = active.filter(t => t.postCount > 0);
+        const active = data.filter((t) => t.isActive);
+        const withPosts = active.filter((t) => t.postCount > 0);
         const totalPosts = active.reduce((sum, t) => sum + t.postCount, 0);
         const topByPosts = [...active].sort((a, b) => b.postCount - a.postCount).slice(0, 5);
         const bottomByPosts = [...active].sort((a, b) => a.postCount - b.postCount).slice(0, 5);
@@ -229,8 +247,8 @@ export function registerTopicCommands(program: Command): void {
             activeTopics: active.length,
             topicsWithPosts: withPosts.length,
             totalClassifiedPosts: totalPosts,
-            topByPosts: topByPosts.map(t => ({ slug: t.slug, postCount: t.postCount })),
-            bottomByPosts: bottomByPosts.map(t => ({ slug: t.slug, postCount: t.postCount })),
+            topByPosts: topByPosts.map((t) => ({ slug: t.slug, postCount: t.postCount })),
+            bottomByPosts: bottomByPosts.map((t) => ({ slug: t.slug, postCount: t.postCount })),
           });
         } else {
           console.log(`Topic Statistics`);
@@ -265,7 +283,7 @@ export function registerTopicCommands(program: Command): void {
         const data = await apiPost<{ classified: number; matched: number; elapsed_ms: number }>(
           `/api/admin/topics/${encodeURIComponent(slug)}/backfill`,
           {},
-          config
+          config,
         );
 
         if (config.json) {
@@ -273,7 +291,7 @@ export function registerTopicCommands(program: Command): void {
         } else {
           printSuccess(
             `Backfill complete: ${data.classified} posts classified, ` +
-            `${data.matched} matched, ${data.elapsed_ms}ms`
+              `${data.matched} matched, ${data.elapsed_ms}ms`,
           );
         }
       } catch (err) {
@@ -290,7 +308,7 @@ export function registerTopicCommands(program: Command): void {
       try {
         const config = resolveConfig(program.opts());
         const data = await apiGet<AdminTopic[]>('/api/admin/topics', config);
-        const active = data.filter(t => t.isActive);
+        const active = data.filter((t) => t.isActive);
 
         console.log(`Backfilling ${active.length} active topics...`);
 
@@ -302,7 +320,7 @@ export function registerTopicCommands(program: Command): void {
           const result = await apiPost<{ classified: number; matched: number; elapsed_ms: number }>(
             `/api/admin/topics/${encodeURIComponent(topic.slug)}/backfill`,
             {},
-            config
+            config,
           );
           totalClassified = Math.max(totalClassified, result.classified);
           totalMatched += result.matched;
@@ -310,7 +328,7 @@ export function registerTopicCommands(program: Command): void {
         }
 
         printSuccess(
-          `All backfills complete: ${totalClassified} posts, ${totalMatched} total topic matches`
+          `All backfills complete: ${totalClassified} posts, ${totalMatched} total topic matches`,
         );
       } catch (err) {
         printError((err as Error).message);

@@ -25,9 +25,8 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const publicOnly = args.includes('--public-only');
   const outputIdx = args.indexOf('--output');
-  const outputPath = outputIdx !== -1 && args[outputIdx + 1]
-    ? path.resolve(args[outputIdx + 1])
-    : DEFAULT_OUTPUT;
+  const outputPath =
+    outputIdx !== -1 && args[outputIdx + 1] ? path.resolve(args[outputIdx + 1]) : DEFAULT_OUTPUT;
 
   // Dynamically import the server builder to avoid top-level side effects
   const { createServer } = await import('../src/feed/server.js');
@@ -63,7 +62,7 @@ async function main(): Promise<void> {
 
     const routeCount = Object.values(spec.paths).reduce(
       (sum, methods) => sum + Object.keys(methods).length,
-      0
+      0,
     );
 
     console.log(`OpenAPI spec written to ${outputPath}`);

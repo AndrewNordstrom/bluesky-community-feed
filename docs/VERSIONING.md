@@ -21,19 +21,19 @@ The dev journal entry for the merge commit should note the version tag.
 
 ## Upcoming Version Map
 
-| Version | Milestone |
-|---------|-----------|
-| v1.2.0 | Embedding classifier, URL dedup, classification tracking (current) |
-| v1.3.0 | Governance parameter registry |
-| v1.4.0 | ML Phase 1 — infrastructure (sidecar, model registry, autonomy modes) |
-| v1.5.0 | ML Phase 2 — prescreener |
-| v2.0.0 | ML Phase 3 — 6th scoring component (quality) — breaking: weight sum constraint changes from 5→6 |
-| v2.1.0 | ML Phase 4 — weight tuning bandit |
+| Version | Milestone                                                                                       |
+| ------- | ----------------------------------------------------------------------------------------------- |
+| v1.2.0  | Embedding classifier, URL dedup, classification tracking (current)                              |
+| v1.3.0  | Governance parameter registry                                                                   |
+| v1.4.0  | ML Phase 1 — infrastructure (sidecar, model registry, autonomy modes)                           |
+| v1.5.0  | ML Phase 2 — prescreener                                                                        |
+| v2.0.0  | ML Phase 3 — 6th scoring component (quality) — breaking: weight sum constraint changes from 5→6 |
+| v2.1.0  | ML Phase 4 — weight tuning bandit                                                               |
 
 ## Release History
 
-| Version | Date | Highlights |
-|---------|------|------------|
-| v1.0.0 | 2026-03-06 | Initial release: 5-component scoring, governance voting, topic engine, security audit |
-| v1.1.0 | 2026-03-08 | Ingestion gate, media filter, relevance floor, Jetstream throughput fix |
-| v1.2.0 | 2026-03-09 | Embedding at ingestion, confidence multiplier, URL dedup, classification tracking |
+| Version | Date       | Highlights                                                                            |
+| ------- | ---------- | ------------------------------------------------------------------------------------- |
+| v1.0.0  | 2026-03-06 | Initial release: 5-component scoring, governance voting, topic engine, security audit |
+| v1.1.0  | 2026-03-08 | Ingestion gate, media filter, relevance floor, Jetstream throughput fix               |
+| v1.2.0  | 2026-03-09 | Embedding at ingestion, confidence multiplier, URL dedup, classification tracking     |

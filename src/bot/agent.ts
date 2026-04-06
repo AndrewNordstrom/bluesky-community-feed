@@ -39,7 +39,9 @@ export function getBotDid(): string | null {
  */
 export async function getBotAgent(): Promise<BskyAgent> {
   if (!isBotEnabled()) {
-    throw new Error('Bot is not enabled. Set BOT_ENABLED=true with BOT_HANDLE and BOT_APP_PASSWORD.');
+    throw new Error(
+      'Bot is not enabled. Set BOT_ENABLED=true with BOT_HANDLE and BOT_APP_PASSWORD.',
+    );
   }
 
   // Check if we have a valid cached session

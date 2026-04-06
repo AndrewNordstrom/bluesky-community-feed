@@ -47,7 +47,7 @@ async function isAnnouncementEnabled(key: string): Promise<boolean> {
       `SELECT enabled
        FROM announcement_settings
        WHERE key = $1`,
-      [key]
+      [key],
     );
 
     if (result.rows.length === 0) {
@@ -104,7 +104,7 @@ export async function announceVotingClosed(epoch: EpochLike, voteCount: number):
 
 export async function announceResultsApproved(
   epoch: EpochLike,
-  changes: ResultsChanges
+  changes: ResultsChanges,
 ): Promise<void> {
   const lines: string[] = [
     `Round #${epoch.id} results are now live.`,
@@ -115,16 +115,16 @@ export async function announceResultsApproved(
     formatWeightDelta(
       'Source Diversity',
       changes.oldWeights.sourceDiversity,
-      changes.newWeights.sourceDiversity
+      changes.newWeights.sourceDiversity,
     ),
     formatWeightDelta('Relevance', changes.oldWeights.relevance, changes.newWeights.relevance),
   ];
 
   const includeAdded = changes.newContentRules.includeKeywords.filter(
-    (keyword) => !changes.oldContentRules.includeKeywords.includes(keyword)
+    (keyword) => !changes.oldContentRules.includeKeywords.includes(keyword),
   );
   const excludeAdded = changes.newContentRules.excludeKeywords.filter(
-    (keyword) => !changes.oldContentRules.excludeKeywords.includes(keyword)
+    (keyword) => !changes.oldContentRules.excludeKeywords.includes(keyword),
   );
 
   if (includeAdded.length > 0 || excludeAdded.length > 0) {
@@ -149,19 +149,14 @@ export async function announceVoteScheduled(scheduledVote: ScheduledVoteLike): P
   await publishIfEnabled('vote_scheduled', message);
 }
 
-export async function announceLegalUpdate(
-  documentType: 'tos' | 'privacy' | 'both'
-): Promise<void> {
+export async function announceLegalUpdate(documentType: 'tos' | 'privacy' | 'both'): Promise<void> {
   if (!(await isAnnouncementEnabled('legal_update'))) {
     logger.debug('Legal update announcement skipped: setting disabled');
     return;
   }
 
   const baseUrl = `https://${config.FEEDGEN_HOSTNAME}`;
-  const url =
-    documentType === 'privacy'
-      ? `${baseUrl}/privacy`
-      : `${baseUrl}/tos`;
+  const url = documentType === 'privacy' ? `${baseUrl}/privacy` : `${baseUrl}/tos`;
 
   await postAnnouncementSafe({
     type: 'legal_update',

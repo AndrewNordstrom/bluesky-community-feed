@@ -116,7 +116,10 @@ export function RoundHistoryCard({ rounds }: RoundHistoryCardProps) {
 
       {selectedRoundId !== null ? (
         <div className="modal-overlay" role="presentation" onClick={() => setSelectedRoundId(null)}>
-          <div className="modal-content modal-content-wide" onClick={(event) => event.stopPropagation()}>
+          <div
+            className="modal-content modal-content-wide"
+            onClick={(event) => event.stopPropagation()}
+          >
             <h3 className="modal-title">Round {selectedRoundId} Changes</h3>
 
             {isLoadingDetails ? (
@@ -129,30 +132,48 @@ export function RoundHistoryCard({ rounds }: RoundHistoryCardProps) {
                   <h4>Weight Changes</h4>
                   <div className="stat-row">
                     <span>Recency</span>
-                    <strong>{formatChange(selectedDetails.endingWeights.recency, selectedDetails.startingWeights.recency)}</strong>
+                    <strong>
+                      {formatChange(
+                        selectedDetails.endingWeights.recency,
+                        selectedDetails.startingWeights.recency,
+                      )}
+                    </strong>
                   </div>
                   <div className="stat-row">
                     <span>Engagement</span>
                     <strong>
-                      {formatChange(selectedDetails.endingWeights.engagement, selectedDetails.startingWeights.engagement)}
+                      {formatChange(
+                        selectedDetails.endingWeights.engagement,
+                        selectedDetails.startingWeights.engagement,
+                      )}
                     </strong>
                   </div>
                   <div className="stat-row">
                     <span>Bridging</span>
-                    <strong>{formatChange(selectedDetails.endingWeights.bridging, selectedDetails.startingWeights.bridging)}</strong>
+                    <strong>
+                      {formatChange(
+                        selectedDetails.endingWeights.bridging,
+                        selectedDetails.startingWeights.bridging,
+                      )}
+                    </strong>
                   </div>
                   <div className="stat-row">
                     <span>Source Diversity</span>
                     <strong>
                       {formatChange(
                         selectedDetails.endingWeights.sourceDiversity,
-                        selectedDetails.startingWeights.sourceDiversity
+                        selectedDetails.startingWeights.sourceDiversity,
                       )}
                     </strong>
                   </div>
                   <div className="stat-row">
                     <span>Relevance</span>
-                    <strong>{formatChange(selectedDetails.endingWeights.relevance, selectedDetails.startingWeights.relevance)}</strong>
+                    <strong>
+                      {formatChange(
+                        selectedDetails.endingWeights.relevance,
+                        selectedDetails.startingWeights.relevance,
+                      )}
+                    </strong>
                   </div>
                 </div>
 
@@ -161,49 +182,57 @@ export function RoundHistoryCard({ rounds }: RoundHistoryCardProps) {
                   <div className="keyword-section">
                     <label>Started with include:</label>
                     <div className="keyword-pills">
-                      {selectedDetails.startingRules.includeKeywords.length > 0
-                        ? selectedDetails.startingRules.includeKeywords.map((keyword) => (
-                            <span className="pill pill-include" key={`start-include-${keyword}`}>
-                              {keyword}
-                            </span>
-                          ))
-                        : <span className="no-rules">None</span>}
+                      {selectedDetails.startingRules.includeKeywords.length > 0 ? (
+                        selectedDetails.startingRules.includeKeywords.map((keyword) => (
+                          <span className="pill pill-include" key={`start-include-${keyword}`}>
+                            {keyword}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="no-rules">None</span>
+                      )}
                     </div>
                   </div>
                   <div className="keyword-section">
                     <label>Ended with include:</label>
                     <div className="keyword-pills">
-                      {selectedDetails.endingRules.includeKeywords.length > 0
-                        ? selectedDetails.endingRules.includeKeywords.map((keyword) => (
-                            <span className="pill pill-include" key={`end-include-${keyword}`}>
-                              {keyword}
-                            </span>
-                          ))
-                        : <span className="no-rules">None</span>}
+                      {selectedDetails.endingRules.includeKeywords.length > 0 ? (
+                        selectedDetails.endingRules.includeKeywords.map((keyword) => (
+                          <span className="pill pill-include" key={`end-include-${keyword}`}>
+                            {keyword}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="no-rules">None</span>
+                      )}
                     </div>
                   </div>
                   <div className="keyword-section">
                     <label>Started with exclude:</label>
                     <div className="keyword-pills">
-                      {selectedDetails.startingRules.excludeKeywords.length > 0
-                        ? selectedDetails.startingRules.excludeKeywords.map((keyword) => (
-                            <span className="pill pill-exclude" key={`start-exclude-${keyword}`}>
-                              {keyword}
-                            </span>
-                          ))
-                        : <span className="no-rules">None</span>}
+                      {selectedDetails.startingRules.excludeKeywords.length > 0 ? (
+                        selectedDetails.startingRules.excludeKeywords.map((keyword) => (
+                          <span className="pill pill-exclude" key={`start-exclude-${keyword}`}>
+                            {keyword}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="no-rules">None</span>
+                      )}
                     </div>
                   </div>
                   <div className="keyword-section">
                     <label>Ended with exclude:</label>
                     <div className="keyword-pills">
-                      {selectedDetails.endingRules.excludeKeywords.length > 0
-                        ? selectedDetails.endingRules.excludeKeywords.map((keyword) => (
-                            <span className="pill pill-exclude" key={`end-exclude-${keyword}`}>
-                              {keyword}
-                            </span>
-                          ))
-                        : <span className="no-rules">None</span>}
+                      {selectedDetails.endingRules.excludeKeywords.length > 0 ? (
+                        selectedDetails.endingRules.excludeKeywords.map((keyword) => (
+                          <span className="pill pill-exclude" key={`end-exclude-${keyword}`}>
+                            {keyword}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="no-rules">None</span>
+                      )}
                     </div>
                   </div>
                 </div>

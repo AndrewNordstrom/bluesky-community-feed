@@ -87,8 +87,8 @@ describe('scoreRelevance', () => {
   });
 
   it('returns < 0.5 for post matching a penalized topic', () => {
-    const post = makePost({ 'politics': 0.8 });
-    const context = makeContext({ 'politics': 0.1 });
+    const post = makePost({ politics: 0.8 });
+    const context = makeContext({ politics: 0.1 });
     const score = scoreRelevance(post, context);
     expect(score).toBeLessThan(0.5);
     expect(score).toBeCloseTo(0.1, 6);
@@ -97,11 +97,11 @@ describe('scoreRelevance', () => {
   it('computes correct weighted average with multiple topics and mixed weights', () => {
     const post = makePost({
       'software-development': 0.8,
-      'politics': 0.2,
+      politics: 0.2,
     });
     const context = makeContext({
       'software-development': 0.9,
-      'politics': 0.1,
+      politics: 0.1,
     });
 
     // Expected: (0.8*0.9 + 0.2*0.1) / (0.8+0.2) = (0.72+0.02)/1.0 = 0.74
@@ -124,7 +124,7 @@ describe('scoreRelevance', () => {
   it('returns default score when all post topic scores are zero', () => {
     const post = makePost({
       'software-development': 0,
-      'politics': 0,
+      politics: 0,
     });
     const context = makeContext({ 'software-development': 0.9 });
     expect(scoreRelevance(post, context)).toBe(0.2);

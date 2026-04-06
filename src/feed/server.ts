@@ -22,7 +22,7 @@ import { registerLegalRoutes } from '../legal/server.js';
 import { registerMcpRoutes } from '../mcp/transport.js';
 import { getPublicHealthStatus, isLive, isReady } from '../lib/health.js';
 import { generateCorrelationId } from '../lib/correlation.js';
-import { AppError, isAppError } from '../lib/errors.js';
+import { isAppError } from '../lib/errors.js';
 import { redis } from '../db/redis.js';
 import { getAuthenticatedDid } from '../governance/auth.js';
 import { requireAdmin } from '../auth/admin.js';
@@ -97,7 +97,7 @@ export async function createServer() {
           'Built on AT Protocol.\n\n' +
           '## Authentication\n' +
           '- **Governance endpoints** require a session cookie or bearer token from `POST /api/governance/auth/login`.\n' +
-          '- **Admin endpoints** additionally require the caller\'s DID to be in the `BOT_ADMIN_DIDS` allowlist.\n' +
+          "- **Admin endpoints** additionally require the caller's DID to be in the `BOT_ADMIN_DIDS` allowlist.\n" +
           '- **Feed endpoints** are public (called by the Bluesky app). Auth is optional for subscriber tracking.\n' +
           '- **Transparency endpoints** are public and unauthenticated.',
         version: '1.1.0',
@@ -107,9 +107,7 @@ export async function createServer() {
         },
         license: { name: 'MIT' },
       },
-      servers: [
-        { url: `https://${config.FEEDGEN_HOSTNAME}`, description: 'Production' },
-      ],
+      servers: [{ url: `https://${config.FEEDGEN_HOSTNAME}`, description: 'Production' }],
       tags: [
         { name: 'Feed', description: 'AT Protocol feed endpoints (called by Bluesky app)' },
         { name: 'Governance', description: 'Voting, epochs, weights, and community governance' },
@@ -169,7 +167,7 @@ export async function createServer() {
       const rateLimitConfig = buildRouteRateLimitConfig(
         routeOptions.url,
         routeOptions.method,
-        governanceMutationKeyGenerator
+        governanceMutationKeyGenerator,
       );
 
       if (!rateLimitConfig) {
@@ -208,13 +206,16 @@ export async function createServer() {
 
   // Log all requests with correlation ID
   app.addHook('onResponse', (request: FastifyRequest, reply: FastifyReply, done) => {
-    logger.info({
-      correlationId: request.correlationId,
-      method: request.method,
-      url: request.url,
-      statusCode: reply.statusCode,
-      responseTime: reply.elapsedTime,
-    }, 'Request completed');
+    logger.info(
+      {
+        correlationId: request.correlationId,
+        method: request.method,
+        url: request.url,
+        statusCode: reply.statusCode,
+        responseTime: reply.elapsedTime,
+      },
+      'Request completed',
+    );
     done();
   });
 
@@ -243,85 +244,107 @@ export async function createServer() {
   registerMcpRoutes(app);
 
   // Public health check endpoint - redacted status only
-  app.get('/health', {
-    schema: {
-      tags: ['Health'],
-      summary: 'Public health check',
-      description: 'Returns a redacted health status (ok or degraded). Does not expose component details.',
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            status: { type: 'string', enum: ['ok', 'degraded'], description: 'Overall system health' },
+  app.get(
+    '/health',
+    {
+      schema: {
+        tags: ['Health'],
+        summary: 'Public health check',
+        description:
+          'Returns a redacted health status (ok or degraded). Does not expose component details.',
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              status: {
+                type: 'string',
+                enum: ['ok', 'degraded'],
+                description: 'Overall system health',
+              },
+            },
+            required: ['status'],
           },
-          required: ['status'],
         },
       },
     },
-  }, async () => {
-    return getPublicHealthStatus();
-  });
+    async () => {
+      return getPublicHealthStatus();
+    },
+  );
 
   // Liveness probe - just checks if process is running (k8s liveness)
-  app.get('/health/live', {
-    schema: {
-      tags: ['Health'],
-      summary: 'Liveness probe',
-      description: 'Returns 200 if the process is running. Used by Kubernetes liveness probes.',
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            status: { type: 'string', enum: ['live'], description: 'Process is running' },
+  app.get(
+    '/health/live',
+    {
+      schema: {
+        tags: ['Health'],
+        summary: 'Liveness probe',
+        description: 'Returns 200 if the process is running. Used by Kubernetes liveness probes.',
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              status: { type: 'string', enum: ['live'], description: 'Process is running' },
+            },
+            required: ['status'],
           },
-          required: ['status'],
-        },
-        503: {
-          type: 'object',
-          properties: {
-            status: { type: 'string', enum: ['not live'] },
+          503: {
+            type: 'object',
+            properties: {
+              status: { type: 'string', enum: ['not live'] },
+            },
+            required: ['status'],
           },
-          required: ['status'],
         },
       },
     },
-  }, async (_request, reply) => {
-    if (isLive()) {
-      return reply.status(200).send({ status: 'live' });
-    }
-    return reply.status(503).send({ status: 'not live' });
-  });
+    async (_request, reply) => {
+      if (isLive()) {
+        return reply.status(200).send({ status: 'live' });
+      }
+      return reply.status(503).send({ status: 'not live' });
+    },
+  );
 
   // Readiness probe - checks if all dependencies are healthy (k8s readiness)
-  app.get('/health/ready', {
-    schema: {
-      tags: ['Health'],
-      summary: 'Readiness probe',
-      description: 'Returns 200 if database and Redis are healthy. Used by Kubernetes readiness probes.',
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            status: { type: 'string', enum: ['ready'], description: 'All critical dependencies healthy' },
+  app.get(
+    '/health/ready',
+    {
+      schema: {
+        tags: ['Health'],
+        summary: 'Readiness probe',
+        description:
+          'Returns 200 if database and Redis are healthy. Used by Kubernetes readiness probes.',
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              status: {
+                type: 'string',
+                enum: ['ready'],
+                description: 'All critical dependencies healthy',
+              },
+            },
+            required: ['status'],
           },
-          required: ['status'],
-        },
-        503: {
-          type: 'object',
-          properties: {
-            status: { type: 'string', enum: ['not ready'] },
+          503: {
+            type: 'object',
+            properties: {
+              status: { type: 'string', enum: ['not ready'] },
+            },
+            required: ['status'],
           },
-          required: ['status'],
         },
       },
     },
-  }, async (_request, reply) => {
-    const ready = await isReady();
-    if (ready) {
-      return reply.status(200).send({ status: 'ready' });
-    }
-    return reply.status(503).send({ status: 'not ready' });
-  });
+    async (_request, reply) => {
+      const ready = await isReady();
+      if (ready) {
+        return reply.status(200).send({ status: 'ready' });
+      }
+      return reply.status(503).send({ status: 'not ready' });
+    },
+  );
 
   // OpenAPI JSON endpoint — gated behind admin auth in production
   app.get(
@@ -329,7 +352,7 @@ export async function createServer() {
     { schema: { hide: true }, preHandler: isProduction ? requireAdmin : undefined },
     async () => {
       return app.swagger();
-    }
+    },
   );
 
   // Standardized error handler with correlation ID
@@ -357,21 +380,27 @@ export async function createServer() {
         response.retryAfterSeconds = rateLimitError.retryAfterSeconds;
       }
 
-      logger.warn({
-        correlationId,
-        retryAfterSeconds: rateLimitError.retryAfterSeconds,
-      }, 'Rate limit exceeded');
+      logger.warn(
+        {
+          correlationId,
+          retryAfterSeconds: rateLimitError.retryAfterSeconds,
+        },
+        'Rate limit exceeded',
+      );
 
       return reply.status(429).send(response);
     }
 
     // Handle AppError (our custom error type)
     if (isAppError(error)) {
-      logger.warn({
-        err: error,
-        correlationId,
-        errorCode: error.errorCode,
-      }, error.message);
+      logger.warn(
+        {
+          err: error,
+          correlationId,
+          errorCode: error.errorCode,
+        },
+        error.message,
+      );
 
       return reply.status(error.statusCode).send(error.toResponse(correlationId));
     }
@@ -379,11 +408,14 @@ export async function createServer() {
     // Handle Fastify validation errors
     const fastifyError = error as Error & { validation?: unknown };
     if (fastifyError.validation) {
-      logger.warn({
-        err: error,
-        correlationId,
-        validation: fastifyError.validation,
-      }, 'Validation error');
+      logger.warn(
+        {
+          err: error,
+          correlationId,
+          validation: fastifyError.validation,
+        },
+        'Validation error',
+      );
 
       return reply.status(400).send({
         error: 'VALIDATION_ERROR',
@@ -394,11 +426,14 @@ export async function createServer() {
     }
 
     // Handle unexpected errors
-    logger.error({
-      err: error,
-      correlationId,
-      stack: error.stack,
-    }, 'Unexpected error');
+    logger.error(
+      {
+        err: error,
+        correlationId,
+        stack: error.stack,
+      },
+      'Unexpected error',
+    );
 
     return reply.status(500).send({
       error: 'INTERNAL_ERROR',
@@ -461,10 +496,12 @@ function normalizeRouteMethods(method: string | string[]): string[] {
 export function buildRouteRateLimitConfig(
   url: string,
   method: string | string[],
-  governanceMutationKeyGenerator: (request: FastifyRequest) => string | Promise<string>
+  governanceMutationKeyGenerator: (request: FastifyRequest) => string | Promise<string>,
 ): RouteRateLimitConfig | null {
   const methods = normalizeRouteMethods(method);
-  const isReadOnly = methods.every((value) => value === 'GET' || value === 'HEAD' || value === 'OPTIONS');
+  const isReadOnly = methods.every(
+    (value) => value === 'GET' || value === 'HEAD' || value === 'OPTIONS',
+  );
 
   // Tight rate limit on sendInteractions due to cold-cache DID resolution cost
   if (url === '/xrpc/app.bsky.feed.sendInteractions') {
@@ -500,8 +537,7 @@ export function buildRouteRateLimitConfig(
 
   if (url.startsWith('/api/governance/') && !isReadOnly) {
     const isCriticalGovernanceMutation =
-      url === '/api/governance/epochs/transition' ||
-      url === '/api/governance/auth/logout';
+      url === '/api/governance/epochs/transition' || url === '/api/governance/auth/logout';
     return {
       max: isCriticalGovernanceMutation
         ? config.RATE_LIMIT_ADMIN_CRITICAL_MAX
@@ -529,11 +565,7 @@ export function buildRouteRateLimitConfig(
     };
   }
 
-  if (
-    url === '/api/bot/announce' ||
-    url === '/api/bot/retry' ||
-    url === '/api/bot/unpin'
-  ) {
+  if (url === '/api/bot/announce' || url === '/api/bot/retry' || url === '/api/bot/unpin') {
     return {
       max: config.RATE_LIMIT_ADMIN_CRITICAL_MAX,
       timeWindow: config.RATE_LIMIT_ADMIN_CRITICAL_WINDOW_MS,
@@ -544,8 +576,7 @@ export function buildRouteRateLimitConfig(
 }
 
 function parseAllowedOrigins(): Set<string> {
-  const configured = config.CORS_ALLOWED_ORIGINS
-    .split(',')
+  const configured = config.CORS_ALLOWED_ORIGINS.split(',')
     .map((origin: string) => origin.trim())
     .filter(Boolean);
 

@@ -34,9 +34,9 @@ export async function initEmbedder(): Promise<void> {
 
   const startMs = Date.now();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Transformers.js pipeline() returns a complex union type
-  extractor = await (pipeline as any)('feature-extraction', MODEL_ID, {
+  extractor = (await (pipeline as any)('feature-extraction', MODEL_ID, {
     dtype: 'q8',
-  }) as FeatureExtractionPipeline;
+  })) as FeatureExtractionPipeline;
   const elapsed = Date.now() - startMs;
 
   logger.info({ model: MODEL_ID, elapsed_ms: elapsed }, 'Embedding model loaded');

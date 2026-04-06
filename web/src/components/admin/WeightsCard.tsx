@@ -136,7 +136,8 @@ export function WeightsCard({ weights, onUpdate, onNotify }: WeightsCardProps) {
       <h2>Algorithm Weights</h2>
 
       {WEIGHT_FIELDS.map((field) => {
-        const rowValue = isEditing && normalizedPreview ? normalizedPreview[field.key] : displayWeights[field.key];
+        const rowValue =
+          isEditing && normalizedPreview ? normalizedPreview[field.key] : displayWeights[field.key];
 
         if (!isEditing || !draft) {
           return (
@@ -196,7 +197,9 @@ export function WeightsCard({ weights, onUpdate, onNotify }: WeightsCardProps) {
 
       <p className="help-text">
         <span className="help-text-icon">i</span>
-        <span>This overrides voter results for the current round and triggers an immediate rescore.</span>
+        <span>
+          This overrides voter results for the current round and triggers an immediate rescore.
+        </span>
       </p>
     </div>
   );

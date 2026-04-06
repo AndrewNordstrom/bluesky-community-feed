@@ -44,7 +44,9 @@ export async function sleep(ms: number): Promise<void> {
 
 export function makeJwt(did: string): string {
   const header = Buffer.from(JSON.stringify({ alg: 'ES256', typ: 'JWT' })).toString('base64url');
-  const payload = Buffer.from(JSON.stringify({ iss: did, sub: did, exp: Math.floor(Date.now() / 1000) + 3600 })).toString('base64url');
+  const payload = Buffer.from(
+    JSON.stringify({ iss: did, sub: did, exp: Math.floor(Date.now() / 1000) + 3600 }),
+  ).toString('base64url');
   const sig = Buffer.from(randomUUID()).toString('base64url');
   return `${header}.${payload}.${sig}`;
 }
@@ -92,7 +94,7 @@ export async function truncateStressData(): Promise<void> {
 
 export async function ensureActiveEpoch(): Promise<number> {
   const existing = await db.query<{ id: number }>(
-    `SELECT id FROM governance_epochs WHERE status = 'active' ORDER BY id DESC LIMIT 1`
+    `SELECT id FROM governance_epochs WHERE status = 'active' ORDER BY id DESC LIMIT 1`,
   );
   if (existing.rows[0]) {
     return existing.rows[0].id;
@@ -125,7 +127,7 @@ export async function ensureActiveEpoch(): Promise<number> {
       TRUE,
       '{"include_keywords":[],"exclude_keywords":[]}'::jsonb
     )
-    RETURNING id`
+    RETURNING id`,
   );
 
   return inserted.rows[0].id;
@@ -163,7 +165,7 @@ export function bytesToMb(bytes: number): number {
 export async function spawnCommand(
   command: string,
   args: string[],
-  opts?: { cwd?: string; env?: NodeJS.ProcessEnv }
+  opts?: { cwd?: string; env?: NodeJS.ProcessEnv },
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {

@@ -11,13 +11,13 @@ const { redisMock, dbQueryMock } = vi.hoisted(() => {
   }));
 
   return {
-  redisMock: {
-    zrevrange: vi.fn(),
-    setex: vi.fn(),
-    get: vi.fn(),
-    pipeline: pipelineMock,
-  },
-  dbQueryMock: vi.fn(),
+    redisMock: {
+      zrevrange: vi.fn(),
+      setex: vi.fn(),
+      get: vi.fn(),
+      pipeline: pipelineMock,
+    },
+    dbQueryMock: vi.fn(),
   };
 });
 
@@ -48,25 +48,22 @@ describe('getFeedSkeleton query validation', () => {
     dbQueryMock.mockReset();
   });
 
-  it.each(['0', '101', '2.5', 'abc'])(
-    'returns 400 for invalid limit value %s',
-    async (limit) => {
-      const app = buildTestApp();
-      registerFeedSkeleton(app);
+  it.each(['0', '101', '2.5', 'abc'])('returns 400 for invalid limit value %s', async (limit) => {
+    const app = buildTestApp();
+    registerFeedSkeleton(app);
 
-      const response = await app.inject({
-        method: 'GET',
-        url: `/xrpc/app.bsky.feed.getFeedSkeleton?feed=${encodeURIComponent(feedUri)}&limit=${encodeURIComponent(limit)}`,
-      });
+    const response = await app.inject({
+      method: 'GET',
+      url: `/xrpc/app.bsky.feed.getFeedSkeleton?feed=${encodeURIComponent(feedUri)}&limit=${encodeURIComponent(limit)}`,
+    });
 
-      expect(response.statusCode).toBe(400);
-      expect(response.json()).toMatchObject({
-        error: 'ValidationError',
-      });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      error: 'ValidationError',
+    });
 
-      await app.close();
-    }
-  );
+    await app.close();
+  });
 
   it('returns 400 for invalid cursor', async () => {
     const app = buildTestApp();
@@ -144,7 +141,7 @@ describe('getFeedSkeleton query validation', () => {
 
     const allUris = Array.from(
       { length: 200 },
-      (_, index) => `at://did:plc:testauthor/app.bsky.feed.post/${index + 1}`
+      (_, index) => `at://did:plc:testauthor/app.bsky.feed.post/${index + 1}`,
     );
     redisMock.get.mockResolvedValueOnce(JSON.stringify(allUris));
 

@@ -53,7 +53,12 @@ const ACTIVE_EPOCH = {
 };
 
 const ACTIVE_TOPICS = [
-  { slug: 'software-development', name: 'Software Development', description: 'Programming', parent_slug: null },
+  {
+    slug: 'software-development',
+    name: 'Software Development',
+    description: 'Programming',
+    parent_slug: null,
+  },
   { slug: 'dogs-pets', name: 'Dogs & Pets', description: 'Dog content', parent_slug: null },
   { slug: 'politics', name: 'Politics', description: 'Political content', parent_slug: null },
 ];
@@ -62,10 +67,7 @@ const ACTIVE_TOPICS = [
  * Setup db.query mock for common flows.
  * Dispatches based on SQL content.
  */
-function setupDbMock(opts?: {
-  hasSubscriber?: boolean;
-  hasExistingVote?: boolean;
-}): void {
+function setupDbMock(opts?: { hasSubscriber?: boolean; hasExistingVote?: boolean }): void {
   const { hasSubscriber = true, hasExistingVote = false } = opts ?? {};
 
   dbQueryMock.mockImplementation((sql: string, _params?: unknown[]) => {
@@ -87,7 +89,14 @@ function setupDbMock(opts?: {
     if (sql.includes('governance_votes') && sql.includes('SELECT')) {
       return Promise.resolve({
         rows: hasExistingVote
-          ? [{ id: 1, voter_did: 'did:plc:voter', epoch_id: 5, topic_weight_votes: { 'dogs-pets': 0.3 } }]
+          ? [
+              {
+                id: 1,
+                voter_did: 'did:plc:voter',
+                epoch_id: 5,
+                topic_weight_votes: { 'dogs-pets': 0.3 },
+              },
+            ]
           : [],
       });
     }

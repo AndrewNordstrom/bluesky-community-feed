@@ -5,6 +5,7 @@ This roadmap is intentionally outcome-driven. Dates are directional and may shif
 ## North Star
 
 Make community-governed ranking credible at production scale:
+
 - Reliable enough for daily use
 - Transparent enough for public audit
 - Rigorous enough for research publication
@@ -46,6 +47,7 @@ Make community-governed ranking credible at production scale:
 ## Quality Bar
 
 We consider a milestone complete only when:
+
 - Required CI checks are green on PR and protected on `main`
 - Security scanning is enabled and passing
 - Build/test/lint/audit/infra smoke checks are reproducible by contributors

@@ -106,10 +106,10 @@ describe('scoring pipeline empty-feed Redis updates', () => {
 
   it('clears feed and writes metadata when all posts are filtered out', async () => {
     dbQueryMock
-      .mockResolvedValueOnce({ rows: [makeEpochRow()] })   // getActiveEpoch
-      .mockResolvedValueOnce({ rows: [makePostRow()] })     // getPostsForScoring
-      .mockResolvedValueOnce({ rows: [] })                   // writeToRedisFromDb
-      .mockResolvedValueOnce({ rows: [] });                  // updateCurrentRunScope
+      .mockResolvedValueOnce({ rows: [makeEpochRow()] }) // getActiveEpoch
+      .mockResolvedValueOnce({ rows: [makePostRow()] }) // getPostsForScoring
+      .mockResolvedValueOnce({ rows: [] }) // writeToRedisFromDb
+      .mockResolvedValueOnce({ rows: [] }); // updateCurrentRunScope
 
     getCurrentContentRulesMock.mockResolvedValue({
       includeKeywords: ['topic'],
@@ -132,16 +132,16 @@ describe('scoring pipeline empty-feed Redis updates', () => {
       expect.objectContaining({
         posts_scored: 0,
         posts_filtered: 1,
-      })
+      }),
     );
   });
 
   it('clears feed and writes metadata when no posts are fetched', async () => {
     dbQueryMock
-      .mockResolvedValueOnce({ rows: [makeEpochRow()] })   // getActiveEpoch
-      .mockResolvedValueOnce({ rows: [] })                   // getPostsForScoring
-      .mockResolvedValueOnce({ rows: [] })                   // writeToRedisFromDb
-      .mockResolvedValueOnce({ rows: [] });                  // updateCurrentRunScope
+      .mockResolvedValueOnce({ rows: [makeEpochRow()] }) // getActiveEpoch
+      .mockResolvedValueOnce({ rows: [] }) // getPostsForScoring
+      .mockResolvedValueOnce({ rows: [] }) // writeToRedisFromDb
+      .mockResolvedValueOnce({ rows: [] }); // updateCurrentRunScope
 
     getCurrentContentRulesMock.mockResolvedValue({
       includeKeywords: [],
@@ -160,16 +160,16 @@ describe('scoring pipeline empty-feed Redis updates', () => {
       expect.objectContaining({
         posts_scored: 0,
         posts_filtered: 0,
-      })
+      }),
     );
   });
 
   it('builds SQL keyword prefilter so LIMIT applies to matching posts', async () => {
     dbQueryMock
-      .mockResolvedValueOnce({ rows: [makeEpochRow()] })   // getActiveEpoch
-      .mockResolvedValueOnce({ rows: [] })                   // getPostsForScoring
-      .mockResolvedValueOnce({ rows: [] })                   // writeToRedisFromDb
-      .mockResolvedValueOnce({ rows: [] });                  // updateCurrentRunScope
+      .mockResolvedValueOnce({ rows: [makeEpochRow()] }) // getActiveEpoch
+      .mockResolvedValueOnce({ rows: [] }) // getPostsForScoring
+      .mockResolvedValueOnce({ rows: [] }) // writeToRedisFromDb
+      .mockResolvedValueOnce({ rows: [] }); // updateCurrentRunScope
 
     getCurrentContentRulesMock.mockResolvedValue({
       includeKeywords: ['atproto', 'foss'],
@@ -183,11 +183,10 @@ describe('scoring pipeline empty-feed Redis updates', () => {
     const queryText = String(postsQueryCall[0]);
     const queryParams = postsQueryCall[1] as unknown[];
 
-    expect(queryText).toContain("p.text ILIKE $");
+    expect(queryText).toContain('p.text ILIKE $');
     expect(queryText).toContain('p.text ~* $');
     expect(queryText).toContain('NOT (');
     expect(queryText).toContain('LIMIT $');
     expect(queryParams.at(-1)).toBe(5000);
   });
 });
-

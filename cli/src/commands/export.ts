@@ -14,9 +14,7 @@ import { printJson, printSuccess, printError } from '../output.js';
 
 /** Register export commands on the program. */
 export function registerExportCommands(program: Command): void {
-  const exp = program
-    .command('export')
-    .description('Export anonymized research data');
+  const exp = program.command('export').description('Export anonymized research data');
 
   // ── Votes ──
   exp
@@ -32,13 +30,13 @@ export function registerExportCommands(program: Command): void {
         if (fmt === 'csv') {
           const stream = await apiStream(
             `/api/admin/export/votes?epoch_id=${opts.epoch}&format=csv`,
-            config
+            config,
           );
           await pipeToStdout(stream);
         } else {
           const data = await apiGet<unknown>(
             `/api/admin/export/votes?epoch_id=${opts.epoch}&format=json`,
-            config
+            config,
           );
           printJson(data);
         }
@@ -62,16 +60,10 @@ export function registerExportCommands(program: Command): void {
         const params = `epoch_id=${opts.epoch}&format=${opts.format}&limit=${opts.limit}&offset=${opts.offset}`;
 
         if (opts.format === 'csv') {
-          const stream = await apiStream(
-            `/api/admin/export/scores?${params}`,
-            config
-          );
+          const stream = await apiStream(`/api/admin/export/scores?${params}`, config);
           await pipeToStdout(stream);
         } else {
-          const data = await apiGet<unknown>(
-            `/api/admin/export/scores?${params}`,
-            config
-          );
+          const data = await apiGet<unknown>(`/api/admin/export/scores?${params}`, config);
           printJson(data);
         }
       } catch (err) {
@@ -94,13 +86,13 @@ export function registerExportCommands(program: Command): void {
         if (fmt === 'csv') {
           const stream = await apiStream(
             `/api/admin/export/engagement?epoch_id=${opts.epoch}&format=csv`,
-            config
+            config,
           );
           await pipeToStdout(stream);
         } else {
           const data = await apiGet<unknown>(
             `/api/admin/export/engagement?epoch_id=${opts.epoch}&format=json`,
-            config
+            config,
           );
           printJson(data);
         }
@@ -120,16 +112,10 @@ export function registerExportCommands(program: Command): void {
         const config = resolveConfig(program.opts());
 
         if (opts.format === 'csv') {
-          const stream = await apiStream(
-            `/api/admin/export/epochs?format=csv`,
-            config
-          );
+          const stream = await apiStream(`/api/admin/export/epochs?format=csv`, config);
           await pipeToStdout(stream);
         } else {
-          const data = await apiGet<unknown>(
-            `/api/admin/export/epochs?format=json`,
-            config
-          );
+          const data = await apiGet<unknown>(`/api/admin/export/epochs?format=json`, config);
           printJson(data);
         }
       } catch (err) {
@@ -153,16 +139,10 @@ export function registerExportCommands(program: Command): void {
         if (opts.end) params.set('end_date', opts.end);
 
         if (opts.format === 'csv') {
-          const stream = await apiStream(
-            `/api/admin/export/audit?${params}`,
-            config
-          );
+          const stream = await apiStream(`/api/admin/export/audit?${params}`, config);
           await pipeToStdout(stream);
         } else {
-          const data = await apiGet<unknown>(
-            `/api/admin/export/audit?${params}`,
-            config
-          );
+          const data = await apiGet<unknown>(`/api/admin/export/audit?${params}`, config);
           printJson(data);
         }
       } catch (err) {
@@ -182,7 +162,7 @@ export function registerExportCommands(program: Command): void {
         const config = resolveConfig(program.opts());
         const stream = await apiStream(
           `/api/admin/export/full-dataset?epoch_id=${opts.epoch}`,
-          config
+          config,
         );
 
         const nodeStream = Readable.fromWeb(stream as Parameters<typeof Readable.fromWeb>[0]);

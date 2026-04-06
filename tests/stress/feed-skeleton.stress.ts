@@ -3,7 +3,14 @@ import Fastify from 'fastify';
 import { config } from '../../src/config.js';
 import { redis } from '../../src/db/redis.js';
 import { registerFeedSkeleton } from '../../src/feed/routes/feed-skeleton.js';
-import { AssertionResult, ScenarioResult, makeJwt, nowIso, rssMb, summarizeAssertions } from './_helpers.js';
+import {
+  AssertionResult,
+  ScenarioResult,
+  makeJwt,
+  nowIso,
+  rssMb,
+  summarizeAssertions,
+} from './_helpers.js';
 
 interface FeedPassResult {
   label: string;
@@ -49,18 +56,25 @@ function getP95Latency(result: autocannon.Result): number {
   return result.latency.max;
 }
 
-async function runLoad(baseUrl: string, validCursor: string | null, noOpRpush = false): Promise<FeedPassResult> {
+async function runLoad(
+  baseUrl: string,
+  validCursor: string | null,
+  noOpRpush = false,
+): Promise<FeedPassResult> {
   const originalPipeline = redis.pipeline.bind(redis);
   if (noOpRpush) {
-    (redis as unknown as { pipeline: () => { rpush: () => unknown; ltrim: () => unknown; exec: () => Promise<[]> } }).pipeline =
-      () => {
-        const stub = {
-          rpush: () => stub,
-          ltrim: () => stub,
-          exec: async () => [],
-        };
-        return stub;
+    (
+      redis as unknown as {
+        pipeline: () => { rpush: () => unknown; ltrim: () => unknown; exec: () => Promise<[]> };
+      }
+    ).pipeline = () => {
+      const stub = {
+        rpush: () => stub,
+        ltrim: () => stub,
+        exec: async () => [],
       };
+      return stub;
+    };
   }
 
   const feedUri = `at://${config.FEEDGEN_PUBLISHER_DID}/app.bsky.feed.generator/community-gov`;
@@ -169,7 +183,7 @@ export async function runFeedSkeletonStress(): Promise<ScenarioResult> {
     await pipeline.exec();
 
     const seedResponse = await fetch(
-      `${baseUrl}/xrpc/app.bsky.feed.getFeedSkeleton?feed=${encodeURIComponent(feedUri)}&limit=50`
+      `${baseUrl}/xrpc/app.bsky.feed.getFeedSkeleton?feed=${encodeURIComponent(feedUri)}&limit=50`,
     );
     const seedJson = (await seedResponse.json()) as { cursor?: string };
     const validCursor = seedJson.cursor ?? null;
@@ -201,7 +215,8 @@ export async function runFeedSkeletonStress(): Promise<ScenarioResult> {
         normal,
         noop,
         asyncLoggingP95DeltaMs: p95Delta,
-        asyncLoggingOverheadPct: noop.p95 > 0 ? Number((((normal.p95 - noop.p95) / noop.p95) * 100).toFixed(2)) : null,
+        asyncLoggingOverheadPct:
+          noop.p95 > 0 ? Number((((normal.p95 - noop.p95) / noop.p95) * 100).toFixed(2)) : null,
         processRssDeltaMb: rssDelta,
       },
       assertions,
@@ -236,7 +251,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       process.exit(result.success ? 0 : 1);
     })
     .catch((err) => {
-      process.stderr.write(`${err instanceof Error ? err.stack ?? err.message : String(err)}\n`);
+      process.stderr.write(`${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`);
       process.exit(1);
     });
 }

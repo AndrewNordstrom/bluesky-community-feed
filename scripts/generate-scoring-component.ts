@@ -117,13 +117,13 @@ function main(): void {
   insertAtAnchor(
     registryPath,
     '// GENERATOR_IMPORT_ANCHOR — do not remove',
-    `import { ${camelName}Component } from './components/${kebabName}.js';`
+    `import { ${camelName}Component } from './components/${kebabName}.js';`,
   );
 
   insertAtAnchor(
     registryPath,
     '  // GENERATOR_COMPONENT_ANCHOR — do not remove',
-    `  ${camelName}Component,`
+    `  ${camelName}Component,`,
   );
 
   console.log('Updated: src/scoring/registry.ts');
@@ -142,7 +142,7 @@ function main(): void {
     min: 0,
     max: 1,
     defaultValue: 0.1,
-  },`
+  },`,
   );
 
   console.log('Updated: src/config/votable-params.ts');
@@ -150,10 +150,16 @@ function main(): void {
   // 4. Print reminders
   console.log('\n--- Remaining manual steps ---');
   console.log(`1. Add '${camelName}' to GovernanceWeightKey union in src/shared/api-types.ts`);
-  console.log(`2. Add '${snakeName}_weight' to VotableWeightParam.voteField union in src/config/votable-params.ts`);
-  console.log(`3. Add '${camelName}' field to GovernanceWeights interface in src/shared/api-types.ts`);
+  console.log(
+    `2. Add '${snakeName}_weight' to VotableWeightParam.voteField union in src/config/votable-params.ts`,
+  );
+  console.log(
+    `3. Add '${camelName}' field to GovernanceWeights interface in src/shared/api-types.ts`,
+  );
   console.log(`4. Add matching entry to web/src/config/votable-params.ts`);
-  console.log(`5. Create DB migration: ALTER TABLE post_scores ADD COLUMN ${snakeName}_raw REAL, ${snakeName}_weight REAL, ${snakeName}_weighted REAL`);
+  console.log(
+    `5. Create DB migration: ALTER TABLE post_scores ADD COLUMN ${snakeName}_raw REAL, ${snakeName}_weight REAL, ${snakeName}_weighted REAL`,
+  );
   console.log(`6. ALTER TABLE governance_epochs ADD COLUMN ${snakeName}_weight REAL DEFAULT 0.1`);
   console.log(`7. Run: npm run build && npm test -- --run`);
 }

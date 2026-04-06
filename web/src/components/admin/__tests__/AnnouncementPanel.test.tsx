@@ -11,7 +11,7 @@ describe('openAnnouncementPost', () => {
     expect(openMock).toHaveBeenCalledWith(
       'https://bsky.app/profile/test/post/123',
       '_blank',
-      'noopener,noreferrer'
+      'noopener,noreferrer',
     );
   });
 });

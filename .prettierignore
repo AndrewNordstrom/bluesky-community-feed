@@ -1,0 +1,9 @@
+dist
+web/dist
+coverage
+node_modules
+docs/docs-site
+docs/screenshots
+.github/ISSUE_TEMPLATE
+.github/PULL_REQUEST_TEMPLATE.md
+src/mcp-local

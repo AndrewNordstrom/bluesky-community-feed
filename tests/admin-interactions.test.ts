@@ -42,13 +42,15 @@ describe('admin interaction endpoints', () => {
     it('returns correct shape with empty data', async () => {
       // Today stats
       dbQueryMock.mockResolvedValueOnce({
-        rows: [{
-          total_requests: '0',
-          unique_viewers: '0',
-          anonymous_requests: '0',
-          avg_scroll_depth: null,
-          avg_response_time_ms: null,
-        }],
+        rows: [
+          {
+            total_requests: '0',
+            unique_viewers: '0',
+            anonymous_requests: '0',
+            avg_scroll_depth: null,
+            avg_response_time_ms: null,
+          },
+        ],
       });
       // Returning viewers
       dbQueryMock.mockResolvedValueOnce({
@@ -103,13 +105,15 @@ describe('admin interaction endpoints', () => {
     it('returns correct shape with zero engagement', async () => {
       // Overall
       dbQueryMock.mockResolvedValueOnce({
-        rows: [{
-          total_served: '0',
-          total_engaged: '0',
-          engagement_rate: '0',
-          likes: '0',
-          reposts: '0',
-        }],
+        rows: [
+          {
+            total_served: '0',
+            total_engaged: '0',
+            engagement_rate: '0',
+            likes: '0',
+            reposts: '0',
+          },
+        ],
       });
       // By position
       dbQueryMock.mockResolvedValueOnce({ rows: [] });

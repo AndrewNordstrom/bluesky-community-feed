@@ -22,7 +22,7 @@ export async function handleDelete(uri: string, collection: string): Promise<voi
              SET deleted = TRUE
              WHERE uri = $1 AND deleted = FALSE
              RETURNING uri`,
-            [uri]
+            [uri],
           );
 
           if (postResult.rowCount === 0) {
@@ -40,7 +40,7 @@ export async function handleDelete(uri: string, collection: string): Promise<voi
              SET deleted = TRUE
              WHERE uri = $1 AND deleted = FALSE
              RETURNING subject_uri`,
-            [uri]
+            [uri],
           );
 
           if (likeResult.rowCount === 0) {
@@ -53,7 +53,7 @@ export async function handleDelete(uri: string, collection: string): Promise<voi
               `UPDATE post_engagement
                SET like_count = GREATEST(like_count - 1, 0), updated_at = NOW()
                WHERE post_uri = $1`,
-              [likeResult.rows[0].subject_uri]
+              [likeResult.rows[0].subject_uri],
             );
           }
         }
@@ -67,7 +67,7 @@ export async function handleDelete(uri: string, collection: string): Promise<voi
              SET deleted = TRUE
              WHERE uri = $1 AND deleted = FALSE
              RETURNING subject_uri`,
-            [uri]
+            [uri],
           );
 
           if (repostResult.rowCount === 0) {
@@ -80,7 +80,7 @@ export async function handleDelete(uri: string, collection: string): Promise<voi
               `UPDATE post_engagement
                SET repost_count = GREATEST(repost_count - 1, 0), updated_at = NOW()
                WHERE post_uri = $1`,
-              [repostResult.rows[0].subject_uri]
+              [repostResult.rows[0].subject_uri],
             );
           }
         }
@@ -94,7 +94,7 @@ export async function handleDelete(uri: string, collection: string): Promise<voi
              SET deleted = TRUE
              WHERE uri = $1 AND deleted = FALSE
              RETURNING uri`,
-            [uri]
+            [uri],
           );
 
           if (followResult.rowCount === 0) {

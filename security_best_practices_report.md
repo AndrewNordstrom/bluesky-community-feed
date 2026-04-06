@@ -15,6 +15,7 @@ Scope: deploy pipeline, repository/security controls, application code, and VPS 
 ## Critical Findings
 
 ### SEC-001 (Fixed): Secrets file was world-readable on VPS
+
 - Severity: Critical
 - Location: `/opt/bluesky-feed/.env` (runtime host)
 - Evidence:
@@ -26,6 +27,7 @@ Scope: deploy pipeline, repository/security controls, application code, and VPS 
 ## High Findings
 
 ### SEC-002 (Open): Service process runs as root
+
 - Severity: High
 - Location:
   - Unit file has no `User=` directive: [ops/bluesky-feed.service](ops/bluesky-feed.service):21
@@ -37,6 +39,7 @@ Scope: deploy pipeline, repository/security controls, application code, and VPS 
   - keep prestart dependency checks with explicit privileges only where required.
 
 ### SEC-003 (Fixed): App listener exposed beyond localhost
+
 - Severity: High
 - Location: VPS runtime `.env` (`FEEDGEN_LISTENHOST`)
 - Evidence:
@@ -49,6 +52,7 @@ Scope: deploy pipeline, repository/security controls, application code, and VPS 
 ## Medium Findings
 
 ### SEC-004 (Fixed): Branch protection was too permissive
+
 - Severity: Medium
 - Location: GitHub branch protection for `main`
 - Evidence before:
@@ -62,6 +66,7 @@ Scope: deploy pipeline, repository/security controls, application code, and VPS 
 - Fix applied via GitHub API.
 
 ### SEC-005 (Open): No explicit CSRF token mechanism for cookie-auth governance mutations
+
 - Severity: Medium
 - Location:
   - Cookie auth setup: [src/governance/routes/auth.ts](src/governance/routes/auth.ts):42
@@ -74,6 +79,7 @@ Scope: deploy pipeline, repository/security controls, application code, and VPS 
   - optionally enforce origin/fetch-metadata checks as defense in depth.
 
 ### SEC-006 (Pending Fix): Deploy workflow tests are environment-dependent on VPS production `.env`
+
 - Severity: Medium (availability/integrity of delivery)
 - Location: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml):29
 - Evidence:
@@ -87,12 +93,14 @@ Scope: deploy pipeline, repository/security controls, application code, and VPS 
 ## Low Findings
 
 ### SEC-007 (Open): SSH `X11Forwarding` enabled
+
 - Severity: Low
 - Location: VPS `/etc/ssh/sshd_config` (`X11Forwarding yes`)
 - Impact: unnecessary SSH surface for a headless production service host.
 - Recommended fix: set `X11Forwarding no` and reload sshd during maintenance window.
 
 ### SEC-008 (Verification Gap): Direct API read of code/dependabot/secret alerts returned 404
+
 - Severity: Low (process visibility gap)
 - Location: GitHub API access path used for audit
 - Evidence:

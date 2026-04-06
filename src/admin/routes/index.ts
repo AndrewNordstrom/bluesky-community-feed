@@ -47,6 +47,6 @@ export function registerAdminRoutes(app: FastifyInstance): void {
 
       logger.info('Admin routes registered');
     },
-    { prefix: '/api/admin' }
+    { prefix: '/api/admin' },
   );
 }

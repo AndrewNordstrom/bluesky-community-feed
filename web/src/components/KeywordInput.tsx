@@ -61,7 +61,7 @@ export function KeywordInput({
     (keywordToRemove: string) => {
       onChange(keywords.filter((k) => k !== keywordToRemove));
     },
-    [keywords, onChange]
+    [keywords, onChange],
   );
 
   const handleKeyDown = useCallback(
@@ -73,7 +73,7 @@ export function KeywordInput({
         removeKeyword(keywords[keywords.length - 1]);
       }
     },
-    [addKeyword, inputValue, keywords, removeKeyword]
+    [addKeyword, inputValue, keywords, removeKeyword],
   );
 
   const handleInputChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
@@ -93,10 +93,7 @@ export function KeywordInput({
       <div className="keyword-input__field">
         <div className="keyword-input__tags">
           {keywords.map((keyword) => (
-            <span
-              key={keyword}
-              className={`keyword-input__tag keyword-input__tag--${variant}`}
-            >
+            <span key={keyword} className={`keyword-input__tag keyword-input__tag--${variant}`}>
               {keyword}
               <button
                 type="button"
@@ -115,9 +112,7 @@ export function KeywordInput({
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             disabled={disabled || keywords.length >= maxKeywords}
-            placeholder={
-              keywords.length >= maxKeywords ? 'Max keywords reached' : placeholder
-            }
+            placeholder={keywords.length >= maxKeywords ? 'Max keywords reached' : placeholder}
             className="keyword-input__text-input"
           />
         </div>

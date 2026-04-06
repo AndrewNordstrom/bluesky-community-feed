@@ -140,7 +140,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Tabs - matches Vote page tab styling */
@@ -181,8 +183,12 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* Cards - matches Vote page cards */
@@ -395,7 +401,9 @@
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
 }
 
 .btn-warning:hover:not(:disabled) {
@@ -444,8 +452,8 @@
   margin-bottom: 8px;
 }
 
-.form-group input[type="text"],
-.form-group input[type="datetime-local"],
+.form-group input[type='text'],
+.form-group input[type='datetime-local'],
 .form-group textarea,
 .form-group select {
   width: 100%;
@@ -490,7 +498,7 @@
   color: #f1f3f5;
 }
 
-.checkbox-label input[type="checkbox"] {
+.checkbox-label input[type='checkbox'] {
   width: 18px;
   height: 18px;
   accent-color: #1083fe;

@@ -84,7 +84,7 @@ export function extractSessionToken(request: FastifyRequest): string | null {
  */
 export async function authenticateWithBluesky(
   handle: string,
-  appPassword: string
+  appPassword: string,
 ): Promise<SessionInfo | null> {
   try {
     const agent = new AtpAgent({ service: 'https://bsky.social' });

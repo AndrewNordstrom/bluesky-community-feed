@@ -24,7 +24,7 @@ async function getCurrentScoringRunScope(): Promise<{ runId: string; epochId: nu
   const result = await db.query<{ value: CurrentScoringRunValue }>(
     `SELECT value
      FROM system_status
-     WHERE key = 'current_scoring_run'`
+     WHERE key = 'current_scoring_run'`,
   );
 
   const value = result.rows[0]?.value;
@@ -95,7 +95,10 @@ export function registerPostExplainRoute(app: FastifyInstance): void {
                 properties: {
                   pure_engagement_rank: { type: 'integer' },
                   community_governed_rank: { type: 'integer' },
-                  difference: { type: 'integer', description: 'Positive = governance boosted this post' },
+                  difference: {
+                    type: 'integer',
+                    description: 'Positive = governance boosted this post',
+                  },
                 },
               },
               scored_at: { type: 'string', format: 'date-time' },
@@ -128,7 +131,7 @@ export function registerPostExplainRoute(app: FastifyInstance): void {
            FROM governance_epochs
            WHERE status = 'active'
            ORDER BY id DESC
-           LIMIT 1`
+           LIMIT 1`,
         );
 
         if (epochResult.rows.length === 0) {
@@ -158,7 +161,7 @@ export function registerPostExplainRoute(app: FastifyInstance): void {
              ${runScopeClause}
            ORDER BY ps.scored_at DESC
            LIMIT 1`,
-          scoreParams
+          scoreParams,
         );
 
         if (scoreResult.rows.length === 0) {
@@ -189,7 +192,7 @@ export function registerPostExplainRoute(app: FastifyInstance): void {
            FROM post_scores
            WHERE epoch_id = $1 AND total_score > $2
              ${rankRunClause}`,
-          rankParams
+          rankParams,
         );
 
         // Compute counterfactual: what would rank be with pure engagement?
@@ -205,7 +208,7 @@ export function registerPostExplainRoute(app: FastifyInstance): void {
            FROM post_scores
            WHERE epoch_id = $1 AND engagement_score > $2
              ${engagementRunClause}`,
-          engagementRankParams
+          engagementRankParams,
         );
 
         const rank = parseInt(rankResult.rows[0].rank, 10);
@@ -265,15 +268,15 @@ export function registerPostExplainRoute(app: FastifyInstance): void {
         try {
           const topicResult = await db.query<{ topic_vector: Record<string, number> | null }>(
             'SELECT topic_vector FROM posts WHERE uri = $1',
-            [decodedUri]
+            [decodedUri],
           );
-          const epochWeightsResult = await db.query<{ topic_weights: Record<string, number> | null }>(
-            'SELECT topic_weights FROM governance_epochs WHERE id = $1',
-            [epochId]
-          );
+          const epochWeightsResult = await db.query<{
+            topic_weights: Record<string, number> | null;
+          }>('SELECT topic_weights FROM governance_epochs WHERE id = $1', [epochId]);
 
           const topicVector = (topicResult.rows[0]?.topic_vector as Record<string, number>) ?? {};
-          const topicWeights = (epochWeightsResult.rows[0]?.topic_weights as Record<string, number>) ?? {};
+          const topicWeights =
+            (epochWeightsResult.rows[0]?.topic_weights as Record<string, number>) ?? {};
 
           if (Object.keys(topicVector).length > 0 && Object.keys(topicWeights).length > 0) {
             const breakdown: Record<string, TopicBreakdownEntry> = {};
@@ -300,6 +303,6 @@ export function registerPostExplainRoute(app: FastifyInstance): void {
           message: 'An error occurred while fetching the post explanation',
         });
       }
-    }
+    },
   );
 }

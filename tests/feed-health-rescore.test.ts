@@ -132,29 +132,35 @@ describe('admin manual rescore overlap guard', () => {
 
     dbQueryMock
       .mockResolvedValueOnce({
-        rows: [{
-          total_posts: '1000',
-          posts_24h: '500',
-          posts_7d: '900',
-          oldest_post: '2026-02-01T00:00:00.000Z',
-          newest_post: '2026-02-08T22:45:09.000Z',
-        }],
-      })
-      .mockResolvedValueOnce({
-        rows: [{
-          total: '120',
-          with_votes: '14',
-          active_last_week: '95',
-        }],
-      })
-      .mockResolvedValueOnce({
-        rows: [{
-          content_rules: {
-            include_keywords: ['bluesky'],
-            exclude_keywords: ['spam'],
+        rows: [
+          {
+            total_posts: '1000',
+            posts_24h: '500',
+            posts_7d: '900',
+            oldest_post: '2026-02-01T00:00:00.000Z',
+            newest_post: '2026-02-08T22:45:09.000Z',
           },
-          rules_updated: '2026-02-08T22:00:00.000Z',
-        }],
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            total: '120',
+            with_votes: '14',
+            active_last_week: '95',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            content_rules: {
+              include_keywords: ['bluesky'],
+              exclude_keywords: ['spam'],
+            },
+            rules_updated: '2026-02-08T22:00:00.000Z',
+          },
+        ],
       });
 
     const app = Fastify();

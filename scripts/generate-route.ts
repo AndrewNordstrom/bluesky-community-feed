@@ -36,7 +36,12 @@ function toTitleCase(name: string): string {
     .join(' ');
 }
 
-function generateGetRoute(kebabName: string, pascalName: string, titleName: string, registerFn: string): string {
+function generateGetRoute(
+  kebabName: string,
+  pascalName: string,
+  titleName: string,
+  registerFn: string,
+): string {
   return `/**
  * ${titleName} Route
  *
@@ -92,7 +97,12 @@ export function ${registerFn}(app: FastifyInstance): void {
 `;
 }
 
-function generatePostRoute(kebabName: string, pascalName: string, titleName: string, registerFn: string): string {
+function generatePostRoute(
+  kebabName: string,
+  pascalName: string,
+  titleName: string,
+  registerFn: string,
+): string {
   return `/**
  * ${titleName} Route
  *
@@ -174,9 +184,10 @@ function main(): void {
     process.exit(1);
   }
 
-  const content = method === 'GET'
-    ? generateGetRoute(kebabName, pascalName, titleName, registerFn)
-    : generatePostRoute(kebabName, pascalName, titleName, registerFn);
+  const content =
+    method === 'GET'
+      ? generateGetRoute(kebabName, pascalName, titleName, registerFn)
+      : generatePostRoute(kebabName, pascalName, titleName, registerFn);
 
   fs.writeFileSync(routePath, content);
   console.log(`Created: src/feed/routes/${kebabName}.ts`);

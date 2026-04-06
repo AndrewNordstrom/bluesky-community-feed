@@ -12,7 +12,12 @@ import type {
 
 /** Backend-specific extension with DB column mapping. */
 export interface VotableWeightParam extends SharedVotableWeightParam {
-  voteField: 'recency_weight' | 'engagement_weight' | 'bridging_weight' | 'source_diversity_weight' | 'relevance_weight';
+  voteField:
+    | 'recency_weight'
+    | 'engagement_weight'
+    | 'bridging_weight'
+    | 'source_diversity_weight'
+    | 'relevance_weight';
 }
 
 export const VOTABLE_WEIGHT_PARAMS: readonly VotableWeightParam[] = [
@@ -67,11 +72,15 @@ export const VOTABLE_WEIGHT_PARAMS: readonly VotableWeightParam[] = [
 export type GovernanceWeightVoteField = (typeof VOTABLE_WEIGHT_PARAMS)[number]['voteField'];
 
 export { type GovernanceWeightKey } from '../shared/api-types.js';
-export const GOVERNANCE_WEIGHT_KEYS = VOTABLE_WEIGHT_PARAMS.map((param) => param.key) as ReadonlyArray<GovernanceWeightKey>;
-export const GOVERNANCE_WEIGHT_VOTE_FIELDS = VOTABLE_WEIGHT_PARAMS.map((param) => param.voteField) as ReadonlyArray<GovernanceWeightVoteField>;
+export const GOVERNANCE_WEIGHT_KEYS = VOTABLE_WEIGHT_PARAMS.map(
+  (param) => param.key,
+) as ReadonlyArray<GovernanceWeightKey>;
+export const GOVERNANCE_WEIGHT_VOTE_FIELDS = VOTABLE_WEIGHT_PARAMS.map(
+  (param) => param.voteField,
+) as ReadonlyArray<GovernanceWeightVoteField>;
 
 export function createDefaultGovernanceWeightRecord(): Record<GovernanceWeightKey, number> {
   return Object.fromEntries(
-    VOTABLE_WEIGHT_PARAMS.map((param) => [param.key, param.defaultValue] as const)
+    VOTABLE_WEIGHT_PARAMS.map((param) => [param.key, param.defaultValue] as const),
   ) as Record<GovernanceWeightKey, number>;
 }

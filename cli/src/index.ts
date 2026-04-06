@@ -12,7 +12,7 @@
 import { Command } from 'commander';
 import { resolveConfig } from './config.js';
 import { login, logout } from './auth.js';
-import { printSuccess, printError, printJson } from './output.js';
+import { printSuccess, printError } from './output.js';
 import { registerEpochCommands } from './commands/epoch.js';
 import { registerRulesCommands } from './commands/rules.js';
 import { registerVotesCommands } from './commands/votes.js';

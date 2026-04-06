@@ -122,13 +122,20 @@ export function registerFeedSkeleton(app: FastifyInstance): void {
                 items: {
                   type: 'object',
                   properties: {
-                    post: { type: 'string', description: 'AT-URI of the post', example: 'at://did:plc:example/app.bsky.feed.post/abc123' },
+                    post: {
+                      type: 'string',
+                      description: 'AT-URI of the post',
+                      example: 'at://did:plc:example/app.bsky.feed.post/abc123',
+                    },
                   },
                   required: ['post'],
                 },
                 description: 'Ordered list of post references',
               },
-              cursor: { type: 'string', description: 'Pagination cursor for the next page (absent on last page)' },
+              cursor: {
+                type: 'string',
+                description: 'Pagination cursor for the next page (absent on last page)',
+              },
             },
             required: ['feed'],
           },
@@ -259,7 +266,7 @@ export function registerFeedSkeleton(app: FastifyInstance): void {
           authHeaderPresent: Boolean(request.headers.authorization),
           responseTimeMs,
         },
-        'Returning feed skeleton'
+        'Returning feed skeleton',
       );
 
       const response = {
@@ -280,6 +287,6 @@ export function registerFeedSkeleton(app: FastifyInstance): void {
       });
 
       return reply.send(response);
-    }
+    },
   );
 }

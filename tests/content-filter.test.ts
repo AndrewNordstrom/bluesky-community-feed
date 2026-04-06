@@ -36,7 +36,7 @@ describe('content filter cache fallback', () => {
       JSON.stringify({
         includeKeywords: ['ai'],
         excludeKeywords: ['spam'],
-      })
+      }),
     );
 
     const rules = await getCurrentContentRules();

@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 
-const { dbQueryMock, redisGetMock, verifyFeedRequesterDidMock, isParticipantApprovedMock } = vi.hoisted(() => ({
-  dbQueryMock: vi.fn(),
-  redisGetMock: vi.fn(),
-  verifyFeedRequesterDidMock: vi.fn(),
-  isParticipantApprovedMock: vi.fn(),
-}));
+const { dbQueryMock, redisGetMock, verifyFeedRequesterDidMock, isParticipantApprovedMock } =
+  vi.hoisted(() => ({
+    dbQueryMock: vi.fn(),
+    redisGetMock: vi.fn(),
+    verifyFeedRequesterDidMock: vi.fn(),
+    isParticipantApprovedMock: vi.fn(),
+  }));
 
 vi.mock('../src/db/client.js', () => ({
   db: {

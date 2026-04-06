@@ -13,12 +13,12 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: bluesky_feed
     ports:
-      - "127.0.0.1:5433:5432"
+      - '127.0.0.1:5433:5432'
     volumes:
       - bluesky_postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U feed"]
+      test: ['CMD-SHELL', 'pg_isready -U feed']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -28,12 +28,12 @@ services:
     container_name: bluesky-feed-redis
     command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru --save 60 1000
     ports:
-      - "127.0.0.1:6380:6379"
+      - '127.0.0.1:6380:6379'
     volumes:
       - bluesky_redis_data:/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
