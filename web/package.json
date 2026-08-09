@@ -16,7 +16,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.101.2",
     "axios": "1.18.1",
-    "dompurify": "^3.4.12",
+    "dompurify": "^3.4.13",
     "marked": "^18.0.6",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
