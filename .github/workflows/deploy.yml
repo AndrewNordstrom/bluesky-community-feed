@@ -1,106 +1,1343 @@
 name: Deploy to VPS
+run-name: Promote ${{ inputs.sha }} to production
 
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch: # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full 40-character commit SHA from main
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-promotion
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  validate-target:
+    name: Validate promotion target
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      sha: ${{ steps.validate-target.outputs.sha }}
+      archive: ${{ steps.package-release.outputs.archive }}
+      archive_sha256: ${{ steps.package-release.outputs.archive_sha256 }}
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate requested main SHA
+        id: validate-target
+        env:
+          DEPLOY_SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Deployment SHA must be a full lowercase 40-character commit SHA"
+            exit 1
+          fi
+          git fetch --no-tags origin refs/heads/main:refs/remotes/origin/main
+          git cat-file -e "${DEPLOY_SHA}^{commit}"
+          git merge-base --is-ancestor "$DEPLOY_SHA" refs/remotes/origin/main
+          git checkout --detach "$DEPLOY_SHA"
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          printf 'sha=%s\n' "$DEPLOY_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "20.19.0"
+          cache: npm
+
+      - name: Install exact-SHA dependencies
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts
+          (cd cli && npm ci --ignore-scripts)
+          (cd web && npm ci --ignore-scripts)
+          (cd web-next && npm ci --ignore-scripts)
+
+      - name: Audit every shipped runtime workspace
+        run: |
+          set -euo pipefail
+          npm audit --omit=dev --audit-level=moderate
+          (cd cli && npm audit --omit=dev --audit-level=moderate)
+          (cd web && npm audit --omit=dev --audit-level=moderate)
+          (cd web-next && npm audit --omit=dev --audit-level=moderate)
+
+      - name: Verify exact SHA before production mutation
+        env:
+          VALIDATED_SHA: ${{ steps.validate-target.outputs.sha }}
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          npm run verify
+          test "$(git rev-parse HEAD)" = "$VALIDATED_SHA"
+
+      - name: Package verified runtime artifacts
+        id: package-release
+        env:
+          VALIDATED_SHA: ${{ steps.validate-target.outputs.sha }}
+        run: |
+          set -euo pipefail
+          RELEASE_ARCHIVE="corgi-release-${VALIDATED_SHA}.tar.gz"
+          printf '%s\n' "$VALIDATED_SHA" > dist/.release-sha
+          tar -czf "$RELEASE_ARCHIVE" -- \
+            node_modules \
+            dist \
+            web/node_modules \
+            web/dist \
+            web-next/node_modules \
+            web-next/.next \
+            web-next/out \
+            cli/node_modules \
+            cli/dist \
+            packages/feed-sdk/dist
+          ARCHIVE_SHA256="$(sha256sum "$RELEASE_ARCHIVE" | awk '{ print $1 }')"
+          if [[ ! "$ARCHIVE_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Release archive digest is invalid" >&2
+            exit 1
+          fi
+          printf '%s  %s\n' "$ARCHIVE_SHA256" "$RELEASE_ARCHIVE" > "${RELEASE_ARCHIVE}.sha256"
+          printf 'archive=%s\n' "$RELEASE_ARCHIVE" >> "$GITHUB_OUTPUT"
+          printf 'archive_sha256=%s\n' "$ARCHIVE_SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Retain verified runtime artifact for deploy job
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: corgi-release-${{ steps.validate-target.outputs.sha }}
+          path: |
+            ${{ steps.package-release.outputs.archive }}
+            ${{ steps.package-release.outputs.archive }}.sha256
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  require-deploy-enabled:
+    name: Require production deploy enable flag
+    needs: validate-target
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Assert deploy is enabled
+        env:
+          DEPLOY_ENABLED: ${{ vars.CORGI_PRODUCTION_DEPLOY_ENABLED }}
+        run: |
+          set -euo pipefail
+          if [ "${DEPLOY_ENABLED:-}" != "true" ]; then
+            echo "CORGI_PRODUCTION_DEPLOY_ENABLED is not 'true'; promotion is disabled" >&2
+            exit 1
+          fi
+
+  deploy:
+    name: Promote validated SHA to production
+    needs: [validate-target, require-deploy-enabled]
+    if: vars.CORGI_PRODUCTION_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment:
+      name: production
+      url: https://feed.corgi.network
+    concurrency:
+      group: production
+      cancel-in-progress: false
 
     steps:
-      - name: Deploy to VPS
-        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+      - name: Download verified runtime artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          command_timeout: 10m
-          script: |
-            set -euo pipefail
-            cd /opt/bluesky-feed
+          name: corgi-release-${{ needs.validate-target.outputs.sha }}
+          path: release-artifact
 
-            # Save current commit for rollback
-            PREV_COMMIT=$(git rev-parse HEAD)
+      - name: Verify downloaded runtime artifact
+        env:
+          RELEASE_ARCHIVE: ${{ needs.validate-target.outputs.archive }}
+          EXPECTED_ARCHIVE_SHA256: ${{ needs.validate-target.outputs.archive_sha256 }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_ARCHIVE" =~ ^corgi-release-[0-9a-f]{40}\.tar\.gz$ ]]; then
+            echo "Release archive name is invalid" >&2
+            exit 1
+          fi
+          if [[ ! "$EXPECTED_ARCHIVE_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Expected release archive digest is invalid" >&2
+            exit 1
+          fi
+          EXPECTED_CHECKSUM_RECORD="${EXPECTED_ARCHIVE_SHA256}  ${RELEASE_ARCHIVE}"
+          if [ "$(cat "release-artifact/${RELEASE_ARCHIVE}.sha256")" != "$EXPECTED_CHECKSUM_RECORD" ]; then
+            echo "Downloaded release checksum record does not match the runner-anchored digest" >&2
+            exit 1
+          fi
+          ACTUAL_ARCHIVE_SHA256="$(sha256sum "release-artifact/${RELEASE_ARCHIVE}" | awk '{ print $1 }')"
+          if [ "$ACTUAL_ARCHIVE_SHA256" != "$EXPECTED_ARCHIVE_SHA256" ]; then
+            echo "Downloaded release archive does not match the runner-anchored digest" >&2
+            exit 1
+          fi
+          (cd release-artifact && sha256sum --check "${RELEASE_ARCHIVE}.sha256")
 
-            git pull origin main
-            npm ci --ignore-scripts
-            node scripts/audit-allowlist.mjs --audit-level=high
-            npm run build
-            # Run tests against deterministic defaults from .env.example,
-            # not production tuning values from /opt/bluesky-feed/.env.
-            ENV_BACKUP=""
-            restore_env_file() {
-              if [ -n "${ENV_BACKUP}" ] && [ -f "${ENV_BACKUP}" ]; then
-                cp "${ENV_BACKUP}" .env
-                rm -f "${ENV_BACKUP}"
-                ENV_BACKUP=""
-              else
-                rm -f .env
-              fi
-            }
-            if [ -f .env ]; then
-              ENV_BACKUP="$(mktemp /tmp/bluesky-feed-env-backup.XXXXXX)"
-              cp .env "${ENV_BACKUP}"
-              if ! cmp -s .env "${ENV_BACKUP}"; then
-                echo "Failed to verify .env backup integrity"
-                rm -f "${ENV_BACKUP}"
-                ENV_BACKUP=""
-                exit 1
-              fi
-            fi
-            trap restore_env_file EXIT
-            if [ ! -f .env.example ]; then
-              echo ".env.example is missing; cannot run deterministic deploy tests"
+      - name: Pin SSH action runtime payloads
+        env:
+          DRONE_SSH_BINARY: drone-ssh-1.8.2-linux-amd64
+          DRONE_SSH_SHA256: 1e10a9972eef167d9ddbc39e1ba80f7d44a011b4a6bc4f6149434154d9b6bb24
+          DRONE_SCP_BINARY: drone-scp-1.8.0-linux-amd64
+          DRONE_SCP_SHA256: 05bed7f47f57fffadfa9c3e53ef5b203cb66b1bc83751e261246584c59ed7649
+        run: |
+          set -euo pipefail
+          if [ "$(uname -s)" != "Linux" ] || [ "$(uname -m)" != "x86_64" ]; then
+            echo "Production SSH actions require the reviewed Linux amd64 payloads" >&2
+            exit 1
+          fi
+          PAYLOAD_ROOT="$RUNNER_TEMP/corgi-pinned-action-payloads"
+          SSH_RELEASE_ROOT="$PAYLOAD_ROOT/drone-ssh"
+          SCP_RELEASE_ROOT="$PAYLOAD_ROOT/drone-scp"
+          install -d -m 0700 "$SSH_RELEASE_ROOT/v1.8.2" "$SCP_RELEASE_ROOT/v1.8.0"
+          curl --fail --silent --show-error --location --retry 5 --connect-timeout 10 --max-time 120 \
+            "https://github.com/appleboy/drone-ssh/releases/download/v1.8.2/${DRONE_SSH_BINARY}" \
+            --output "$SSH_RELEASE_ROOT/v1.8.2/$DRONE_SSH_BINARY"
+          curl --fail --silent --show-error --location --retry 5 --connect-timeout 10 --max-time 120 \
+            "https://github.com/appleboy/drone-scp/releases/download/v1.8.0/${DRONE_SCP_BINARY}" \
+            --output "$SCP_RELEASE_ROOT/v1.8.0/$DRONE_SCP_BINARY"
+          printf '%s  %s\n' "$DRONE_SSH_SHA256" "$SSH_RELEASE_ROOT/v1.8.2/$DRONE_SSH_BINARY" | sha256sum --check --strict
+          printf '%s  %s\n' "$DRONE_SCP_SHA256" "$SCP_RELEASE_ROOT/v1.8.0/$DRONE_SCP_BINARY" | sha256sum --check --strict
+          chmod 0500 \
+            "$SSH_RELEASE_ROOT/v1.8.2/$DRONE_SSH_BINARY" \
+            "$SCP_RELEASE_ROOT/v1.8.0/$DRONE_SCP_BINARY"
+          {
+            echo "DRONE_SSH_RELEASE_URL=file://$SSH_RELEASE_ROOT"
+            echo "DRONE_SSH_VERSION=1.8.2"
+            echo "DRONE_SCP_RELEASE_URL=file://$SCP_RELEASE_ROOT"
+            echo "DRONE_SCP_VERSION=1.8.0"
+          } >> "$GITHUB_ENV"
+
+      - name: Require production SSH credentials
+        env:
+          PRODUCTION_VPS_HOST: ${{ secrets.PRODUCTION_VPS_HOST }}
+          PRODUCTION_VPS_USER: ${{ secrets.PRODUCTION_VPS_USER }}
+          PRODUCTION_VPS_SSH_KEY: ${{ secrets.PRODUCTION_VPS_SSH_KEY }}
+          PRODUCTION_VPS_SSH_FINGERPRINT: ${{ secrets.PRODUCTION_VPS_SSH_FINGERPRINT }}
+        run: |
+          set -euo pipefail
+          for REQUIRED_SECRET in \
+            PRODUCTION_VPS_HOST \
+            PRODUCTION_VPS_USER \
+            PRODUCTION_VPS_SSH_KEY \
+            PRODUCTION_VPS_SSH_FINGERPRINT; do
+            if [ -z "${!REQUIRED_SECRET:-}" ]; then
+              echo "Required production deployment secret is missing: name=$REQUIRED_SECRET" >&2
               exit 1
             fi
-            cp .env.example .env
-            npm run test -- --reporter=verbose --run
-            restore_env_file
-            trap - EXIT
-            cd web && npm ci && npm run build
-            cd ..
-            # Build the web-next static export too, so cutover (WEB_DIST_DIR /
-            # WEB_ROUTING_MODE env flip) is a pure config change with a fresh
-            # build already on disk. Serving still defaults to web/dist.
-            cd web-next && npm ci
-            # One retry absorbs transient failures (e.g. the next/font fetch);
-            # a second failure is real and should stop the deploy.
-            npm run build || { echo "web-next build failed; retrying once..."; npm run build; }
-            cd ..
-            cd cli && npm ci && npx tsc
-            cd ..
-            # Rollback restores PREV_COMMIT without a down migration. Keep every
-            # deploy migration additive and backward-compatible with that prior
-            # application, and run it only after every build/test gate passes.
-            npm run migrate
-            sudo docker compose -f docker-compose.prod.yml up -d --no-deps demo-redis
+          done
+          if [[ ! "$PRODUCTION_VPS_SSH_FINGERPRINT" =~ ^SHA256:[A-Za-z0-9+/]{43}$ ]]; then
+            echo "Production VPS SSH fingerprint must use the SHA256 OpenSSH format" >&2
+            exit 1
+          fi
+
+      - name: Admit artifact transfer
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        env:
+          DEPLOY_RUN_ID: ${{ github.run_id }}
+          DEPLOY_RUN_ATTEMPT: ${{ github.run_attempt }}
+        with:
+          host: ${{ secrets.PRODUCTION_VPS_HOST }}
+          username: ${{ secrets.PRODUCTION_VPS_USER }}
+          key: ${{ secrets.PRODUCTION_VPS_SSH_KEY }}
+          fingerprint: ${{ secrets.PRODUCTION_VPS_SSH_FINGERPRINT }}
+          command_timeout: 5m
+          envs: DEPLOY_RUN_ATTEMPT,DEPLOY_RUN_ID
+          script: |
+            set -Eeuo pipefail
+            cd /opt/bluesky-feed
+
+            require_transfer_path_access() {
+              local inspected_path="$1"
+              local deploy_user="$2"
+              local path_owner
+              if [ -L "$inspected_path" ] || [ ! -e "$inspected_path" ]; then
+                echo "Deployment path must exist and must not be a symlink: path=$inspected_path" >&2
+                return 1
+              fi
+              path_owner="$(stat -c '%U' "$inspected_path")" || return 1
+              if [ "$path_owner" != "$deploy_user" ] || [ ! -w "$inspected_path" ]; then
+                echo "Deployment path must be owned and writable by the deployment user: path=$inspected_path deploy_user=$deploy_user path_owner=$path_owner" >&2
+                return 1
+              fi
+            }
+
+            transfer_receipt_is_safe_terminal() {
+              local inspected_receipt="$1"
+              local built_sha
+              local deployed_sha
+              local previous_sha
+              local requested_sha
+              local runtime_sha
+              local status_field
+              if [ ! -f "$inspected_receipt" ] || [ -L "$inspected_receipt" ]; then
+                return 1
+              fi
+              if [ "$(wc -l < "$inspected_receipt")" -ne 1 ] || \
+                 ! grep -Eq '^CORGI_DEPLOY_RECEIPT\|status=(succeeded|rolled_back|preflight_failed)\|requested=[0-9a-f]{40}\|previous=[0-9a-f]{40}\|built=(none|[0-9a-f]{40})\|deployed=(none|[0-9a-f]{40})\|runtime=(none|[0-9a-f]{40})\|migrations=[^|]+\|compose=[^|]+\|operator=[A-Za-z0-9-]+(\[bot\])?\|timestamp=[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$' "$inspected_receipt"; then
+                return 1
+              fi
+              IFS='|' read -r _ status_field requested_sha previous_sha built_sha \
+                deployed_sha runtime_sha _ < "$inspected_receipt"
+              requested_sha="${requested_sha#requested=}"
+              previous_sha="${previous_sha#previous=}"
+              built_sha="${built_sha#built=}"
+              deployed_sha="${deployed_sha#deployed=}"
+              runtime_sha="${runtime_sha#runtime=}"
+              case "$status_field" in
+                status=succeeded)
+                  [ "$built_sha" = "$requested_sha" ] && \
+                    [ "$deployed_sha" = "$requested_sha" ] && \
+                    [ "$runtime_sha" = "$requested_sha" ]
+                  ;;
+                status=rolled_back)
+                  [ "$built_sha" = "$requested_sha" ] && \
+                    [ "$deployed_sha" = "$previous_sha" ] && \
+                    [ "$runtime_sha" = "$previous_sha" ]
+                  ;;
+                status=preflight_failed)
+                  { { [ "$built_sha" = "none" ] || [ "$built_sha" = "$requested_sha" ]; } && \
+                    [ "$deployed_sha" = "none" ] && [ "$runtime_sha" = "none" ]; } || \
+                    { [ "$built_sha" = "$requested_sha" ] && \
+                      [ "$deployed_sha" = "$previous_sha" ] && \
+                      [ "$runtime_sha" = "$previous_sha" ]; }
+                  ;;
+                *) return 1 ;;
+              esac
+            }
+
+            if [[ ! "$DEPLOY_RUN_ID" =~ ^[1-9][0-9]*$ ]] || \
+               [[ ! "$DEPLOY_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]; then
+              echo "GitHub deployment run identity is invalid" >&2
+              exit 1
+            fi
+            DEPLOY_USER="$(id -un)"
+            if [ ! -d .git ] || [ -L .git ]; then
+              echo "Production checkout must contain a non-symlinked .git directory" >&2
+              exit 1
+            fi
+            for DEPLOY_PATH in \
+              /opt/bluesky-feed \
+              /opt/bluesky-feed/.git \
+              /opt/bluesky-feed/node_modules \
+              /opt/bluesky-feed/dist \
+              /opt/bluesky-feed/web/node_modules \
+              /opt/bluesky-feed/web/dist \
+              /opt/bluesky-feed/web-next/node_modules \
+              /opt/bluesky-feed/web-next/.next \
+              /opt/bluesky-feed/web-next/out \
+              /opt/bluesky-feed/cli/node_modules \
+              /opt/bluesky-feed/cli/dist; do
+              if [ -e "$DEPLOY_PATH" ] || [ -L "$DEPLOY_PATH" ]; then
+                require_transfer_path_access "$DEPLOY_PATH" "$DEPLOY_USER"
+              fi
+            done
+            if [ ! -f .env ] || [ -L .env ] || [ -w .env ] || [ -r .env ] || \
+               [ "$(stat -c '%U' .env)" != "root" ]; then
+              echo "Production environment file must be root-owned, non-symlinked, and unreadable and unwritable by the deployment user" >&2
+              exit 1
+            fi
+            if sudo -n /usr/bin/true 2>/dev/null; then
+              echo "Deployment user must not have unrestricted passwordless sudo" >&2
+              exit 1
+            fi
+            SERVICE_USER="$(sudo -n systemctl show bluesky-feed --property=User --value)"
+            SERVICE_GROUP="$(sudo -n systemctl show bluesky-feed --property=Group --value)"
+            SERVICE_MAIN_PID="$(sudo -n systemctl show bluesky-feed --property=MainPID --value)"
+            if [ -z "$SERVICE_USER" ] || [ "$SERVICE_USER" = "root" ] || \
+               [ "$SERVICE_USER" = "$DEPLOY_USER" ] || [ -z "$SERVICE_GROUP" ] || \
+               [ "$SERVICE_GROUP" = "root" ]; then
+              echo "Production service must run under an explicit dedicated non-root user and group distinct from the deployment user" >&2
+              exit 1
+            fi
+            if ! printf '%s\n' "$SERVICE_MAIN_PID" | grep -Eq '^[1-9][0-9]*$'; then
+              echo "Production service must have a nonzero MainPID before artifact transfer" >&2
+              exit 1
+            fi
+            SERVICE_UID="$(id -u "$SERVICE_USER")"
+            if ! SERVICE_GID="$(getent group "$SERVICE_GROUP" | cut -d: -f3)"; then
+              echo "Production service group does not exist: group=$SERVICE_GROUP" >&2
+              exit 1
+            fi
+            DEPLOY_GID="$(id -g)"
+            SERVICE_PROCESS_UID="$(stat -c '%u' "/proc/${SERVICE_MAIN_PID}")"
+            SERVICE_PROCESS_GID="$(awk '/^Gid:/ { print $3 }' "/proc/${SERVICE_MAIN_PID}/status")"
+            if [ "$SERVICE_UID" = "0" ] || [ "$SERVICE_PROCESS_UID" != "$SERVICE_UID" ] || \
+               ! printf '%s\n' "$SERVICE_GID" | grep -Eq '^[1-9][0-9]*$' || \
+               [ "$SERVICE_GID" = "$DEPLOY_GID" ] || [ "$SERVICE_PROCESS_GID" != "$SERVICE_GID" ]; then
+              echo "Production MainPID owner does not match the dedicated non-root service user and group" >&2
+              exit 1
+            fi
+            RECEIPT_DIR="/opt/bluesky-feed/.git/corgi-deploy-receipts"
+            INCOMING_ARTIFACT_ROOT="/opt/bluesky-feed/.git/corgi-deploy-incoming"
+            CURRENT_ATTEMPT="${DEPLOY_RUN_ID}-${DEPLOY_RUN_ATTEMPT}"
+            for OPTIONAL_ROOT in "$RECEIPT_DIR" "$INCOMING_ARTIFACT_ROOT"; do
+              if [ -e "$OPTIONAL_ROOT" ] || [ -L "$OPTIONAL_ROOT" ]; then
+                require_transfer_path_access "$OPTIONAL_ROOT" "$DEPLOY_USER"
+              fi
+            done
+            DEPLOY_LOCK_PATH="${RECEIPT_DIR}/production.lock"
+            if [ -L "$DEPLOY_LOCK_PATH" ]; then
+              echo "Deployment lock path must not be a symlink" >&2
+              exit 1
+            fi
+            if [ -e "$DEPLOY_LOCK_PATH" ]; then
+              if [ ! -f "$DEPLOY_LOCK_PATH" ] || ! command -v flock > /dev/null 2>&1; then
+                echo "Production deployment lock cannot be inspected safely" >&2
+                exit 1
+              fi
+              exec 9< "$DEPLOY_LOCK_PATH"
+              if ! flock -n 9; then
+                echo "Another production mutation still holds the host deployment lock" >&2
+                exit 1
+              fi
+              flock -u 9
+            fi
+            if [ -e "${INCOMING_ARTIFACT_ROOT}/${CURRENT_ATTEMPT}" ] || \
+               [ -L "${INCOMING_ARTIFACT_ROOT}/${CURRENT_ATTEMPT}" ]; then
+              echo "Current deployment transfer path already exists: attempt=$CURRENT_ATTEMPT" >&2
+              exit 1
+            fi
+            for PRIOR_RECEIPT in "${RECEIPT_DIR}"/*.receipt; do
+              if [ ! -e "$PRIOR_RECEIPT" ] && [ ! -L "$PRIOR_RECEIPT" ]; then
+                continue
+              fi
+              PRIOR_ATTEMPT="$(basename "$PRIOR_RECEIPT" .receipt)"
+              if [ "$PRIOR_ATTEMPT" = "$CURRENT_ATTEMPT" ] || \
+                 ! printf '%s\n' "$PRIOR_ATTEMPT" | grep -Eq '^[1-9][0-9]*-[1-9][0-9]*$' || \
+                 ! transfer_receipt_is_safe_terminal "$PRIOR_RECEIPT"; then
+                echo "Unresolved or malformed production deployment receipt blocks artifact transfer: path=$PRIOR_RECEIPT" >&2
+                exit 1
+              fi
+            done
+            for PRIOR_TEMP in "${RECEIPT_DIR}"/*.receipt.tmp.*; do
+              if [ -e "$PRIOR_TEMP" ] || [ -L "$PRIOR_TEMP" ]; then
+                echo "Incomplete production deployment receipt blocks artifact transfer: path=$PRIOR_TEMP" >&2
+                exit 1
+              fi
+            done
+            for PRIOR_PAYLOAD in \
+              "${RECEIPT_DIR}"/*.candidate \
+              "${RECEIPT_DIR}"/*.previous \
+              "${INCOMING_ARTIFACT_ROOT}"/*; do
+              if [ ! -e "$PRIOR_PAYLOAD" ] && [ ! -L "$PRIOR_PAYLOAD" ]; then
+                continue
+              fi
+              case "$PRIOR_PAYLOAD" in
+                "${RECEIPT_DIR}"/*.candidate)
+                  PRIOR_ATTEMPT="$(basename "$PRIOR_PAYLOAD" .candidate)"
+                  ;;
+                "${RECEIPT_DIR}"/*.previous)
+                  PRIOR_ATTEMPT="$(basename "$PRIOR_PAYLOAD" .previous)"
+                  ;;
+                "${INCOMING_ARTIFACT_ROOT}"/*)
+                  PRIOR_ATTEMPT="$(basename "$PRIOR_PAYLOAD")"
+                  ;;
+                *)
+                  echo "Unexpected production deployment payload path blocks artifact transfer: path=$PRIOR_PAYLOAD" >&2
+                  exit 1
+                  ;;
+              esac
+              if ! printf '%s\n' "$PRIOR_ATTEMPT" | grep -Eq '^[1-9][0-9]*-[1-9][0-9]*$' || \
+                 ! transfer_receipt_is_safe_terminal "${RECEIPT_DIR}/${PRIOR_ATTEMPT}.receipt"; then
+                echo "Unresolved or malformed production deployment payload blocks artifact transfer: path=$PRIOR_PAYLOAD" >&2
+                exit 1
+              fi
+            done
+            AVAILABLE_DEPLOY_KIB="$(df -Pk .git | awk 'NR == 2 { print $4 }')"
+            if ! printf '%s\n' "$AVAILABLE_DEPLOY_KIB" | grep -Eq '^[1-9][0-9]*$' || \
+               [ "$AVAILABLE_DEPLOY_KIB" -lt 8388608 ]; then
+              echo "Production deploy requires at least 8 GiB before artifact transfer: available_kib=$AVAILABLE_DEPLOY_KIB" >&2
+              exit 1
+            fi
+
+      - name: Transfer verified runtime artifact
+        id: transfer-runtime
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1
+        with:
+          host: ${{ secrets.PRODUCTION_VPS_HOST }}
+          username: ${{ secrets.PRODUCTION_VPS_USER }}
+          key: ${{ secrets.PRODUCTION_VPS_SSH_KEY }}
+          fingerprint: ${{ secrets.PRODUCTION_VPS_SSH_FINGERPRINT }}
+          source: release-artifact/${{ needs.validate-target.outputs.archive }},release-artifact/${{ needs.validate-target.outputs.archive }}.sha256
+          target: /opt/bluesky-feed/.git/corgi-deploy-incoming/${{ github.run_id }}-${{ github.run_attempt }}
+          strip_components: 1
+          command_timeout: 20m
+
+      - name: Deploy to VPS
+        id: deploy-to-vps
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        env:
+          DEPLOY_SHA: ${{ needs.validate-target.outputs.sha }}
+          DEPLOY_OPERATOR: ${{ github.actor }}
+          DEPLOY_RUN_ID: ${{ github.run_id }}
+          DEPLOY_RUN_ATTEMPT: ${{ github.run_attempt }}
+          RELEASE_ARCHIVE: ${{ needs.validate-target.outputs.archive }}
+          EXPECTED_ARCHIVE_SHA256: ${{ needs.validate-target.outputs.archive_sha256 }}
+        with:
+          host: ${{ secrets.PRODUCTION_VPS_HOST }}
+          username: ${{ secrets.PRODUCTION_VPS_USER }}
+          key: ${{ secrets.PRODUCTION_VPS_SSH_KEY }}
+          fingerprint: ${{ secrets.PRODUCTION_VPS_SSH_FINGERPRINT }}
+          command_timeout: 60m
+          envs: DEPLOY_OPERATOR,DEPLOY_RUN_ATTEMPT,DEPLOY_RUN_ID,DEPLOY_SHA,EXPECTED_ARCHIVE_SHA256,RELEASE_ARCHIVE
+          script: |
+            set -Eeuo pipefail
+            cd /opt/bluesky-feed
+
+            require_deploy_path_access() {
+              local inspected_path="$1"
+              local deploy_user="$2"
+              local path_owner
+              if [ -L "$inspected_path" ] || [ ! -e "$inspected_path" ]; then
+                echo "Deployment path must exist and must not be a symlink: path=$inspected_path" >&2
+                return 1
+              fi
+              if ! path_owner="$(stat -c '%U' "$inspected_path")"; then
+                echo "Deployment path owner could not be read: path=$inspected_path" >&2
+                return 1
+              fi
+              if [ "$path_owner" != "$deploy_user" ]; then
+                echo "Deployment path owner mismatch: path=$inspected_path deploy_user=$deploy_user path_owner=$path_owner" >&2
+                return 1
+              fi
+              if [ ! -w "$inspected_path" ]; then
+                echo "Deployment path is not writable: path=$inspected_path deploy_user=$deploy_user" >&2
+                return 1
+              fi
+            }
+
+            DEPLOY_USER="$(id -un)"
+            if [ ! -d /opt/bluesky-feed/.git ]; then
+              echo "Production checkout must contain a .git directory" >&2
+              exit 1
+            fi
+            for DEPLOY_PATH in \
+              /opt/bluesky-feed \
+              /opt/bluesky-feed/.git \
+              /opt/bluesky-feed/node_modules \
+              /opt/bluesky-feed/dist \
+              /opt/bluesky-feed/web/node_modules \
+              /opt/bluesky-feed/web/dist \
+              /opt/bluesky-feed/web-next/node_modules \
+              /opt/bluesky-feed/web-next/.next \
+              /opt/bluesky-feed/web-next/out \
+              /opt/bluesky-feed/cli/node_modules \
+              /opt/bluesky-feed/cli/dist; do
+              if [ -e "$DEPLOY_PATH" ] || [ -L "$DEPLOY_PATH" ]; then
+                require_deploy_path_access "$DEPLOY_PATH" "$DEPLOY_USER"
+              fi
+            done
+            if [ ! -f /opt/bluesky-feed/.env ] || [ -L /opt/bluesky-feed/.env ]; then
+              echo "Production environment file must exist and must not be a symlink" >&2
+              exit 1
+            fi
+            if [ -w /opt/bluesky-feed/.env ]; then
+              echo "Production environment file must not be writable by the deployment user" >&2
+              exit 1
+            fi
+            if [ -r /opt/bluesky-feed/.env ] || \
+               [ "$(stat -c '%U' /opt/bluesky-feed/.env)" != "root" ]; then
+              echo "Production environment file must be root-owned and unreadable by the deployment user" >&2
+              exit 1
+            fi
+            if sudo -n /usr/bin/true 2>/dev/null; then
+              echo "Deployment user must not have unrestricted passwordless sudo" >&2
+              exit 1
+            fi
+            SERVICE_USER="$(sudo -n systemctl show bluesky-feed --property=User --value)"
+            SERVICE_GROUP="$(sudo -n systemctl show bluesky-feed --property=Group --value)"
+            SERVICE_MAIN_PID="$(sudo -n systemctl show bluesky-feed --property=MainPID --value)"
+            if [ -z "$SERVICE_USER" ] || [ "$SERVICE_USER" = "root" ] || \
+               [ "$SERVICE_USER" = "$DEPLOY_USER" ] || [ -z "$SERVICE_GROUP" ] || \
+               [ "$SERVICE_GROUP" = "root" ]; then
+              echo "Production service must run under an explicit dedicated non-root user and group distinct from the deployment user" >&2
+              exit 1
+            fi
+            if ! printf '%s\n' "$SERVICE_MAIN_PID" | grep -Eq '^[1-9][0-9]*$'; then
+              echo "Production service must have a nonzero MainPID before deployment" >&2
+              exit 1
+            fi
+            SERVICE_UID="$(id -u "$SERVICE_USER")"
+            if ! SERVICE_GID="$(getent group "$SERVICE_GROUP" | cut -d: -f3)"; then
+              echo "Production service group does not exist: group=$SERVICE_GROUP" >&2
+              exit 1
+            fi
+            DEPLOY_GID="$(id -g)"
+            SERVICE_PROCESS_UID="$(stat -c '%u' "/proc/${SERVICE_MAIN_PID}")"
+            SERVICE_PROCESS_GID="$(awk '/^Gid:/ { print $3 }' "/proc/${SERVICE_MAIN_PID}/status")"
+            if [ "$SERVICE_UID" = "0" ] || [ "$SERVICE_PROCESS_UID" != "$SERVICE_UID" ] || \
+               ! printf '%s\n' "$SERVICE_GID" | grep -Eq '^[1-9][0-9]*$' || \
+               [ "$SERVICE_GID" = "$DEPLOY_GID" ] || [ "$SERVICE_PROCESS_GID" != "$SERVICE_GID" ]; then
+              echo "Production MainPID owner does not match the dedicated non-root service user and group" >&2
+              exit 1
+            fi
+            if [[ ! "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "Deployment SHA must be a full lowercase 40-character commit SHA" >&2
+              exit 1
+            fi
+            if [[ ! "$DEPLOY_RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
+              echo "GitHub run ID must be a positive integer" >&2
+              exit 1
+            fi
+            if [[ ! "$DEPLOY_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]; then
+              echo "GitHub run attempt must be a positive integer" >&2
+              exit 1
+            fi
+            if [[ ! "$DEPLOY_OPERATOR" =~ ^[A-Za-z0-9-]+(\[bot\])?$ ]]; then
+              echo "GitHub operator name is invalid" >&2
+              exit 1
+            fi
+            if [ "$RELEASE_ARCHIVE" != "corgi-release-${DEPLOY_SHA}.tar.gz" ]; then
+              echo "Transferred release archive does not match the requested SHA" >&2
+              exit 1
+            fi
+            if [[ ! "$EXPECTED_ARCHIVE_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+              echo "Expected release archive digest is invalid" >&2
+              exit 1
+            fi
+
+            RECEIPT_DIR="/opt/bluesky-feed/.git/corgi-deploy-receipts"
+            if [ -L "$RECEIPT_DIR" ]; then
+              echo "Deployment receipt directory must not be a symlink" >&2
+              exit 1
+            fi
+            mkdir -p "$RECEIPT_DIR"
+            chmod 700 "$RECEIPT_DIR"
+            require_deploy_path_access "$RECEIPT_DIR" "$DEPLOY_USER"
+            DEPLOY_LOCK_PATH="${RECEIPT_DIR}/production.lock"
+            if [ -L "$DEPLOY_LOCK_PATH" ]; then
+              echo "Deployment lock path must not be a symlink" >&2
+              exit 1
+            fi
+            if ! command -v flock > /dev/null 2>&1; then
+              echo "Production deployment requires flock" >&2
+              exit 1
+            fi
+            exec 9> "$DEPLOY_LOCK_PATH"
+            chmod 600 "$DEPLOY_LOCK_PATH"
+            if ! flock -n 9; then
+              echo "Another production mutation still holds the host deployment lock" >&2
+              exit 1
+            fi
+            RECEIPT_PATH="${RECEIPT_DIR}/${DEPLOY_RUN_ID}-${DEPLOY_RUN_ATTEMPT}.receipt"
+            ROLLBACK_GUARD_DIR="${RECEIPT_DIR}/${DEPLOY_RUN_ID}-${DEPLOY_RUN_ATTEMPT}.rollback"
+            CANDIDATE_BUILD_DIR="${RECEIPT_DIR}/${DEPLOY_RUN_ID}-${DEPLOY_RUN_ATTEMPT}.candidate"
+            PREVIOUS_ARTIFACT_DIR="${RECEIPT_DIR}/${DEPLOY_RUN_ID}-${DEPLOY_RUN_ATTEMPT}.previous"
+            INCOMING_ARTIFACT_ROOT="/opt/bluesky-feed/.git/corgi-deploy-incoming"
+            INCOMING_ARTIFACT_DIR="${INCOMING_ARTIFACT_ROOT}/${DEPLOY_RUN_ID}-${DEPLOY_RUN_ATTEMPT}"
+            if [ -L "$RECEIPT_PATH" ]; then
+              echo "Deployment receipt path must not be a symlink" >&2
+              exit 1
+            fi
+            require_deploy_path_access "$INCOMING_ARTIFACT_ROOT" "$DEPLOY_USER"
+            require_deploy_path_access "$INCOMING_ARTIFACT_DIR" "$DEPLOY_USER"
+            for INCOMING_FILE in \
+              "${INCOMING_ARTIFACT_DIR}/${RELEASE_ARCHIVE}" \
+              "${INCOMING_ARTIFACT_DIR}/${RELEASE_ARCHIVE}.sha256"; do
+              if [ ! -f "$INCOMING_FILE" ] || [ -L "$INCOMING_FILE" ]; then
+                echo "Transferred release artifact is missing or unsafe: path=$INCOMING_FILE" >&2
+                exit 1
+              fi
+            done
+            PREV_COMMIT="$(git rev-parse HEAD)"
+            BUILD_SHA="none"
+            DEPLOYED_SHA="none"
+            RUNTIME_SHA="none"
+            MIGRATION_SET="none"
+            COMPOSE_CHANGE_SET="none"
+            ROLLBACK_ARMED=false
+            ARTIFACT_SWAP_STARTED=false
+            ARTIFACT_BACKUP_COMPLETE=false
+            DEPLOY_MAIN_BASHPID="$BASHPID"
+            RUNTIME_ARTIFACT_PATHS=(
+              node_modules
+              dist
+              web/node_modules
+              web/dist
+              web-next/node_modules
+              web-next/.next
+              web-next/out
+              cli/node_modules
+              cli/dist
+              packages/feed-sdk/dist
+            )
+
+            write_receipt() {
+              local receipt_status="$1"
+              local receipt_timestamp
+              local receipt_temp
+              receipt_timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)" || return 1
+              receipt_temp="${RECEIPT_PATH}.tmp.$$"
+              if ! (
+                umask 077
+                printf '%s\n' "CORGI_DEPLOY_RECEIPT|status=$receipt_status|requested=$DEPLOY_SHA|previous=$PREV_COMMIT|built=$BUILD_SHA|deployed=$DEPLOYED_SHA|runtime=$RUNTIME_SHA|migrations=$MIGRATION_SET|compose=$COMPOSE_CHANGE_SET|operator=$DEPLOY_OPERATOR|timestamp=$receipt_timestamp" > "$receipt_temp" &&
+                  mv "$receipt_temp" "$RECEIPT_PATH"
+              ); then
+                return 1
+              fi
+            }
+
+            cleanup_terminal_artifacts() {
+              local cleanup_failed=false
+              local cleanup_path
+              for cleanup_path in \
+                "$CANDIDATE_BUILD_DIR" \
+                "$PREVIOUS_ARTIFACT_DIR" \
+                "$INCOMING_ARTIFACT_DIR"; do
+                case "$cleanup_path" in
+                  "${RECEIPT_DIR}/${DEPLOY_RUN_ID}-${DEPLOY_RUN_ATTEMPT}.candidate"|\
+                  "${RECEIPT_DIR}/${DEPLOY_RUN_ID}-${DEPLOY_RUN_ATTEMPT}.previous"|\
+                  "/opt/bluesky-feed/.git/corgi-deploy-incoming/${DEPLOY_RUN_ID}-${DEPLOY_RUN_ATTEMPT}") ;;
+                  *)
+                    echo "Refusing unsafe terminal artifact cleanup: path=$cleanup_path" >&2
+                    return 1
+                    ;;
+                esac
+                if [ -e "$cleanup_path" ] || [ -L "$cleanup_path" ]; then
+                  rm -rf -- "$cleanup_path" || cleanup_failed=true
+                fi
+              done
+              if [ "$cleanup_failed" = "true" ]; then
+                return 1
+              fi
+            }
+
+            receipt_is_safe_terminal() {
+              local inspected_receipt="$1"
+              local built_field
+              local compose_field
+              local deployed_field
+              local extra_field
+              local marker
+              local migrations_field
+              local operator_field
+              local previous_field
+              local receipt_line
+              local requested_field
+              local runtime_field
+              local status_field
+              local timestamp_field
+              local built_sha
+              local deployed_sha
+              local previous_sha
+              local requested_sha
+              local runtime_sha
+              if [ ! -f "$inspected_receipt" ] || [ -L "$inspected_receipt" ]; then
+                return 1
+              fi
+              if [ "$(wc -l < "$inspected_receipt")" -ne 1 ]; then
+                return 1
+              fi
+              receipt_line="$(cat "$inspected_receipt")" || return 1
+              IFS='|' read -r marker status_field requested_field previous_field built_field \
+                deployed_field runtime_field migrations_field compose_field operator_field \
+                timestamp_field extra_field <<< "$receipt_line"
+              if [ "$marker" != "CORGI_DEPLOY_RECEIPT" ] || [ -n "${extra_field:-}" ]; then
+                return 1
+              fi
+              case "$status_field" in
+                status=succeeded|status=rolled_back|status=preflight_failed) ;;
+                *) return 1 ;;
+              esac
+              case "$requested_field" in requested=*) ;; *) return 1 ;; esac
+              case "$previous_field" in previous=*) ;; *) return 1 ;; esac
+              case "$built_field" in built=*) ;; *) return 1 ;; esac
+              case "$deployed_field" in deployed=*) ;; *) return 1 ;; esac
+              case "$runtime_field" in runtime=*) ;; *) return 1 ;; esac
+              case "$migrations_field" in migrations=*) ;; *) return 1 ;; esac
+              case "$compose_field" in compose=*) ;; *) return 1 ;; esac
+              case "$operator_field" in operator=*) ;; *) return 1 ;; esac
+              case "$timestamp_field" in timestamp=*) ;; *) return 1 ;; esac
+              if ! printf '%s\n' "${operator_field#operator=}" | \
+                   grep -Eq '^[A-Za-z0-9-]+(\[bot\])?$' || \
+                 ! printf '%s\n' "${timestamp_field#timestamp=}" | \
+                   grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$' || \
+                 [ -z "${migrations_field#migrations=}" ] || \
+                 [ -z "${compose_field#compose=}" ]; then
+                return 1
+              fi
+              requested_sha="${requested_field#requested=}"
+              previous_sha="${previous_field#previous=}"
+              built_sha="${built_field#built=}"
+              deployed_sha="${deployed_field#deployed=}"
+              runtime_sha="${runtime_field#runtime=}"
+              if printf '%s\n' "$requested_sha" "$previous_sha" | \
+                   grep -Eqv '^[0-9a-f]{40}$'; then
+                return 1
+              fi
+              if printf '%s\n' "$built_sha" "$deployed_sha" "$runtime_sha" | \
+                   grep -Eqv '^(none|[0-9a-f]{40})$'; then
+                return 1
+              fi
+              case "$status_field" in
+                status=succeeded)
+                  [ "$built_sha" = "$requested_sha" ] && \
+                    [ "$deployed_sha" = "$requested_sha" ] && \
+                    [ "$runtime_sha" = "$requested_sha" ] || return 1
+                  ;;
+                status=rolled_back)
+                  [ "$built_sha" = "$requested_sha" ] && \
+                    [ "$deployed_sha" = "$previous_sha" ] && \
+                    [ "$runtime_sha" = "$previous_sha" ] || return 1
+                  ;;
+                status=preflight_failed)
+                  { { [ "$built_sha" = "none" ] || [ "$built_sha" = "$requested_sha" ]; } && \
+                    [ "$deployed_sha" = "none" ] && [ "$runtime_sha" = "none" ]; } || \
+                    { [ "$built_sha" = "$requested_sha" ] && \
+                      [ "$deployed_sha" = "$previous_sha" ] && \
+                      [ "$runtime_sha" = "$previous_sha" ]; } || return 1
+                  ;;
+              esac
+              return 0
+            }
+
+            reclaim_prior_terminal_artifacts() {
+              local prior_attempt
+              local prior_path
+              local prior_receipt
+              local prior_temp
+              for prior_receipt in "${RECEIPT_DIR}"/*.receipt; do
+                if [ ! -e "$prior_receipt" ] && [ ! -L "$prior_receipt" ]; then
+                  continue
+                fi
+                prior_attempt="$(basename "$prior_receipt" .receipt)"
+                if [ "$prior_attempt" = "${DEPLOY_RUN_ID}-${DEPLOY_RUN_ATTEMPT}" ]; then
+                  echo "Current deployment attempt already has a receipt: path=$prior_receipt" >&2
+                  return 1
+                fi
+                if ! printf '%s\n' "$prior_attempt" | grep -Eq '^[1-9][0-9]*-[1-9][0-9]*$'; then
+                  echo "Malformed production deployment receipt name blocks promotion: path=$prior_receipt" >&2
+                  return 1
+                fi
+                if ! receipt_is_safe_terminal "$prior_receipt"; then
+                  echo "Unresolved or malformed production deployment receipt blocks promotion: path=$prior_receipt" >&2
+                  return 1
+                fi
+              done
+              for prior_temp in "${RECEIPT_DIR}"/*.receipt.tmp.*; do
+                if [ -e "$prior_temp" ] || [ -L "$prior_temp" ]; then
+                  echo "Incomplete production deployment receipt blocks promotion: path=$prior_temp" >&2
+                  return 1
+                fi
+              done
+              for prior_path in \
+                "${RECEIPT_DIR}"/*.candidate \
+                "${RECEIPT_DIR}"/*.previous \
+                "${INCOMING_ARTIFACT_ROOT}"/*; do
+                if [ ! -e "$prior_path" ] && [ ! -L "$prior_path" ]; then
+                  continue
+                fi
+                case "$prior_path" in
+                  "${RECEIPT_DIR}"/*.candidate)
+                    prior_attempt="$(basename "$prior_path" .candidate)"
+                    ;;
+                  "${RECEIPT_DIR}"/*.previous)
+                    prior_attempt="$(basename "$prior_path" .previous)"
+                    ;;
+                  "${INCOMING_ARTIFACT_ROOT}"/*)
+                    prior_attempt="$(basename "$prior_path")"
+                    if [ "$prior_attempt" = "${DEPLOY_RUN_ID}-${DEPLOY_RUN_ATTEMPT}" ]; then
+                      continue
+                    fi
+                    ;;
+                  *)
+                    echo "Unexpected production deployment payload path blocks promotion: path=$prior_path" >&2
+                    return 1
+                    ;;
+                esac
+                if ! printf '%s\n' "$prior_attempt" | grep -Eq '^[1-9][0-9]*-[1-9][0-9]*$' || \
+                   ! receipt_is_safe_terminal "${RECEIPT_DIR}/${prior_attempt}.receipt"; then
+                  echo "Unresolved or malformed production deployment payload blocks promotion: path=$prior_path" >&2
+                  return 1
+                fi
+              done
+              for prior_receipt in "${RECEIPT_DIR}"/*.receipt; do
+                if [ ! -e "$prior_receipt" ] && [ ! -L "$prior_receipt" ]; then
+                  continue
+                fi
+                prior_attempt="$(basename "$prior_receipt" .receipt)"
+                if [ "$prior_attempt" = "${DEPLOY_RUN_ID}-${DEPLOY_RUN_ATTEMPT}" ]; then
+                  continue
+                fi
+                for prior_path in \
+                  "${RECEIPT_DIR}/${prior_attempt}.candidate" \
+                  "${RECEIPT_DIR}/${prior_attempt}.previous" \
+                  "${INCOMING_ARTIFACT_ROOT}/${prior_attempt}"; do
+                  if [ -e "$prior_path" ] || [ -L "$prior_path" ]; then
+                    rm -rf -- "$prior_path" || return 1
+                  fi
+                done
+              done
+            }
+
+            reclaim_prior_terminal_artifacts
+            AVAILABLE_DEPLOY_KIB="$(df -Pk "$RECEIPT_DIR" | awk 'NR == 2 { print $4 }')"
+            if ! printf '%s\n' "$AVAILABLE_DEPLOY_KIB" | grep -Eq '^[1-9][0-9]*$' || \
+               [ "$AVAILABLE_DEPLOY_KIB" -lt 8388608 ]; then
+              echo "Production deploy requires at least 8 GiB of free artifact space: available_kib=$AVAILABLE_DEPLOY_KIB" >&2
+              exit 1
+            fi
+
+            read_health_revision() {
+              node -e "let body=''; process.stdin.on('data', chunk => body += chunk); process.stdin.on('end', () => { let parsed; try { parsed = JSON.parse(body); } catch { process.stderr.write('Health response is not valid JSON\\n'); process.exit(1); } if (!parsed || parsed.status !== 'ok') { process.stderr.write('Health response status is not ok\\n'); process.exit(1); } const revision = parsed.revision; if (typeof revision !== 'string' || !/^[0-9a-f]{40}$/.test(revision)) { process.stderr.write('Health response revision is not a lowercase full SHA\\n'); process.exit(1); } process.stdout.write(revision); });"
+            }
+
+            assert_health_revision() {
+              local health_response="$1"
+              local expected_revision="$2"
+              local observed_revision
+              observed_revision="$(printf '%s' "$health_response" | read_health_revision)" || return 1
+              if [ "$observed_revision" != "$expected_revision" ]; then
+                echo "Health response revision mismatch: observed=$observed_revision expected=$expected_revision" >&2
+                return 1
+              fi
+            }
+
+            read_ingestion_signals() {
+              local signals
+              signals="$(timeout 10s sudo docker exec bluesky-feed-postgres \
+                psql -U feed -d bluesky_feed -v ON_ERROR_STOP=1 -tA -c "
+                  SELECT cursor.cursor_us::text || '|' || newest.indexed_epoch::text
+                  FROM (SELECT cursor_us FROM jetstream_cursor WHERE id = 1) cursor
+                  CROSS JOIN (
+                    SELECT FLOOR(EXTRACT(EPOCH FROM MAX(indexed_at)))::bigint AS indexed_epoch
+                    FROM posts
+                    WHERE deleted = FALSE
+                  ) newest
+                  WHERE newest.indexed_epoch IS NOT NULL;" | tr -d '[:space:]')" || return 1
+              if [ -z "$signals" ]; then
+                echo "Ingestion signal query returned no row: cursor or newest post is missing" >&2
+                return 1
+              fi
+              printf '%s' "$signals"
+            }
+
+            ingestion_signals_are_fresh() {
+              local signals="$1"
+              local minimum_cursor="$2"
+              local cursor_us
+              local newest_post_epoch
+              local now_epoch
+              IFS='|' read -r cursor_us newest_post_epoch <<< "$signals"
+              if ! printf '%s\n' "$cursor_us" | grep -Eq '^(0|[1-9][0-9]{0,17})$' || \
+                 ! printf '%s\n' "$newest_post_epoch" | grep -Eq '^(0|[1-9][0-9]{0,11})$' || \
+                 ! printf '%s\n' "$minimum_cursor" | grep -Eq '^(0|[1-9][0-9]{0,17})$'; then
+                echo "Ingestion signals are malformed: cursor_us=$cursor_us newest_post_epoch=$newest_post_epoch minimum_cursor=$minimum_cursor" >&2
+                return 1
+              fi
+              if ! now_epoch="$(date +%s)"; then
+                echo "Host time could not be read for ingestion freshness" >&2
+                return 1
+              fi
+              if [ "$((cursor_us / 1000000))" -gt "$((now_epoch + 120))" ] || \
+                 [ "$newest_post_epoch" -gt "$((now_epoch + 120))" ]; then
+                echo "Ingestion signals are ahead of host time: cursor_us=$cursor_us newest_post_epoch=$newest_post_epoch now=$now_epoch" >&2
+                return 1
+              fi
+              if [ "$((cursor_us / 1000000))" -lt "$((now_epoch - 120))" ] || \
+                 [ "$newest_post_epoch" -lt "$((now_epoch - 120))" ]; then
+                echo "Ingestion signals are stale beyond 120s: cursor_age_s=$((now_epoch - cursor_us / 1000000)) newest_post_age_s=$((now_epoch - newest_post_epoch))" >&2
+                return 1
+              fi
+              if [ "$minimum_cursor" != "0" ] && [ "$cursor_us" -le "$minimum_cursor" ]; then
+                echo "Ingestion cursor did not advance: cursor_us=$cursor_us minimum_cursor=$minimum_cursor" >&2
+                return 1
+              fi
+            }
+
+            on_deploy_error() {
+              local exit_status="$1"
+              trap - ERR EXIT HUP INT TERM
+              if [ "$exit_status" -eq 0 ]; then
+                exit_status=1
+              fi
+              if [ "$BASHPID" != "$DEPLOY_MAIN_BASHPID" ]; then
+                exit "$exit_status"
+              fi
+              if [ "$ROLLBACK_ARMED" = "true" ]; then
+                if [ -e "$ROLLBACK_GUARD_DIR" ] || [ -L "$ROLLBACK_GUARD_DIR" ]; then
+                  echo "Rollback was already claimed for this workflow attempt" >&2
+                  write_receipt rollback_interrupted || true
+                elif mkdir "$ROLLBACK_GUARD_DIR"; then
+                  chmod 700 "$ROLLBACK_GUARD_DIR" || true
+                  rollback_application "command failure or interruption" || true
+                else
+                  echo "Rollback claim directory could not be created; refusing an unclaimed rollback: path=$ROLLBACK_GUARD_DIR" >&2
+                  write_receipt rollback_interrupted || true
+                fi
+              else
+                if write_receipt preflight_failed; then
+                  cleanup_terminal_artifacts || \
+                    echo "Terminal preflight artifact cleanup failed; a later deploy must reclaim it" >&2
+                fi
+              fi
+              exit "$exit_status"
+            }
+
+            trap 'on_deploy_error "$?"' ERR
+            trap 'on_deploy_error "$?"' EXIT
+            trap 'on_deploy_error 129' HUP
+            trap 'on_deploy_error 130' INT
+            trap 'on_deploy_error 143' TERM
+
+            write_receipt started
+
+            if ! git diff --quiet || ! git diff --cached --quiet; then
+              echo "Tracked production checkout changes block deployment"
+              git status --short --untracked-files=no
+              exit 1
+            fi
+            UNTRACKED_FILES="$(git ls-files --others --exclude-standard)"
+            if [ -n "$UNTRACKED_FILES" ]; then
+              echo "Non-ignored untracked production files block deployment" >&2
+              printf '%s\n' "$UNTRACKED_FILES" >&2
+              exit 1
+            fi
+
+            candidate_artifacts_are_complete() {
+              local artifact_path
+              for artifact_path in "${RUNTIME_ARTIFACT_PATHS[@]}"; do
+                if [ ! -d "${CANDIDATE_BUILD_DIR}/${artifact_path}" ] || \
+                   [ -L "${CANDIDATE_BUILD_DIR}/${artifact_path}" ]; then
+                  echo "Candidate runtime artifact is missing or unsafe: path=$artifact_path" >&2
+                  return 1
+                fi
+              done
+              if [ "$(cat "${CANDIDATE_BUILD_DIR}/dist/.release-sha" 2>/dev/null)" != "$DEPLOY_SHA" ]; then
+                echo "Candidate release artifact does not prove the requested SHA" >&2
+                return 1
+              fi
+            }
+
+            backup_previous_artifacts() {
+              local artifact_path
+              local backup_path
+              if [ -e "$PREVIOUS_ARTIFACT_DIR" ] || [ -L "$PREVIOUS_ARTIFACT_DIR" ]; then
+                echo "Previous-artifact backup path already exists: path=$PREVIOUS_ARTIFACT_DIR" >&2
+                return 1
+              fi
+              mkdir "$PREVIOUS_ARTIFACT_DIR" || return 1
+              chmod 700 "$PREVIOUS_ARTIFACT_DIR" || return 1
+              ARTIFACT_SWAP_STARTED=true
+              for artifact_path in "${RUNTIME_ARTIFACT_PATHS[@]}"; do
+                if [ -e "$artifact_path" ] || [ -L "$artifact_path" ]; then
+                  if [ -L "$artifact_path" ]; then
+                    echo "Previous runtime artifact must not be a symlink: path=$artifact_path" >&2
+                    return 1
+                  fi
+                  backup_path="${PREVIOUS_ARTIFACT_DIR}/${artifact_path}"
+                  mkdir -p "$(dirname "$backup_path")" || return 1
+                  mv "$artifact_path" "$backup_path" || return 1
+                fi
+              done
+              ARTIFACT_BACKUP_COMPLETE=true
+            }
+
+            install_candidate_artifacts() {
+              local artifact_path
+              candidate_artifacts_are_complete || return 1
+              for artifact_path in "${RUNTIME_ARTIFACT_PATHS[@]}"; do
+                mkdir -p "$(dirname "$artifact_path")" || return 1
+                mv "${CANDIDATE_BUILD_DIR}/${artifact_path}" "$artifact_path" || return 1
+              done
+            }
+
+            restore_previous_artifacts() {
+              local artifact_failed
+              local artifact_path
+              local failed_path
+              local previous_path
+              local restoration_failed=false
+              if [ "$ARTIFACT_SWAP_STARTED" != "true" ]; then
+                return 0
+              fi
+              mkdir -p "${CANDIDATE_BUILD_DIR}/failed" || return 1
+              for artifact_path in "${RUNTIME_ARTIFACT_PATHS[@]}"; do
+                artifact_failed=false
+                failed_path="${CANDIDATE_BUILD_DIR}/failed/${artifact_path}"
+                previous_path="${PREVIOUS_ARTIFACT_DIR}/${artifact_path}"
+                if { [ -e "$previous_path" ] || [ -L "$previous_path" ]; } && \
+                   { [ -e "$artifact_path" ] || [ -L "$artifact_path" ]; }; then
+                  mkdir -p "$(dirname "$failed_path")" || artifact_failed=true
+                  if [ "$artifact_failed" = "false" ]; then
+                    if ! mv "$artifact_path" "$failed_path"; then
+                      echo "Failed to retain candidate artifact during rollback: path=$artifact_path" >&2
+                      artifact_failed=true
+                    fi
+                  fi
+                fi
+                if [ -e "$previous_path" ] || [ -L "$previous_path" ]; then
+                  if [ ! -e "$previous_path" ] || [ -L "$previous_path" ]; then
+                    echo "Previous runtime artifact is missing or unsafe: path=$artifact_path" >&2
+                    artifact_failed=true
+                  else
+                    mkdir -p "$(dirname "$artifact_path")" || artifact_failed=true
+                    if [ "$artifact_failed" = "false" ]; then
+                      if ! mv "$previous_path" "$artifact_path"; then
+                        echo "Failed to restore previous runtime artifact: path=$artifact_path" >&2
+                        artifact_failed=true
+                      fi
+                    fi
+                  fi
+                elif [ "$ARTIFACT_BACKUP_COMPLETE" = "true" ] && \
+                     { [ -e "$artifact_path" ] || [ -L "$artifact_path" ]; }; then
+                  mkdir -p "$(dirname "$failed_path")" || artifact_failed=true
+                  if [ "$artifact_failed" = "false" ]; then
+                    if ! mv "$artifact_path" "$failed_path"; then
+                      echo "Failed to retain unmatched candidate artifact: path=$artifact_path" >&2
+                      artifact_failed=true
+                    fi
+                  fi
+                fi
+                if [ "$artifact_failed" = "true" ]; then
+                  restoration_failed=true
+                fi
+              done
+              if [ "$restoration_failed" = "true" ]; then
+                return 1
+              fi
+              if [ "$(cat dist/.release-sha 2>/dev/null)" != "$PREV_COMMIT" ]; then
+                echo "Restored release artifact does not prove PREV_COMMIT" >&2
+                return 1
+              fi
+            }
+
+            rollback_application() {
+              local failure_context="$1"
+              local rollback_attempt
+              local rollback_health_response
+              local rollback_health_signals
+              local rollback_healthy=false
+              local rollback_minimum_cursor=0
+              local rollback_pre_restart_signals
+              trap - ERR EXIT HUP INT TERM
+              set +e
+              if ! write_receipt rollback_interrupted; then
+                echo "Rollback could not record its interruption sentinel; continuing restoration without it" >&2
+              fi
+              if ! cd /opt/bluesky-feed; then
+                write_receipt rollback_failed || true
+                return 1
+              fi
+              echo "Rolling back application after ${failure_context}: previous=$PREV_COMMIT" >&2
+              if [ "$ARTIFACT_SWAP_STARTED" != "true" ]; then
+                if ! git checkout --detach "$PREV_COMMIT" || \
+                   [ "$(git rev-parse HEAD 2>/dev/null)" != "$PREV_COMMIT" ]; then
+                  echo "Candidate failed before artifact swap, but the checkout could not be restored" >&2
+                  write_receipt rollback_failed || true
+                  return 1
+                fi
+                rollback_health_response="$(curl -fsS --connect-timeout 2 --max-time 5 http://localhost:3001/health)"
+                if ! assert_health_revision "$rollback_health_response" "$PREV_COMMIT" || \
+                   ! sudo systemctl is-active --quiet bluesky-feed; then
+                  echo "Candidate failed before artifact swap, but the existing runtime could not be verified" >&2
+                  write_receipt rollback_failed || true
+                  return 1
+                fi
+                DEPLOYED_SHA="$PREV_COMMIT"
+                RUNTIME_SHA="$PREV_COMMIT"
+                write_receipt preflight_failed || return 1
+                cleanup_terminal_artifacts || \
+                  echo "Terminal preflight artifact cleanup failed; a later deploy must reclaim it" >&2
+                echo "Candidate failed before production artifact mutation; previous runtime remains active" >&2
+                return 0
+              fi
+              local artifact_restore_failed=false
+              if ! git checkout --detach "$PREV_COMMIT" || \
+                 [ "$(git rev-parse HEAD 2>/dev/null)" != "$PREV_COMMIT" ]; then
+                artifact_restore_failed=true
+              fi
+              if ! restore_previous_artifacts; then
+                artifact_restore_failed=true
+              fi
+              if [ "$artifact_restore_failed" = "true" ]; then
+                echo "Rollback could not restore the retained PREV_COMMIT artifacts" >&2
+                write_receipt rollback_failed || true
+                return 1
+              fi
+              if rollback_pre_restart_signals="$(read_ingestion_signals)"; then
+                IFS='|' read -r rollback_minimum_cursor _ <<< "$rollback_pre_restart_signals"
+                if ! printf '%s\n' "$rollback_minimum_cursor" | grep -Eq '^(0|[1-9][0-9]{0,17})$'; then
+                  rollback_minimum_cursor=0
+                fi
+              else
+                echo "Rollback ingestion baseline unavailable; continuing restoration" >&2
+              fi
+              # The retained release replaced every served artifact; restart it without
+              # registry access or a rebuild.
+              if ! sudo systemctl restart bluesky-feed; then
+                write_receipt rollback_failed || true
+                return 1
+              fi
+              for rollback_attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+                if rollback_health_response="$(curl -fsS --connect-timeout 2 --max-time 5 http://localhost:3001/health)" && \
+                   assert_health_revision "$rollback_health_response" "$PREV_COMMIT" && \
+                   sudo systemctl is-active --quiet bluesky-feed; then
+                  if rollback_health_signals="$(read_ingestion_signals)" && \
+                     ingestion_signals_are_fresh "$rollback_health_signals" "$rollback_minimum_cursor"; then
+                    echo "Rollback ingestion diagnostics are fresh and advancing" >&2
+                  else
+                    echo "Rollback ingestion diagnostics are stale or quiet; restoration proof still passed" >&2
+                  fi
+                  rollback_healthy=true
+                  break
+                fi
+                echo "Rollback health check failed (attempt $rollback_attempt/12)" >&2
+                if [ "$rollback_attempt" != "12" ]; then
+                  sleep 10
+                fi
+              done
+              if [ "$rollback_healthy" != "true" ]; then
+                echo "Application rollback did not restore verified health: previous=$PREV_COMMIT" >&2
+                write_receipt rollback_failed || true
+                return 1
+              fi
+              DEPLOYED_SHA="$PREV_COMMIT"
+              RUNTIME_SHA="$PREV_COMMIT"
+              write_receipt rolled_back || return 1
+              cleanup_terminal_artifacts || \
+                echo "Terminal rollback artifact cleanup failed; a later deploy must reclaim it" >&2
+              echo "Application rollback restored previous=$PREV_COMMIT" >&2
+            }
+
+            git fetch --no-tags origin refs/heads/main:refs/remotes/origin/main
+            git cat-file -e "${DEPLOY_SHA}^{commit}"
+            git merge-base --is-ancestor "$DEPLOY_SHA" refs/remotes/origin/main
+            git merge-base --is-ancestor "$PREV_COMMIT" "$DEPLOY_SHA"
+
+            CURRENT_HEALTH_RESPONSE="$(curl -fsS --connect-timeout 2 --max-time 5 http://localhost:3001/health)"
+            assert_health_revision "$CURRENT_HEALTH_RESPONSE" "$PREV_COMMIT"
+            PREFLIGHT_INGESTION_SIGNALS="$(read_ingestion_signals)"
+            ingestion_signals_are_fresh "$PREFLIGHT_INGESTION_SIGNALS" "0"
+            MIGRATION_CHANGE_OUTPUT="$(
+              git diff --name-only "$PREV_COMMIT" "$DEPLOY_SHA" -- 'src/db/migrations/*.sql'
+            )"
+            COMPOSE_CHANGE_OUTPUT="$(
+              git diff --name-only "$PREV_COMMIT" "$DEPLOY_SHA" -- 'docker-compose.prod.yml'
+            )"
+            PROMOTION_BLOCKED=false
+            if [ -n "$MIGRATION_CHANGE_OUTPUT" ]; then
+              MIGRATION_SET="$(printf '%s\n' "$MIGRATION_CHANGE_OUTPUT" | paste -sd, -)"
+              echo "M0 promotion blocks changed migrations until PREV_COMMIT compatibility is rehearsed" >&2
+              printf '%s\n' "$MIGRATION_CHANGE_OUTPUT" >&2
+              PROMOTION_BLOCKED=true
+            fi
+            if [ -n "$COMPOSE_CHANGE_OUTPUT" ]; then
+              COMPOSE_CHANGE_SET="docker-compose.prod.yml"
+              echo "M0 promotion blocks changed production Compose configuration until container rollback is rehearsed" >&2
+              printf '%s\n' "$COMPOSE_CHANGE_OUTPUT" >&2
+              PROMOTION_BLOCKED=true
+            fi
+            if [ "$PROMOTION_BLOCKED" = "true" ]; then
+              false
+            fi
+
+            for STAGING_PATH in "$CANDIDATE_BUILD_DIR" "$PREVIOUS_ARTIFACT_DIR"; do
+              if [ -e "$STAGING_PATH" ] || [ -L "$STAGING_PATH" ]; then
+                echo "Run-scoped deployment staging path already exists: path=$STAGING_PATH" >&2
+                false
+              fi
+            done
+            mkdir "$CANDIDATE_BUILD_DIR"
+            chmod 700 "$CANDIDATE_BUILD_DIR"
+            (
+              cd "$INCOMING_ARTIFACT_DIR"
+              EXPECTED_CHECKSUM_RECORD="${EXPECTED_ARCHIVE_SHA256}  ${RELEASE_ARCHIVE}"
+              if [ "$(cat "${RELEASE_ARCHIVE}.sha256")" != "$EXPECTED_CHECKSUM_RECORD" ]; then
+                echo "Transferred checksum record does not match the runner-anchored digest" >&2
+                exit 1
+              fi
+              ACTUAL_ARCHIVE_SHA256="$(sha256sum "$RELEASE_ARCHIVE" | awk '{ print $1 }')"
+              if [ "$ACTUAL_ARCHIVE_SHA256" != "$EXPECTED_ARCHIVE_SHA256" ]; then
+                echo "Transferred archive does not match the runner-anchored digest" >&2
+                exit 1
+              fi
+              sha256sum --check "${RELEASE_ARCHIVE}.sha256"
+              tar -xzf "$RELEASE_ARCHIVE" --no-same-owner --no-same-permissions \
+                -C "$CANDIDATE_BUILD_DIR"
+            )
+            candidate_artifacts_are_complete
+            BUILD_SHA="$DEPLOY_SHA"
+
+            ROLLBACK_ARMED=true
+            git checkout --detach "$DEPLOY_SHA"
+            ACTUAL_SHA="$(git rev-parse HEAD)"
+            test "$ACTUAL_SHA" = "$DEPLOY_SHA"
+            backup_previous_artifacts
+            install_candidate_artifacts
+            test "$(cat dist/.release-sha 2>/dev/null)" = "$DEPLOY_SHA"
             for i in 1 2 3 4 5; do
-              if sudo docker compose -f docker-compose.prod.yml exec -T demo-redis redis-cli ping | grep -q PONG; then
+              if sudo docker exec bluesky-feed-demo-redis redis-cli ping | grep -q PONG; then
                 echo "Isolated demo Redis is ready (attempt $i/5)"
                 break
               fi
               if [ "$i" = "5" ]; then
                 echo "Isolated demo Redis failed to become ready"
-                exit 1
+                false
               fi
               sleep 2
             done
+            PRE_RESTART_SHA="$(git rev-parse HEAD)"
+            test "$PRE_RESTART_SHA" = "$DEPLOY_SHA"
+            PREVIOUS_MAIN_PID="$(sudo systemctl show bluesky-feed --property MainPID --value)"
+            if [[ ! "$PREVIOUS_MAIN_PID" =~ ^[1-9][0-9]*$ ]]; then
+              echo "Service has no valid running pre-restart process: MainPID=$PREVIOUS_MAIN_PID" >&2
+              false
+            fi
             sudo systemctl restart bluesky-feed
 
-            # Post-deploy health verification (3 retries, 10s apart)
+            # Post-deploy composite health verification (12 retries, 10s apart).
+            # Promotion requires the process-reported revision plus both the
+            # persisted Jetstream cursor and newest indexed post within 120s.
+            # Low-volume or no-post periods intentionally fail this M0 campaign
+            # gate; PROJ-2181 acceptance requires both freshness signals.
             echo "Waiting 10s for startup..."
             sleep 10
+            BASELINE_READY=false
+            POST_RESTART_BASELINE_SIGNALS=""
+            POST_RESTART_BASELINE_CURSOR=""
+            for baseline_attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+              if POST_RESTART_BASELINE_SIGNALS="$(read_ingestion_signals)"; then
+                IFS='|' read -r POST_RESTART_BASELINE_CURSOR _ <<< "$POST_RESTART_BASELINE_SIGNALS"
+                if printf '%s\n' "$POST_RESTART_BASELINE_CURSOR" | grep -Eq '^(0|[1-9][0-9]{0,17})$'; then
+                  BASELINE_READY=true
+                  break
+                fi
+                echo "Post-restart baseline cursor is invalid: cursor=$POST_RESTART_BASELINE_CURSOR" >&2
+              fi
+              echo "Post-restart ingestion baseline unavailable (attempt $baseline_attempt/12)" >&2
+              if [ "$baseline_attempt" != "12" ]; then
+                sleep 10
+              fi
+            done
+            if [ "$BASELINE_READY" != "true" ]; then
+              echo "Post-restart ingestion baseline remained unavailable after 12 attempts" >&2
+              false
+            fi
             HEALTHY=false
-            for i in 1 2 3; do
-              if curl -sf --max-time 5 http://localhost:3001/health/ready > /dev/null 2>&1; then
-                echo "Health check passed (attempt $i/3)"
+            HEALTH_RESPONSE=""
+            RUNTIME_SHA="none"
+            POST_RESTART_SIGNALS=""
+            for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+              if curl -sf --connect-timeout 2 --max-time 5 http://localhost:3001/health/promotion-ready > /dev/null 2>&1 && \
+                 HEALTH_RESPONSE="$(curl -fsS --connect-timeout 2 --max-time 5 http://localhost:3001/health)" && \
+                 assert_health_revision "$HEALTH_RESPONSE" "$DEPLOY_SHA" && \
+                 POST_RESTART_SIGNALS="$(read_ingestion_signals)" && \
+                 ingestion_signals_are_fresh "$POST_RESTART_SIGNALS" "$POST_RESTART_BASELINE_CURSOR"; then
+                RUNTIME_SHA="$(printf '%s' "$HEALTH_RESPONSE" | read_health_revision)"
+                echo "Composite health check passed (attempt $i/12)"
                 HEALTHY=true
                 break
               fi
-              echo "Health check failed (attempt $i/3)"
+              echo "Composite health check failed (attempt $i/12)"
               sleep 10
             done
 
@@ -130,27 +1367,27 @@ jobs:
                 DEMO_MAXMEMORY="probe-failed"
                 DEMO_APPENDONLY="probe-failed"
                 DEMO_SAVE="probe-failed"
-                if ! DEMO_KEY_EXISTS=$(sudo docker compose -f docker-compose.prod.yml exec -T demo-redis redis-cli --raw EXISTS "$DEMO_KEY"); then
+                if ! DEMO_KEY_EXISTS=$(sudo docker exec bluesky-feed-demo-redis redis-cli --raw EXISTS "$DEMO_KEY"); then
                   echo "Demo Redis session-key probe failed"
                   HEALTHY=false
                 fi
-                if ! PRODUCTION_KEY_EXISTS=$(sudo docker compose -f docker-compose.prod.yml exec -T redis redis-cli --raw EXISTS "$DEMO_KEY"); then
+                if ! PRODUCTION_KEY_EXISTS=$(sudo docker exec bluesky-feed-redis redis-cli --raw EXISTS "$DEMO_KEY"); then
                   echo "Production Redis isolation probe failed"
                   HEALTHY=false
                 fi
-                if ! DEMO_POLICY=$(sudo docker compose -f docker-compose.prod.yml exec -T demo-redis redis-cli --raw CONFIG GET maxmemory-policy | tail -n 1); then
+                if ! DEMO_POLICY=$(sudo docker exec bluesky-feed-demo-redis redis-cli --raw CONFIG GET maxmemory-policy | tail -n 1); then
                   echo "Demo Redis maxmemory-policy probe failed"
                   HEALTHY=false
                 fi
-                if ! DEMO_MAXMEMORY=$(sudo docker compose -f docker-compose.prod.yml exec -T demo-redis redis-cli --raw CONFIG GET maxmemory | tail -n 1); then
+                if ! DEMO_MAXMEMORY=$(sudo docker exec bluesky-feed-demo-redis redis-cli --raw CONFIG GET maxmemory | tail -n 1); then
                   echo "Demo Redis maxmemory probe failed"
                   HEALTHY=false
                 fi
-                if ! DEMO_APPENDONLY=$(sudo docker compose -f docker-compose.prod.yml exec -T demo-redis redis-cli --raw CONFIG GET appendonly | tail -n 1); then
+                if ! DEMO_APPENDONLY=$(sudo docker exec bluesky-feed-demo-redis redis-cli --raw CONFIG GET appendonly | tail -n 1); then
                   echo "Demo Redis appendonly probe failed"
                   HEALTHY=false
                 fi
-                if ! DEMO_SAVE=$(sudo docker compose -f docker-compose.prod.yml exec -T demo-redis redis-cli --raw CONFIG GET save | tail -n 1); then
+                if ! DEMO_SAVE=$(sudo docker exec bluesky-feed-demo-redis redis-cli --raw CONFIG GET save | tail -n 1); then
                   echo "Demo Redis save-policy probe failed"
                   HEALTHY=false
                 fi
@@ -165,26 +1402,311 @@ jobs:
               fi
             fi
 
-            if [ "$HEALTHY" = "false" ]; then
-              echo "DEPLOY FAILED: service unhealthy after restart"
-              echo "Rolling back to $PREV_COMMIT..."
-              git checkout "$PREV_COMMIT"
-              npm ci --ignore-scripts
-              npm run build
-              # Best-effort frontend rebuilds at the rolled-back commit: the
-              # previous good build artifacts are still on disk (gitignored,
-              # untouched by checkout), so a rebuild failure must never block
-              # the service restart that completes the rollback.
-              (cd web && npm ci && npm run build) || echo "WARNING: web rollback rebuild failed; serving prior artifacts"
-              (cd web-next && npm ci && npm run build) || echo "WARNING: web-next rollback rebuild failed; serving prior artifacts"
-              sudo systemctl restart bluesky-feed
-              sleep 5
-              echo "Rollback complete. Current health:"
-              curl -s http://localhost:3001/health || echo "Still unhealthy after rollback"
-              exit 1
+            DEPLOYED_SHA="none"
+            if [ "$HEALTHY" = "true" ]; then
+              if ! DEPLOYED_SHA="$(git rev-parse HEAD)"; then
+                DEPLOYED_SHA="none"
+                echo "Could not resolve deployed checkout SHA" >&2
+                HEALTHY=false
+              elif [ "$DEPLOYED_SHA" != "$DEPLOY_SHA" ]; then
+                echo "Deployed checkout SHA does not match requested SHA" >&2
+                HEALTHY=false
+              elif ! sudo systemctl is-active --quiet bluesky-feed; then
+                echo "Running service is not active" >&2
+                HEALTHY=false
+              else
+                MAIN_PID="$(sudo systemctl show bluesky-feed --property MainPID --value)"
+                if [[ ! "$MAIN_PID" =~ ^[1-9][0-9]*$ ]]; then
+                  echo "Running service has invalid MainPID: $MAIN_PID" >&2
+                  HEALTHY=false
+                elif [ "$MAIN_PID" = "$PREVIOUS_MAIN_PID" ]; then
+                  echo "Service MainPID did not change after restart" >&2
+                  HEALTHY=false
+                elif [ "$RUNTIME_SHA" != "$DEPLOY_SHA" ]; then
+                  echo "Running service SHA does not match requested SHA" >&2
+                  HEALTHY=false
+                fi
+              fi
             fi
 
-            echo "Deploy successful"
+            if [ "$HEALTHY" = "false" ]; then
+              echo "DEPLOY FAILED: service health or revision proof failed after restart"
+              false
+            fi
+
+            trap - ERR EXIT HUP INT TERM
+            ROLLBACK_ARMED=false
+            if ! write_receipt succeeded; then
+              echo "Deployment is healthy but its terminal receipt could not be written; production was not rolled back" >&2
+              exit 1
+            fi
+            cleanup_terminal_artifacts || \
+              echo "Terminal success artifact cleanup failed; a later deploy must reclaim it" >&2
+
+      - name: Capture deployment receipt
+        id: capture-receipt
+        if: always()
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        env:
+          DEPLOY_RUN_ID: ${{ github.run_id }}
+          DEPLOY_RUN_ATTEMPT: ${{ github.run_attempt }}
+          TRANSFER_STEP_OUTCOME: ${{ steps.transfer-runtime.outcome }}
+        with:
+          host: ${{ secrets.PRODUCTION_VPS_HOST }}
+          username: ${{ secrets.PRODUCTION_VPS_USER }}
+          key: ${{ secrets.PRODUCTION_VPS_SSH_KEY }}
+          fingerprint: ${{ secrets.PRODUCTION_VPS_SSH_FINGERPRINT }}
+          command_timeout: 1m
+          capture_stdout: true
+          envs: DEPLOY_RUN_ATTEMPT,DEPLOY_RUN_ID,TRANSFER_STEP_OUTCOME
+          script: |
+            set -euo pipefail
+            case "$TRANSFER_STEP_OUTCOME" in
+              success|failure|cancelled|skipped) ;;
+              *) echo "Artifact transfer outcome is invalid: outcome=$TRANSFER_STEP_OUTCOME" >&2; exit 1 ;;
+            esac
+            if [[ ! "$DEPLOY_RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
+              echo "GitHub run ID must be a positive integer" >&2
+              exit 1
+            fi
+            if [[ ! "$DEPLOY_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]; then
+              echo "GitHub run attempt must be a positive integer" >&2
+              exit 1
+            fi
+            RECEIPT_DIR="/opt/bluesky-feed/.git/corgi-deploy-receipts"
+            RECEIPT_PATH="${RECEIPT_DIR}/${DEPLOY_RUN_ID}-${DEPLOY_RUN_ATTEMPT}.receipt"
+            INCOMING_ARTIFACT_PATH="/opt/bluesky-feed/.git/corgi-deploy-incoming/${DEPLOY_RUN_ID}-${DEPLOY_RUN_ATTEMPT}"
+            test ! -L "$RECEIPT_DIR"
+            test ! -L "$RECEIPT_PATH"
+            if [ ! -f "$RECEIPT_PATH" ]; then
+              if [ "$TRANSFER_STEP_OUTCOME" != "skipped" ] || \
+                 [ -e "$INCOMING_ARTIFACT_PATH" ] || [ -L "$INCOMING_ARTIFACT_PATH" ]; then
+                printf '%s\n' 'CORGI_DEPLOY_RECEIPT_UNRESOLVED'
+                exit 0
+              fi
+              printf '%s\n' 'CORGI_DEPLOY_RECEIPT_ABSENT'
+              exit 0
+            fi
+            cat "$RECEIPT_PATH"
+
+      - name: Record deployment receipt
+        if: always() && steps.capture-receipt.outcome == 'success'
+        env:
+          DEPLOY_SHA: ${{ needs.validate-target.outputs.sha }}
+          DEPLOY_OUTPUT: ${{ steps.capture-receipt.outputs.stdout }}
+          DEPLOY_STEP_OUTCOME: ${{ steps.deploy-to-vps.outcome }}
+          DEPLOY_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          DEPLOY_OUTPUT="$(printf '%s' "$DEPLOY_OUTPUT" | tr -d '\r')"
+          UNRESOLVED_RECEIPT_COUNT="$(printf '%s\n' "$DEPLOY_OUTPUT" | grep -c '^CORGI_DEPLOY_RECEIPT_UNRESOLVED$' || true)"
+          if [ "$UNRESOLVED_RECEIPT_COUNT" = "1" ]; then
+            if printf '%s\n' "$DEPLOY_OUTPUT" | grep -q 'CORGI_DEPLOY_RECEIPT|' || \
+               printf '%s\n' "$DEPLOY_OUTPUT" | grep -q '^CORGI_DEPLOY_RECEIPT_ABSENT$'; then
+              echo "Unresolved-receipt marker conflicts with deployment output" >&2
+              exit 1
+            fi
+            {
+              echo "## Production deployment"
+              echo
+              echo "- Status: transferred payload without receipt"
+              echo "- Requested SHA: $DEPLOY_SHA"
+              echo "- Production state: unresolved"
+              echo "- Action: freeze dispatches and use the approval-gated incident procedure"
+              echo "- Workflow run: $DEPLOY_RUN_URL"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          if [ "$UNRESOLVED_RECEIPT_COUNT" != "0" ]; then
+            echo "Deployment output contains duplicate unresolved-receipt markers" >&2
+            exit 1
+          fi
+          ABSENT_RECEIPT_COUNT="$(printf '%s\n' "$DEPLOY_OUTPUT" | grep -c '^CORGI_DEPLOY_RECEIPT_ABSENT$' || true)"
+          if [ "$ABSENT_RECEIPT_COUNT" = "1" ]; then
+            if printf '%s\n' "$DEPLOY_OUTPUT" | grep -q 'CORGI_DEPLOY_RECEIPT|' || \
+               [ "$DEPLOY_STEP_OUTCOME" = "success" ]; then
+              echo "Absent-receipt marker conflicts with deployment output" >&2
+              exit 1
+            fi
+            {
+              echo "## Production deployment"
+              echo
+              echo "- Status: no receipt recorded"
+              echo "- Requested SHA: $DEPLOY_SHA"
+              echo "- Production mutation: none"
+              echo "- Action: fix host preflight, then redispatch the same reviewed SHA"
+              echo "- Workflow run: $DEPLOY_RUN_URL"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [ "$ABSENT_RECEIPT_COUNT" != "0" ]; then
+            echo "Deployment output contains duplicate absent-receipt markers" >&2
+            exit 1
+          fi
+          RECEIPT_COUNT="$(printf '%s\n' "$DEPLOY_OUTPUT" | grep -o 'CORGI_DEPLOY_RECEIPT|' | grep -c . || true)"
+          RECEIPT_LINES="$(printf '%s\n' "$DEPLOY_OUTPUT" | awk 'index($0, "CORGI_DEPLOY_RECEIPT|") { print substr($0, index($0, "CORGI_DEPLOY_RECEIPT|")) }')"
+          if [ "$RECEIPT_COUNT" != "1" ]; then
+            echo "Deployment output must contain exactly one revision receipt, found $RECEIPT_COUNT" >&2
+            exit 1
+          fi
+          RECEIPT="$RECEIPT_LINES"
+          IFS='|' read -r MARKER STATUS_FIELD REQUESTED_FIELD PREVIOUS_FIELD BUILT_FIELD DEPLOYED_FIELD RUNTIME_FIELD MIGRATIONS_FIELD COMPOSE_FIELD OPERATOR_FIELD TIMESTAMP_FIELD EXTRA_FIELD <<< "$RECEIPT"
+          if [ "$MARKER" != "CORGI_DEPLOY_RECEIPT" ] || [ -n "${EXTRA_FIELD:-}" ]; then
+            echo "Deployment revision receipt has an invalid shape" >&2
+            exit 1
+          fi
+          case "$STATUS_FIELD" in status=*) ;; *) echo "Deployment receipt status field is invalid" >&2; exit 1 ;; esac
+          case "$REQUESTED_FIELD" in requested=*) ;; *) echo "Deployment receipt requested field is invalid" >&2; exit 1 ;; esac
+          case "$PREVIOUS_FIELD" in previous=*) ;; *) echo "Deployment receipt previous field is invalid" >&2; exit 1 ;; esac
+          case "$BUILT_FIELD" in built=*) ;; *) echo "Deployment receipt built field is invalid" >&2; exit 1 ;; esac
+          case "$DEPLOYED_FIELD" in deployed=*) ;; *) echo "Deployment receipt deployed field is invalid" >&2; exit 1 ;; esac
+          case "$RUNTIME_FIELD" in runtime=*) ;; *) echo "Deployment receipt runtime field is invalid" >&2; exit 1 ;; esac
+          case "$MIGRATIONS_FIELD" in migrations=*) ;; *) echo "Deployment receipt migrations field is invalid" >&2; exit 1 ;; esac
+          case "$COMPOSE_FIELD" in compose=*) ;; *) echo "Deployment receipt compose field is invalid" >&2; exit 1 ;; esac
+          case "$OPERATOR_FIELD" in operator=*) ;; *) echo "Deployment receipt operator field is invalid" >&2; exit 1 ;; esac
+          case "$TIMESTAMP_FIELD" in timestamp=*) ;; *) echo "Deployment receipt timestamp field is invalid" >&2; exit 1 ;; esac
+          DEPLOY_STATUS="${STATUS_FIELD#status=}"
+          REQUESTED_SHA="${REQUESTED_FIELD#requested=}"
+          PREVIOUS_SHA="${PREVIOUS_FIELD#previous=}"
+          BUILT_SHA="${BUILT_FIELD#built=}"
+          DEPLOYED_SHA="${DEPLOYED_FIELD#deployed=}"
+          RUNTIME_SHA="${RUNTIME_FIELD#runtime=}"
+          MIGRATION_SET="${MIGRATIONS_FIELD#migrations=}"
+          COMPOSE_CHANGE_SET="${COMPOSE_FIELD#compose=}"
+          DEPLOYED_BY="${OPERATOR_FIELD#operator=}"
+          DEPLOYED_AT="${TIMESTAMP_FIELD#timestamp=}"
+          case "$DEPLOY_STATUS" in succeeded|rolled_back|rollback_failed|rollback_interrupted|preflight_failed|started) ;; *) echo "Deployment receipt contains an invalid status" >&2; exit 1 ;; esac
+          for SHA_VALUE in "$REQUESTED_SHA" "$PREVIOUS_SHA"; do
+            if ! printf '%s\n' "$SHA_VALUE" | grep -Eq '^[0-9a-f]{40}$'; then
+              echo "Deployment revision receipt contains an invalid SHA" >&2
+              exit 1
+            fi
+          done
+          for SHA_VALUE in "$BUILT_SHA" "$DEPLOYED_SHA" "$RUNTIME_SHA"; do
+            if ! printf '%s\n' "$SHA_VALUE" | grep -Eq '^(none|[0-9a-f]{40})$'; then
+              echo "Deployment revision receipt contains an invalid optional SHA" >&2
+              exit 1
+            fi
+          done
+          if [ "$REQUESTED_SHA" != "$DEPLOY_SHA" ]; then
+            echo "Deployment revision receipt does not match the validated SHA" >&2
+            exit 1
+          fi
+          if [ "$DEPLOY_STATUS" = "succeeded" ] && \
+             { [ "$BUILT_SHA" != "$DEPLOY_SHA" ] || [ "$DEPLOYED_SHA" != "$DEPLOY_SHA" ] || [ "$RUNTIME_SHA" != "$DEPLOY_SHA" ]; }; then
+            echo "Successful deployment receipt does not prove the validated SHA" >&2
+            exit 1
+          fi
+          if [ "$DEPLOY_STATUS" = "rolled_back" ] && \
+             { [ "$BUILT_SHA" != "$DEPLOY_SHA" ] || [ "$DEPLOYED_SHA" != "$PREVIOUS_SHA" ] || [ "$RUNTIME_SHA" != "$PREVIOUS_SHA" ]; }; then
+            echo "Rolled-back deployment receipt does not prove the built target and restored previous SHA" >&2
+            exit 1
+          fi
+          if [ "$DEPLOY_STATUS" = "preflight_failed" ] && \
+             ! { { { [ "$BUILT_SHA" = "none" ] || [ "$BUILT_SHA" = "$DEPLOY_SHA" ]; } && \
+                   [ "$DEPLOYED_SHA" = "none" ] && [ "$RUNTIME_SHA" = "none" ]; } || \
+                 { [ "$BUILT_SHA" = "$DEPLOY_SHA" ] && \
+                   [ "$DEPLOYED_SHA" = "$PREVIOUS_SHA" ] && \
+                   [ "$RUNTIME_SHA" = "$PREVIOUS_SHA" ]; }; }; then
+            echo "Preflight-failed deployment receipt claims production mutation" >&2
+            exit 1
+          fi
+          if [ "$DEPLOY_STEP_OUTCOME" != "success" ] && [ "$DEPLOY_STATUS" = "succeeded" ]; then
+            echo "Failed deployment step produced a success receipt" >&2
+            exit 1
+          fi
+          if [ "$DEPLOY_STEP_OUTCOME" = "success" ] && [ "$DEPLOY_STATUS" != "succeeded" ]; then
+            echo "Successful deployment step produced a non-success receipt" >&2
+            exit 1
+          fi
+          if [ "$DEPLOY_STATUS" = "started" ] || [ "$DEPLOY_STATUS" = "rollback_interrupted" ]; then
+            echo "Deployment receipt reports an unresolved production state: status=$DEPLOY_STATUS" >&2
+            exit 1
+          fi
+          if [ "$MIGRATION_SET" != "none" ]; then
+            if [ "$DEPLOY_STATUS" != "preflight_failed" ] || \
+               ! printf '%s\n' "$MIGRATION_SET" | grep -Eq '^src/db/migrations/[A-Za-z0-9._-]+\.sql(,src/db/migrations/[A-Za-z0-9._-]+\.sql)*$'; then
+              echo "Deployment revision receipt contains an invalid migration set" >&2
+              exit 1
+            fi
+          fi
+          if [ "$COMPOSE_CHANGE_SET" != "none" ] && \
+             { [ "$DEPLOY_STATUS" != "preflight_failed" ] || [ "$COMPOSE_CHANGE_SET" != "docker-compose.prod.yml" ]; }; then
+            echo "Deployment revision receipt contains an invalid production Compose change set" >&2
+            exit 1
+          fi
+          if ! printf '%s\n' "$DEPLOYED_BY" | grep -Eq '^[A-Za-z0-9-]+(\[bot\])?$'; then
+            echo "Deployment revision receipt contains an invalid operator" >&2
+            exit 1
+          fi
+          if ! printf '%s\n' "$DEPLOYED_AT" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$'; then
+            echo "Deployment revision receipt contains an invalid timestamp" >&2
+            exit 1
+          fi
+          {
+            echo "## Production deployment"
+            echo
+            echo "- Status: $DEPLOY_STATUS"
+            echo "- Requested SHA: $REQUESTED_SHA"
+            echo "- Previous SHA: $PREVIOUS_SHA"
+            echo "- Built SHA: $BUILT_SHA"
+            echo "- Deployed checkout SHA: $DEPLOYED_SHA"
+            echo "- Healthy runtime SHA: $RUNTIME_SHA"
+            echo "- Migration set: $MIGRATION_SET"
+            echo "- Production Compose change set: $COMPOSE_CHANGE_SET"
+            echo "- Operator: $DEPLOYED_BY"
+            echo "- Recorded at: $DEPLOYED_AT"
+            echo "- Workflow run: $DEPLOY_RUN_URL"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report unreadable deployment receipt
+        if: always() && steps.capture-receipt.outcome != 'success'
+        env:
+          DEPLOY_RUN_ID: ${{ github.run_id }}
+          DEPLOY_RUN_ATTEMPT: ${{ github.run_attempt }}
+          DEPLOY_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Production deployment"
+            echo
+            echo "- Status: deployment receipt unreadable"
+            echo "- Production state: unresolved"
+            echo "- Receipt path: /opt/bluesky-feed/.git/corgi-deploy-receipts/${DEPLOY_RUN_ID}-${DEPLOY_RUN_ATTEMPT}.receipt"
+            echo "- Action: freeze dispatches and use the approval-gated incident procedure"
+            echo "- Workflow run: $DEPLOY_RUN_URL"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
+      - name: Inspect runtime and checkout consistency
+        if: always()
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        with:
+          host: ${{ secrets.PRODUCTION_VPS_HOST }}
+          username: ${{ secrets.PRODUCTION_VPS_USER }}
+          key: ${{ secrets.PRODUCTION_VPS_SSH_KEY }}
+          fingerprint: ${{ secrets.PRODUCTION_VPS_SSH_FINGERPRINT }}
+          command_timeout: 1m
+          script: |
+            set -euo pipefail
+            cd /opt/bluesky-feed
+            CHECKOUT_SHA="$(git rev-parse HEAD)"
+            HEALTH_RESPONSE="$(curl -fsS --connect-timeout 2 --max-time 5 http://localhost:3001/health)" || HEALTH_RESPONSE=""
+            RUNTIME_SHA="$(printf '%s' "$HEALTH_RESPONSE" | node -e "let body=''; process.stdin.on('data', chunk => body += chunk); process.stdin.on('end', () => { let revision; try { revision = JSON.parse(body).revision; } catch { revision = undefined; } process.stdout.write(typeof revision === 'string' && /^[0-9a-f]{40}$/.test(revision) ? revision : 'unknown'); });")"
+            SERVICE_STATE="$(sudo systemctl is-active bluesky-feed || true)"
+            printf 'CORGI_DEPLOY_STATE|checkout=%s|runtime=%s|service=%s\n' "$CHECKOUT_SHA" "$RUNTIME_SHA" "$SERVICE_STATE"
+            if [ "$RUNTIME_SHA" = "unknown" ]; then
+              echo "Health endpoint did not report a valid revision; runtime identity is unverified" >&2
+              exit 1
+            fi
+            if [ "$CHECKOUT_SHA" != "$RUNTIME_SHA" ]; then
+              echo "Runtime revision drift: checkout=$CHECKOUT_SHA runtime=$RUNTIME_SHA" >&2
+              exit 1
+            fi
+            if [ "$SERVICE_STATE" != "active" ]; then
+              echo "Service is not active: state=$SERVICE_STATE" >&2
+              exit 1
+            fi
 
       - name: Ping health monitor on success
         if: success()
