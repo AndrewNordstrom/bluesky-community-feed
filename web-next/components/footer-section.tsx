@@ -7,7 +7,7 @@ const FOCUS =
 
 // The live Corgi community-gov feed on Bluesky.
 const CORGI_FEED_URL = "https://bsky.app/profile/corgi-network.bsky.social/feed/community-gov"
-const GITHUB_URL = "https://github.com/andrewnordstrom-eng/bluesky-community-feed"
+const GITHUB_URL = "https://github.com/andrewnordstrom-eng/corgi"
 
 const linkGroups = [
   {
@@ -98,7 +98,7 @@ export function FooterSection() {
         {/* Copyright bar */}
         <div className="border-t border-border/60 py-5 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-foreground/50 text-xs font-normal">
-            &copy; 2026 Corgi. Built on Bluesky. Open source.
+            Corgi Network. &copy; 2026 Andrew Nordstrom. Built on Bluesky. Open source.
           </p>
           <div className="flex items-center gap-4">
             <Link href="/tos" className={`text-foreground/60 hover:text-primary transition-colors text-xs font-medium ${FOCUS}`}>

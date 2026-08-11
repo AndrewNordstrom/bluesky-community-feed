@@ -1,9 +1,9 @@
-# PRD — bluesky-community-feed
+# PRD — Corgi
 
 Status: canonical product brief
 Owner: bluesky-feed
 Service class: production_service
-Last updated: 2026-07-13
+Last updated: 2026-08-10
 
 ## Mission
 

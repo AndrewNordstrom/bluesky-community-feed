@@ -2,7 +2,16 @@
   "name": "@corgi/feed-sdk",
   "version": "0.1.0",
   "private": false,
-  "description": "Public type contract and helpers for implementing custom scoring components for the bluesky-community-feed",
+  "description": "Public type contract and helpers for Corgi scoring components. Community-governed feeds for Bluesky.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrewnordstrom-eng/corgi.git",
+    "directory": "packages/feed-sdk"
+  },
+  "homepage": "https://corgi.network/code",
+  "bugs": {
+    "url": "https://github.com/andrewnordstrom-eng/corgi/issues"
+  },
   "type": "module",
   "exports": {
     ".": {

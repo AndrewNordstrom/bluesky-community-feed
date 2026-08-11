@@ -1,4 +1,4 @@
-# Community Feed Generator - Production Dockerfile
+# Corgi feed generator - production Dockerfile
 # Multi-stage build for minimal image size
 
 # =============================================================================

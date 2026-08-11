@@ -37,7 +37,7 @@ This Code of Conduct applies within all community spaces, and also applies when 
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement at [GitHub Issues](https://github.com/andrewnordstrom-eng/bluesky-community-feed/issues) or via direct message on Bluesky to [@corgi-network.bsky.social](https://bsky.app/profile/corgi-network.bsky.social). All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported privately via email to [hello@corgi.network](mailto:hello@corgi.network), as documented in [SUPPORT.md](SUPPORT.md). A direct message on Bluesky to [@corgi-network.bsky.social](https://bsky.app/profile/corgi-network.bsky.social) may be used only to make initial contact. Sensitive conduct details must be sent only to `hello@corgi.network`; do not include them in Bluesky messages or public GitHub issues. All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the reporter of any incident.
 
@@ -82,4 +82,3 @@ For answers to common questions about this code of conduct, see the FAQ at [http
 [Mozilla CoC]: https://github.com/mozilla/diversity
 [FAQ]: https://www.contributor-covenant.org/faq
 [translations]: https://www.contributor-covenant.org/translations
-

@@ -5,7 +5,7 @@ import { Container } from "@/components/ui/layout"
 // and community-governed, and the code is open. Deliberately no volume metrics — a raw
 // post count invites a firehose-scale comparison this curated community feed shouldn't be read against.
 const FEED_URL = "https://bsky.app/profile/corgi-network.bsky.social/feed/community-gov"
-const GITHUB_URL = "https://github.com/andrewnordstrom-eng/bluesky-community-feed"
+const GITHUB_URL = "https://github.com/andrewnordstrom-eng/corgi"
 
 const FOCUS =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"

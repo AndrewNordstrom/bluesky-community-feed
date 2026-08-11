@@ -16,8 +16,6 @@ This document covers operational and contributor security expectations for this 
 - Feed availability matters: ingestion/scoring outages affect trust and demos.
 - Operator mistakes (bad env, permissive network rules, leaked app password) are the largest practical risk.
 
-## Operator checklist
-
 ## Secrets and credentials
 
 - Never commit `.env`.
@@ -54,7 +52,8 @@ This document covers operational and contributor security expectations for this 
 
 ## Contributor checklist
 
-- Do not hardcode secrets, DIDs, or production domains.
+- Do not hardcode secrets or private DIDs. Keep canonical public origins in the
+  existing shared metadata/configuration surfaces rather than scattering them.
 - Validate untrusted input (Zod for routes).
 - Use parameterized SQL only.
 - Preserve soft-delete patterns and append-only audit log behavior.

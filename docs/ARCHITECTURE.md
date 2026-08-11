@@ -1,13 +1,13 @@
-# Architecture — bluesky-community-feed
+# Architecture — Corgi
 
 Status: canonical service architecture
 Owner: bluesky-feed
 Service class: production_service
-Last updated: 2026-04-05
+Last updated: 2026-08-10
 
 ## System Purpose
 
-`bluesky-community-feed` is a production custom-feed system for Bluesky where
+Corgi is a production custom-feed system for Bluesky where
 community voting changes how posts are ranked. The durable architecture must
 support three things at once: real-time feed serving, auditable governance, and
 research-grade transparency.
@@ -56,7 +56,7 @@ The system has four major surfaces:
 - `docs/SYSTEM_OVERVIEW.md`, `docs/OPS_RUNBOOK.md`, `docs/DEPLOYMENT.md`: deeper operational references
 - `docs/contributing-scoring-components.md`: end-to-end author guide for new scoring components
 - `docs/adr/ADR-0001-extensible-scoring-components.md`: architectural rationale for the registry-driven, long-table-backed component contract
-- `packages/feed-sdk/`: published `@corgi/feed-sdk` workspace package — the public type surface external component authors depend on
+- `packages/feed-sdk/`: current `@corgi/feed-sdk` workspace package — the public type surface external component authors depend on; migration to `@corgi-network/feed-sdk` remains gated on namespace registration
 - `examples/civility-component/`: working external component example, CI-validated on every PR
 
 ## External Dependencies

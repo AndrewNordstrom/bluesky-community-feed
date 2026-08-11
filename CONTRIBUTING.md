@@ -5,7 +5,8 @@
 1. Install dependencies:
 ```bash
 npm install
-cd web && npm install && cd ..
+npm --prefix web-next install
+npm --prefix web install
 ```
 2. Configure environment:
 ```bash
@@ -24,8 +25,9 @@ npm run migrate
 
 - Build backend: `npm run build`
 - Run backend tests: `npm test -- --run`
-- Build frontend: `cd web && npm run build`
-- Run frontend dev server: `cd web && npm run dev`
+- Build canonical frontend: `npm --prefix web-next run build`
+- Run canonical frontend dev server: `npm --prefix web-next run dev`
+- Build legacy frontend: `npm --prefix web run build`
 - Full local gate: `npm run verify`
 - Docs freshness gate: `npm run docs:verify`
 
@@ -37,7 +39,8 @@ npm run migrate
 - `src/feed/`: feed generator routes
 - `src/admin/`: admin routes and status
 - `src/transparency/`: public transparency APIs
-- `web/`: React frontend
+- `web-next/`: canonical Next.js product frontend
+- `web/`: legacy React/Vite compatibility frontend
 
 ## Contribution Guidelines
 
@@ -91,8 +94,8 @@ npm run migrate
 1. Update backend parameter config in `src/config/votable-params.ts`.
 2. Add any required schema/migration changes for new vote columns.
 3. Wire scoring/aggregation consumers that depend on the new field.
-4. Update frontend parameter config in `web/src/config/votable-params.ts`.
-5. Run full verification (`npm run build`, `npm test`, `cd web && npm run build`).
+4. Update the canonical frontend parameter config and any legacy compatibility config.
+5. Run full verification (`npm run verify`).
 
 ## Pull Request Checklist
 
@@ -102,6 +105,7 @@ npm run migrate
 - `MPLCONFIGDIR=/tmp python3 scripts/generate-report-pdf.py --csv tests/fixtures/report/report-sample.csv --epoch-json tests/fixtures/report/epoch-sample.json --dry-run` passes
 - `npm audit --audit-level=moderate` passes
 - `cd web && npm audit --audit-level=moderate` passes
+- `npm --prefix web-next audit --audit-level=moderate` passes against `web-next/package-lock.json`
 - `npm run docs:verify` passes
 - `CHANGELOG.md` updated for user/operator-visible changes
 - Migrations included for schema changes

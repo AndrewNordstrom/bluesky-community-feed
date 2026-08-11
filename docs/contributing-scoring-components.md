@@ -1,7 +1,7 @@
 # Contributing a scoring component
 
 This guide walks through proposing and registering a new scoring
-component for the bluesky-community-feed. Reading time ~10 min;
+component for Corgi. Reading time ~10 min;
 implementing time depends on your scoring logic.
 
 A scoring component takes a `PostForScoring` plus a `ScoringContext` and
@@ -20,15 +20,22 @@ need a starting point, copy that directory.
 1. Implement [`ScoringComponent`](../packages/feed-sdk/src/index.ts) using
    only `@corgi/feed-sdk` imports.
 2. Write a unit test that exercises your `score()` function.
-3. Open a Linear issue under the `bluesky-feed` project describing the
-   component (purpose, expected score distribution, external
-   dependencies, governance implications).
+3. Open a GitHub issue describing the component (purpose, expected score
+   distribution, external dependencies, governance implications). The
+   `issue-to-linear` workflow routes it to the maintainers' Bluesky Corgi
+   project automatically.
 4. Open a PR that registers your component in
    `src/scoring/registry.ts` and adds a matching entry to
    `src/config/votable-params.ts`. The registry drift check at module
    load enforces the pairing.
 5. (Optional) Seed an initial weight in the active `governance_epochs`
    row so the community starts voting on it immediately.
+
+The repository maintainers keep `LINEAR_API_KEY_PUBLIC` configured for this
+route. It handles issue `opened` and `reopened` events, targets the `PROJ` team
+and Bluesky Corgi project, and intentionally skips issues authored by
+`dependabot[bot]` or `github-actions[bot]` and issues labeled `eng-digest`,
+`quality-digest`, or `cto-brief`.
 
 ## Step-by-step
 
@@ -109,11 +116,12 @@ test('score is in [0, 1]', async () => {
 See [`examples/civility-component/src/civility.test.ts`](../examples/civility-component/src/civility.test.ts)
 for a complete example with helper functions.
 
-### 4. Open a Linear issue
+### 4. Open a GitHub issue
 
-Using the project's
-[GitHub Issues](https://github.com/andrewnordstrom-eng/bluesky-community-feed/issues),
-file an issue describing:
+File an issue in
+[GitHub Issues](https://github.com/andrewnordstrom-eng/corgi/issues). The
+`issue-to-linear` workflow synchronizes new and reopened issues to the
+maintainers' Bluesky Corgi Linear project. Describe:
 
 - **Purpose:** What signal does this component capture? Why does
   community-voted weighting matter for it?

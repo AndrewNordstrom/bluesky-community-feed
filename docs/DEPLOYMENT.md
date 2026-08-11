@@ -1,6 +1,6 @@
 # Deployment Guide
 
-This guide is for deploying your own instance of the Community-Governed Bluesky Feed on a VPS.
+This guide is for deploying your own instance of Corgi, a community-governed Bluesky feed, on a VPS.
 
 ## Prerequisites
 
@@ -25,7 +25,7 @@ Save the returned `did`.
 
 ```bash
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y curl git nginx certbot python3-certbot-nginx redis-server postgresql
+sudo apt install -y acl curl git jq nginx certbot python3-certbot-nginx redis-server postgresql
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 ```
@@ -46,10 +46,16 @@ CREATE DATABASE community_feed OWNER feeduser;
 
 ```bash
 cd /opt
-sudo git clone https://github.com/andrewnordstrom-eng/bluesky-community-feed.git
-sudo chown -R "$USER":"$USER" /opt/bluesky-community-feed
-cd /opt/bluesky-community-feed
+sudo git clone https://github.com/andrewnordstrom-eng/corgi.git /opt/bluesky-feed
+DEPLOY_USER="$(id -un)"
+DEPLOY_GROUP="$(id -gn "$DEPLOY_USER")"
+sudo chown -R "$DEPLOY_USER":"$DEPLOY_GROUP" /opt/bluesky-feed
+cd /opt/bluesky-feed
 ```
+
+Keep the checkout and its `.git` directory owned by the deployment operator.
+That same operator must be able to run the recurring `git pull`, dependency
+install, build, test, and migration commands without `sudo`.
 
 ## 5. Configure environment
 
@@ -86,9 +92,9 @@ Then copy the printed `FEEDGEN_SERVICE_DID` and `FEEDGEN_PUBLISHER_DID` into `.e
 
 ```bash
 npm install
-cd web && npm install && cd ..
-npm run build
-cd web && npm run build && cd ..
+npm --prefix web-next install
+npm --prefix web install
+npm run verify
 ```
 
 ## 7. Run migrations
@@ -107,27 +113,102 @@ This creates/updates the `app.bsky.feed.generator/community-gov` record.
 
 ## 9. Configure systemd
 
-Create a dedicated service account and grant app directory ownership:
+Keep builds owned by the non-root deployment operator, but run the service as a
+separate, read-only runtime identity. Resolve the operator identity and create
+the runtime account only when it does not already exist:
 
 ```bash
-sudo useradd --system --home /opt/bluesky-community-feed --shell /usr/sbin/nologin bluesky-feed || true
-sudo chown -R bluesky-feed:bluesky-feed /opt/bluesky-community-feed
+DEPLOY_USER="$(id -un)"
+DEPLOY_GROUP="$(id -gn "$DEPLOY_USER")"
+test "$DEPLOY_USER" != "root"
+test "$(stat -c '%U' /opt/bluesky-feed)" = "$DEPLOY_USER"
+test "$(stat -c '%G' /opt/bluesky-feed)" = "$DEPLOY_GROUP"
+test -w /opt/bluesky-feed/.git
+for OPERATOR_PATH in .git node_modules dist web/dist web-next/out; do
+  test -e "/opt/bluesky-feed/$OPERATOR_PATH"
+  OWNER_MISMATCH="$(sudo find "/opt/bluesky-feed/$OPERATOR_PATH" \( ! -user "$DEPLOY_USER" -o ! -group "$DEPLOY_GROUP" \) -print -quit)"
+  if [ -n "$OWNER_MISMATCH" ]; then
+    printf 'Deployment operator does not own %s: %s\n' "$OPERATOR_PATH" "$OWNER_MISMATCH" >&2
+    exit 1
+  fi
+done
+if ! getent group corgi-runtime > /dev/null; then
+  sudo groupadd --system corgi-runtime
+fi
+if ! getent passwd corgi-runtime > /dev/null; then
+  sudo useradd --system --gid corgi-runtime --home-dir /nonexistent --shell /usr/sbin/nologin corgi-runtime
+fi
+getent passwd corgi-runtime | awk -F: '$1 == "corgi-runtime" && $6 == "/nonexistent" && $7 == "/usr/sbin/nologin" { found=1 } END { exit !found }'
+test "$(id -gn corgi-runtime)" = "corgi-runtime"
+RUNTIME_GID="$(getent group corgi-runtime | awk -F: '{ print $3 }')"
+test -n "$RUNTIME_GID"
+test -z "$(getent group corgi-runtime | awk -F: '$4 != "" { print $4 }')"
+test -z "$(getent passwd | awk -F: -v gid="$RUNTIME_GID" '$4 == gid && $1 != "corgi-runtime" { print $1 }')"
 ```
+
+After the initial dependency install and build, grant the runtime group read and
+traverse access only to the files the running service needs. Setgid directories
+and default ACLs preserve that read-only access for artifacts created by later
+deploys, without requiring the runtime identity to own or write the checkout.
+The `.env` file remains writable by the deployment operator because the deploy
+workflow backs it up and restores it during tests.
+
+Run the install, build, migration, and recurring pull commands in this guide
+from the deployment operator's login session, without `sudo`. The ownership
+gate above rejects root-owned or otherwise foreign build and Git artifacts
+before runtime ACLs are applied.
+
+```bash
+cd /opt/bluesky-feed
+DEPLOY_USER="$(id -un)"
+sudo chgrp corgi-runtime /opt/bluesky-feed /opt/bluesky-feed/web /opt/bluesky-feed/web-next
+sudo chmod g+s,g+rx,g-w,o-rwx /opt/bluesky-feed /opt/bluesky-feed/web /opt/bluesky-feed/web-next
+sudo setfacl -m d:g:corgi-runtime:r-x,d:m::r-x,d:o::--- /opt/bluesky-feed /opt/bluesky-feed/web /opt/bluesky-feed/web-next
+for RUNTIME_PATH in dist node_modules web/dist web-next/out legal; do
+  test -e "$RUNTIME_PATH"
+  sudo chgrp -R corgi-runtime "$RUNTIME_PATH"
+  sudo chmod -R g+rX,g-w,o-rwx "$RUNTIME_PATH"
+  sudo find "$RUNTIME_PATH" -type d -exec chmod g+s {} +
+  sudo find "$RUNTIME_PATH" -type d -exec setfacl -m d:g:corgi-runtime:r-x,d:m::r-x,d:o::--- {} +
+done
+sudo chgrp corgi-runtime package.json .env
+sudo chmod g+r,g-w,o-rwx package.json
+sudo chown "$DEPLOY_USER":corgi-runtime .env
+sudo chmod 640 .env
+sudo chmod -R go-rwx .git
+sudo -u corgi-runtime test -r dist/index.js
+sudo -u corgi-runtime test -r node_modules
+sudo -u corgi-runtime test -r web/dist
+sudo -u corgi-runtime test -r legal/TERMS_OF_SERVICE.md
+sudo -u corgi-runtime test -r .env
+sudo -u corgi-runtime test ! -w /opt/bluesky-feed
+sudo -u corgi-runtime test ! -w /opt/bluesky-feed/.git
+sudo -u corgi-runtime test ! -r /opt/bluesky-feed/.git/objects
+test -z "$(sudo -u corgi-runtime find /opt/bluesky-feed -xdev -path /opt/bluesky-feed/.git -prune -o -writable -print -quit)"
+for RUNTIME_PATH in dist node_modules web/dist web-next/out legal; do
+  test -z "$(sudo find "$RUNTIME_PATH" -perm /022 -print -quit)"
+done
+```
+
+Existing installations whose unit still runs without a dedicated `User=`
+should schedule this as a service-hardening migration and verify a complete
+build, migration, restart, and health check before switching the unit, rather
+than changing its runtime identity during an ordinary deploy.
 
 Create `/etc/systemd/system/bluesky-feed.service`:
 
 ```ini
 [Unit]
-Description=Bluesky Community Feed Generator
+Description=Corgi feed generator
 After=network.target postgresql.service redis-server.service
 
 [Service]
 Type=simple
-User=bluesky-feed
-Group=bluesky-feed
-WorkingDirectory=/opt/bluesky-community-feed
+User=corgi-runtime
+Group=corgi-runtime
+WorkingDirectory=/opt/bluesky-feed
 Environment=NODE_ENV=production
-EnvironmentFile=/opt/bluesky-community-feed/.env
+EnvironmentFile=/opt/bluesky-feed/.env
 ExecStart=/usr/bin/node dist/index.js
 Restart=on-failure
 RestartSec=10
@@ -225,13 +306,16 @@ location / {
 
 Required GitHub Actions secrets:
 
-- Add these as repository-level secrets in the transferred org repo:
+- Add these as repository-level secrets in the canonical repository:
   `Settings -> Secrets and variables -> Actions` for
-  `andrewnordstrom-eng/bluesky-community-feed`.
+  `andrewnordstrom-eng/corgi`.
 - `VPS_HOST`
 - `VPS_USER`
 - `VPS_SSH_KEY`
-- `VPS_SSH_HOST_KEY` (recommended host-key pin for strict SSH verification)
+- `VPS_SSH_HOST_KEY` (required by `daily-health.yml`; also pins the host for
+  `deploy-docs.yml` and `weekly-export.yml` instead of their compatibility
+  bootstrap behavior; `deploy.yml` currently delegates SSH setup to its pinned
+  SSH action and does not consume this secret)
 - `DATABASE_URL` (required by `daily-health.yml` and `weekly-export.yml`)
 - `EXPORT_ANONYMIZATION_SALT` (required by `weekly-export.yml`)
 - `HEALTHCHECK_PING_URL` (optional, used by deploy and daily health monitor pings)
@@ -245,4 +329,4 @@ On each `main` push that changes `docs/docs-site/**`, the workflow uploads the d
 - Rotate app passwords and admin DID list as needed.
 - Watch `/health` and systemd logs.
 - Use `docs/OPS_RUNBOOK.md` for day-2 operations, retention, alerting, and incident response.
-- After any repo/org transfer, run the "Post-Transfer Validation (Manual Dispatch)" section in `docs/OPS_RUNBOOK.md`.
+- After any repository rename or ownership transfer, run the "Post-Rename or Transfer Validation (Manual Dispatch)" section in `docs/OPS_RUNBOOK.md`.

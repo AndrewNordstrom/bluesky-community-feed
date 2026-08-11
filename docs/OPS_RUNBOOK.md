@@ -50,52 +50,166 @@ sudo systemctl restart bluesky-feed
 sudo systemctl is-active bluesky-feed
 ```
 
-## Post-Transfer Validation (Manual Dispatch)
+## Post-Rename or Transfer Validation (Manual Dispatch)
 
-Use this after repository ownership transfer and for recurring manual verification.
+Use this after a repository rename or ownership transfer and for recurring manual verification.
 This project intentionally uses a deploy-only model for ongoing checks (no extra scheduled smoke workflow).
 
 Set the repo target once:
 
 ```bash
-REPO="andrewnordstrom-eng/bluesky-community-feed"
+set -euo pipefail
+command -v gh >/dev/null
+command -v jq >/dev/null
+command -v ssh >/dev/null
+REPO="andrewnordstrom-eng/corgi"
 ```
+
+Do not continue until all of these checks pass:
+
+```bash
+EXPECTED_REPO_URL="https://github.com/andrewnordstrom-eng/corgi"
+EXPECTED_REMOTE_URL="${EXPECTED_REPO_URL}.git"
+test "$(gh repo view "$REPO" --json url --jq .url)" = "$EXPECTED_REPO_URL"
+test "$(git remote get-url origin)" = "$EXPECTED_REMOTE_URL"
+test "$(ssh corgi-vps 'cd /opt/bluesky-feed && git remote get-url origin')" = "$EXPECTED_REMOTE_URL"
+test "$(ssh corgi-vps 'cd /opt/bluesky-feed && git branch --show-current')" = "main"
+```
+
+The repository must resolve at the canonical name, both remotes must point
+directly to it, and the VPS checkout must report `main`. Confirm the org
+control-plane repository mapping separately before dispatching deploys.
 
 ### 1) Verify required repository secrets
 
 ```bash
-gh secret list --repo "$REPO"
+REQUIRED_SECRETS=(
+  VPS_HOST
+  VPS_USER
+  VPS_SSH_KEY
+  VPS_SSH_HOST_KEY
+  DATABASE_URL
+  EXPORT_ANONYMIZATION_SALT
+)
+AVAILABLE_SECRET_NAMES="$(gh secret list --repo "$REPO" --json name --jq '.[].name')"
+for secret_name in "${REQUIRED_SECRETS[@]}"; do
+  case $'\n'"$AVAILABLE_SECRET_NAMES"$'\n' in
+    *$'\n'"$secret_name"$'\n'*) ;;
+    *) printf 'Missing required repository secret: %s\n' "$secret_name" >&2; exit 1 ;;
+  esac
+done
 ```
 
 Expected required names:
 - `VPS_HOST`
 - `VPS_USER`
 - `VPS_SSH_KEY`
+- `VPS_SSH_HOST_KEY` (required by `Daily Health Check`; `Deploy Docs` and
+  `Weekly Research Export` use it when present, while `Deploy to VPS` currently
+  delegates SSH setup to its pinned SSH action)
 - `DATABASE_URL`
 - `EXPORT_ANONYMIZATION_SALT`
+- `HEALTHCHECK_PING_URL` (optional)
 
-### 2) Trigger and watch required workflows on `main`
+### 2) Verify CI before and after merge
 
 ```bash
-# CI
-gh workflow run "CI" --repo "$REPO" --ref main
-gh run watch "$(gh run list --repo "$REPO" --workflow "CI" --branch main --limit 1 --json databaseId --jq '.[0].databaseId')" --repo "$REPO" --exit-status
+# CI has pull_request and push triggers, not workflow_dispatch. Before merge,
+# replace this value and require the CI run for the cutover PR's exact head.
+find_ci_run() {
+  local event="$1"
+  local sha="$2"
+  local deadline=$((SECONDS + CI_LOOKUP_TIMEOUT_SECONDS))
+  local delay=5
+  local run_id=""
+  while (( SECONDS < deadline )); do
+    run_id="$(gh run list --repo "$REPO" --workflow "CI" --event "$event" --limit 50 --json databaseId,headSha | jq -r --arg sha "$sha" '[.[] | select(.headSha == $sha)][0].databaseId // empty')"
+    if [ -n "$run_id" ]; then
+      printf '%s' "$run_id"
+      return 0
+    fi
+    sleep "$delay"
+    delay=$((delay < 20 ? delay * 2 : 20))
+  done
+  printf 'Timed out waiting for CI run with head SHA %s\n' "$sha" >&2
+  return 1
+}
 
-# Deploy Docs
-gh workflow run "Deploy Docs" --repo "$REPO" --ref main
-gh run watch "$(gh run list --repo "$REPO" --workflow "Deploy Docs" --branch main --limit 1 --json databaseId --jq '.[0].databaseId')" --repo "$REPO" --exit-status
+CI_LOOKUP_TIMEOUT_SECONDS=180
+CUTOVER_PR_NUMBER="<cutover-pr-number>"
+PR_HEAD_SHA="$(gh pr view "$CUTOVER_PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)"
+PR_CI_RUN_ID="$(find_ci_run pull_request "$PR_HEAD_SHA")"
+test -n "$PR_CI_RUN_ID"
+gh run watch "$PR_CI_RUN_ID" --repo "$REPO" --exit-status
 
-# Deploy to VPS
-gh workflow run "Deploy to VPS" --repo "$REPO" --ref main
-gh run watch "$(gh run list --repo "$REPO" --workflow "Deploy to VPS" --branch main --limit 1 --json databaseId --jq '.[0].databaseId')" --repo "$REPO" --exit-status
+# After merge, require the push-triggered CI run for the exact main commit.
+MAIN_SHA="$(gh api "repos/$REPO/commits/main" --jq .sha)"
+CI_RUN_ID="$(find_ci_run push "$MAIN_SHA")"
+test -n "$CI_RUN_ID"
+gh run watch "$CI_RUN_ID" --repo "$REPO" --exit-status
+```
 
-# Daily Health Check
-gh workflow run "Daily Health Check" --repo "$REPO" --ref main
-gh run watch "$(gh run list --repo "$REPO" --workflow "Daily Health Check" --branch main --limit 1 --json databaseId --jq '.[0].databaseId')" --repo "$REPO" --exit-status
+### 3) Trigger and watch deploy and operational workflows on `main`
 
-# Weekly Research Export
-gh workflow run "Weekly Research Export" --repo "$REPO" --ref main
-gh run watch "$(gh run list --repo "$REPO" --workflow "Weekly Research Export" --branch main --limit 1 --json databaseId --jq '.[0].databaseId')" --repo "$REPO" --exit-status
+This exact-run receipt requires GitHub CLI 2.87.0 or newer. It must return the
+created workflow-run URL; the procedure aborts rather than guessing when no
+deterministic run ID is available.
+
+```bash
+require_workflow_run_url_gh_version() {
+  local version
+  local version_core
+  local major
+  local minor
+  local patch
+
+  version="$(gh --version | awk 'NR == 1 { print $3 }')"
+  version_core="${version%%-*}"
+  IFS=. read -r major minor patch <<< "$version_core"
+  case "$major:$minor:$patch" in
+    *[!0-9:]*|:*|*::*|*:) printf 'Unable to parse GitHub CLI version: %s\n' "$version" >&2; return 1 ;;
+  esac
+  if (( major < 2 || (major == 2 && minor < 87) )); then
+    printf 'GitHub CLI 2.87.0 or newer is required; found %s\n' "$version" >&2
+    return 1
+  fi
+}
+
+dispatch_and_watch() {
+  local workflow="$1"
+  local expected_sha="$2"
+  local run_url
+  local run_id
+  local run_sha
+
+  require_workflow_run_url_gh_version
+  run_sha="$(gh api "repos/$REPO/commits/main" --jq .sha)"
+  if [ "$run_sha" != "$expected_sha" ]; then
+    printf 'Refusing to dispatch %s: main moved from %s to %s\n' "$workflow" "$expected_sha" "$run_sha" >&2
+    return 1
+  fi
+
+  run_url="$(gh workflow run "$workflow" --repo "$REPO" --ref main)"
+  if [ -z "$run_url" ]; then
+    printf 'No deterministic run URL returned for %s; aborting\n' "$workflow" >&2
+    return 1
+  fi
+  run_id="${run_url##*/}"
+  case "$run_id" in
+    ''|*[!0-9]*) printf 'Unexpected workflow dispatch response: %s\n' "$run_url" >&2; return 1 ;;
+  esac
+  run_sha="$(gh run view "$run_id" --repo "$REPO" --json headSha --jq .headSha)"
+  if [ "$run_sha" != "$expected_sha" ]; then
+    printf 'Refusing workflow run %s: expected head SHA %s, got %s\n' "$run_id" "$expected_sha" "$run_sha" >&2
+    return 1
+  fi
+  gh run watch "$run_id" --repo "$REPO" --exit-status
+}
+
+dispatch_and_watch "Deploy Docs" "$MAIN_SHA"
+dispatch_and_watch "Deploy to VPS" "$MAIN_SHA"
+dispatch_and_watch "Daily Health Check" "$MAIN_SHA"
+dispatch_and_watch "Weekly Research Export" "$MAIN_SHA"
 ```
 
 Expected pass criteria:
@@ -103,7 +217,7 @@ Expected pass criteria:
 - `Daily Health Check` creates no incident issue when the run passes.
 - `Weekly Research Export` uploads the expected CSV artifacts.
 
-### 3) Validate live runtime endpoints
+### 4) Validate live runtime endpoints
 
 ```bash
 curl -sS https://feed.corgi.network/health

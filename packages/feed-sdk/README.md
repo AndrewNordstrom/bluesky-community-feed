@@ -1,7 +1,9 @@
 # @corgi/feed-sdk
 
-Public type contract for implementing custom scoring components for the
-[bluesky-community-feed](https://github.com/andrewnordstrom-eng/bluesky-community-feed).
+> Planned migration to `@corgi-network/feed-sdk` is gated on registration of the `corgi-network` npm organization.
+
+Public type contract for implementing custom scoring components for
+[Corgi](https://github.com/andrewnordstrom-eng/corgi).
 
 The package exports the minimum surface a third-party component author needs:
 
@@ -45,7 +47,8 @@ in the main repo (added in PROJ-820 / P7).
 The short version:
 
 1. Implement `ScoringComponent` against this SDK.
-2. Open a Linear issue in the `bluesky-feed` project.
+2. Open a GitHub issue; the repository workflow routes it to the maintainers'
+   Bluesky Corgi Linear project.
 3. Add the component to `src/scoring/registry.ts` `DEFAULT_COMPONENTS`.
 4. Seed an initial weight in `governance_epoch_weights` if you want it to count
    from epoch 1.

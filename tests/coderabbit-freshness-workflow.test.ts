@@ -162,7 +162,7 @@ async function runScenario(
         get: async (args: unknown) => {
           expect(args).toEqual({
             owner: 'andrewnordstrom-eng',
-            repo: 'bluesky-community-feed',
+            repo: 'corgi',
             pull_number: 340,
           });
           return {
@@ -203,7 +203,7 @@ async function runScenario(
       if (method === listCommitStatusesForRef) {
         expect(args).toEqual({
           owner: 'andrewnordstrom-eng',
-          repo: 'bluesky-community-feed',
+          repo: 'corgi',
           ref: 'head',
           per_page: 100,
         });
@@ -214,7 +214,7 @@ async function runScenario(
       if (method === listForRef) {
         expect(args).toEqual({
           owner: 'andrewnordstrom-eng',
-          repo: 'bluesky-community-feed',
+          repo: 'corgi',
           ref: 'head',
           per_page: 100,
         });
@@ -228,7 +228,7 @@ async function runScenario(
       if (method === listSuitesForRef) {
         expect(args).toEqual({
           owner: 'andrewnordstrom-eng',
-          repo: 'bluesky-community-feed',
+          repo: 'corgi',
           ref: 'head',
           per_page: 100,
         });
@@ -248,7 +248,7 @@ async function runScenario(
           : options?.rollupPages?.[rollupPageIndex - 1]?.pageInfo.endCursor ?? null;
         expect(variables).toEqual({
           owner: 'andrewnordstrom-eng',
-          repo: 'bluesky-community-feed',
+          repo: 'corgi',
           headSha: 'head',
           after: priorCursor,
         });
@@ -281,7 +281,7 @@ async function runScenario(
         : options?.pages?.[pageIndex - 1]?.pageInfo.endCursor ?? null;
       expect(variables).toEqual({
         owner: 'andrewnordstrom-eng',
-        repo: 'bluesky-community-feed',
+        repo: 'corgi',
         prNumber: 340,
         after: priorCursor,
       });
@@ -308,7 +308,7 @@ async function runScenario(
   const context = {
     repo: {
       owner: 'andrewnordstrom-eng',
-      repo: 'bluesky-community-feed',
+      repo: 'corgi',
     },
     payload: {
       pull_request: {

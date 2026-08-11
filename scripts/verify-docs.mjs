@@ -3,6 +3,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { isDeepStrictEqual } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -12,10 +13,15 @@ const repoRoot = path.resolve(__dirname, '..');
 const FRESHNESS_CONFIG_PATH = path.join(repoRoot, 'docs', 'freshness.json');
 const MCP_SETUP_PATH = path.join(repoRoot, 'docs', 'MCP_SETUP.md');
 const REPO_CONTRACT_PATH = path.join(repoRoot, 'docs', 'agent', 'REPO_CONTRACT.md');
+const SUPPORT_PATH = path.join(repoRoot, 'SUPPORT.md');
+const CODE_OF_CONDUCT_PATH = path.join(repoRoot, 'CODE_OF_CONDUCT.md');
+const OPENAPI_INFO_PATH = path.join(repoRoot, 'src', 'feed', 'openapi-info.json');
 const MCP_TOOL_SOURCE_DIR = path.join(repoRoot, 'src', 'mcp', 'tools');
 const OLD_REPO_PATTERNS = [
   /github\.com\/AndrewNordstrom\/bluesky-community-feed/,
   /\bAndrewNordstrom\/bluesky-community-feed\b/,
+  /github\.com\/andrewnordstrom-eng\/bluesky-community-feed/,
+  /\bandrewnordstrom-eng\/bluesky-community-feed\b/,
 ];
 const REPO_GUARD_SCAN_PATHS = [
   'README.md',
@@ -26,8 +32,8 @@ const REPO_GUARD_SCAN_PATHS = [
   '.github/ISSUE_TEMPLATE/config.yml',
 ];
 const REPO_GUARD_EXCLUDES = new Set([
-  'docs/dev-journal.md',
-  'docs/SECURITY_AUDIT.md',
+  // Immutable evidence packet whose repository-baseline line is historical provenance.
+  'docs/lab/2026-07-04-pipeline-prod-grade-audit.md',
 ]);
 const REPO_GUARD_EXTENSIONS = new Set([
   '.md',
@@ -36,6 +42,16 @@ const REPO_GUARD_EXTENSIONS = new Set([
   '.yml',
   '.yaml',
 ]);
+const REQUIRED_OPENAPI_FRESHNESS_PATHS = [
+  'docs/openapi-public.json',
+  'docs/openapi.json',
+  'docs/docs-site/openapi.json',
+];
+const OPENAPI_ARTIFACT_PATHS = [
+  'docs/openapi.json',
+  'docs/openapi-public.json',
+  'docs/docs-site/openapi.json',
+];
 
 const LINK_REGEX = /!?\[[^\]]*]\(([^)]+)\)/g;
 const NPM_RUN_REGEX = /\bnpm run ([a-zA-Z0-9:_-]+)\b/g;
@@ -216,6 +232,56 @@ function validateFreshness(config, problems) {
   }
 }
 
+function validateOpenApiFreshnessCoverage(config, problems) {
+  const configuredPaths = new Set(
+    (config.documents ?? []).map(document => document.path)
+  );
+  for (const requiredPath of REQUIRED_OPENAPI_FRESHNESS_PATHS) {
+    if (!configuredPaths.has(requiredPath)) {
+      problems.push(`freshness: missing required OpenAPI policy for "${requiredPath}"`);
+    }
+  }
+}
+
+export function validateOpenApiMetadataFiles(expectedInfoPath, artifactPaths, problems) {
+  let expectedInfo;
+  try {
+    expectedInfo = readJson(expectedInfoPath);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    problems.push(`Unable to read canonical OpenAPI metadata ${expectedInfoPath}: ${message}`);
+    return;
+  }
+
+  for (const artifactPath of artifactPaths) {
+    let artifactInfo;
+    try {
+      artifactInfo = readJson(artifactPath).info;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      problems.push(`Unable to read OpenAPI artifact ${artifactPath}: ${message}`);
+      continue;
+    }
+    const comparableInfo = {
+      title: artifactInfo?.title,
+      description: artifactInfo?.description,
+      version: artifactInfo?.version,
+      contact: artifactInfo?.contact,
+    };
+    if (!isDeepStrictEqual(comparableInfo, expectedInfo)) {
+      problems.push(`OpenAPI metadata differs from ${expectedInfoPath}: ${artifactPath}`);
+    }
+  }
+}
+
+function validateOpenApiMetadata(problems) {
+  validateOpenApiMetadataFiles(
+    OPENAPI_INFO_PATH,
+    OPENAPI_ARTIFACT_PATHS.map(artifactPath => path.join(repoRoot, artifactPath)),
+    problems,
+  );
+}
+
 function validateMarkdownLinks(markdownFiles, problems) {
   for (const file of markdownFiles) {
     const content = readFileSync(file, 'utf8');
@@ -325,6 +391,22 @@ function validateLegacyRepoReferences(files, problems) {
     const hasLegacyReference = OLD_REPO_PATTERNS.some(pattern => pattern.test(content));
     if (hasLegacyReference) {
       problems.push(`legacy repo URL reference found: ${rel}`);
+    }
+  }
+}
+
+function validatePrivateConductReporting(problems) {
+  const requiredMarkers = [
+    'mailto:hello@corgi.network',
+    'https://bsky.app/profile/corgi-network.bsky.social',
+    'Sensitive conduct details must be sent only to',
+  ];
+  for (const file of [SUPPORT_PATH, CODE_OF_CONDUCT_PATH]) {
+    const content = readFileSync(file, 'utf8').replace(/\s+/g, ' ');
+    for (const marker of requiredMarkers) {
+      if (!content.includes(marker)) {
+        problems.push(`private conduct reporting marker missing from ${relative(file)}: ${marker}`);
+      }
     }
   }
 }
@@ -549,12 +631,15 @@ function main() {
   const ignoreSet = new Set((config.ignoreFilesForLint ?? []).map(p => String(p)));
 
   validateFreshness(config, problems);
+  validateOpenApiFreshnessCoverage(config, problems);
+  validateOpenApiMetadata(problems);
   validateMarkdownLinks(markdownFiles, problems);
   validateNpmRunCommands(markdownFiles, problems);
   validateDeprecatedPatterns(markdownFiles, ignoreSet, problems);
   validateMcpToolCount(problems);
   validateCiHasDocsVerify(path.join(repoRoot, '.github', 'workflows', 'ci.yml'), problems);
   validateLegacyRepoReferences(repoGuardFiles, problems);
+  validatePrivateConductReporting(problems);
   validateRepoContract(problems);
 
   if (problems.length > 0) {

@@ -1,11 +1,11 @@
-# Repo Contract -- bluesky-community-feed
+# Repo Contract -- Corgi
 
 Status: canonical repo contract
 Owner: bluesky-feed
 Service class: production_service
 Contract version: 2
-Last updated: 2026-07-13
-Last verified: 2026-07-13
+Last updated: 2026-08-10
+Last verified: 2026-08-10
 
 > Canonical reference for any human or tooling operating in this repo.
 
@@ -22,7 +22,7 @@ applied and the feed is rescored.
 
 **Canonical URL:** `https://feed.corgi.network`
 **API docs:** `https://docs.corgi.network`
-**Repo:** `andrewnordstrom-eng/bluesky-community-feed`
+**Repo:** `andrewnordstrom-eng/corgi`
 **Linear project:** tracked on the maintainers' private project board
 **Product doc:** maintained in the maintainers' private product-doc tool
 

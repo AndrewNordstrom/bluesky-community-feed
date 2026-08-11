@@ -36,7 +36,7 @@ const SECTIONS = [
         <P>
           Corgi is maintained by Andrew Nordstrom as an <Strong>independent, open-source project</Strong> — not an
           ad-funded company. The ranking engine, the governance pipeline, and this site are all developed in the open on{" "}
-          <InlineLink href="https://github.com/andrewnordstrom-eng/bluesky-community-feed">GitHub</InlineLink>, so anyone
+          <InlineLink href="https://github.com/andrewnordstrom-eng/corgi">GitHub</InlineLink>, so anyone
           can read the code that decides the order.
         </P>
         <P>
@@ -105,7 +105,7 @@ const SECTIONS = [
       <>
         <P>
           Read the code, open an issue, or suggest a change on{" "}
-          <InlineLink href="https://github.com/andrewnordstrom-eng/bluesky-community-feed">GitHub</InlineLink>. For help,
+          <InlineLink href="https://github.com/andrewnordstrom-eng/corgi">GitHub</InlineLink>. For help,
           feedback, and private security-reporting guidance, visit <InlineLink href="/support">Support</InlineLink>. Ready
           to try it? See{" "}
           <InlineLink href="/start">how to add the feed in Bluesky</InlineLink>.

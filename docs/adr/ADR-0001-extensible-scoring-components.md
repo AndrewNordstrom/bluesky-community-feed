@@ -87,7 +87,7 @@ Redis snapshot write.
 
 ### The SDK boundary
 
-The public type surface is published as the `@corgi/feed-sdk`
+The public type surface is maintained as the `@corgi/feed-sdk`
 workspace package (`packages/feed-sdk/`). A third-party component
 author depends on the SDK, implements `ScoringComponent`, and writes
 a unit test — without cloning the monolith or touching internal paths.
@@ -106,9 +106,10 @@ External component proposals follow this path (codified in PROJ-820 / P7):
    their fork or workspace.
 2. Author writes a unit test that exercises the component without DB
    dependencies.
-3. Author opens a Linear issue under `bluesky-feed` describing the
-   component (purpose, expected score distribution, any external
-   dependencies, governance implications).
+3. Author opens a GitHub issue describing the component (purpose, expected
+   score distribution, any external dependencies, governance implications).
+   The `issue-to-linear` workflow routes it to the maintainers' Bluesky Corgi
+   project automatically.
 4. Author opens a PR that registers the component in
    `DEFAULT_COMPONENTS` and adds the matching `VOTABLE_WEIGHT_PARAMS`
    entry. The drift check at module load proves the wiring.

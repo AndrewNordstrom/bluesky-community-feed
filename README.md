@@ -25,21 +25,23 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/andrewnordstrom-eng/bluesky-community-feed/actions/workflows/deploy.yml"><img src="https://github.com/andrewnordstrom-eng/bluesky-community-feed/actions/workflows/deploy.yml/badge.svg" alt="Deploy status"></a>
-  <a href="https://github.com/andrewnordstrom-eng/bluesky-community-feed/actions/workflows/ci.yml"><img src="https://github.com/andrewnordstrom-eng/bluesky-community-feed/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status"></a>
-  <a href="https://github.com/andrewnordstrom-eng/bluesky-community-feed/actions/workflows/codeql.yml"><img src="https://github.com/andrewnordstrom-eng/bluesky-community-feed/actions/workflows/codeql.yml/badge.svg?branch=main" alt="CodeQL status"></a>
+  <a href="https://github.com/andrewnordstrom-eng/corgi/actions/workflows/deploy.yml"><img src="https://github.com/andrewnordstrom-eng/corgi/actions/workflows/deploy.yml/badge.svg" alt="Deploy status"></a>
+  <a href="https://github.com/andrewnordstrom-eng/corgi/actions/workflows/ci.yml"><img src="https://github.com/andrewnordstrom-eng/corgi/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status"></a>
+  <a href="https://github.com/andrewnordstrom-eng/corgi/actions/workflows/codeql.yml"><img src="https://github.com/andrewnordstrom-eng/corgi/actions/workflows/codeql.yml/badge.svg?branch=main" alt="CodeQL status"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/Node-%3E%3D20.19-339933" alt="Node.js 20.19 or newer">
   <img src="https://img.shields.io/badge/TypeScript-strict-3178C6" alt="TypeScript strict mode">
 </p>
 
-Corgi — short for Community-Oriented Recommendation: Governance and Infrastructure — treats a shared recommender as a community resource.
+Corgi treats a shared recommender as a community resource. Corgi Commons is its live, community-governed Bluesky feed, and Corgi Network is the organization behind the open-source project.
 
 Corgi Commons is a production Bluesky custom feed and a limited governance pilot. Anyone can view the public feed. Approved pilot participants can collectively govern five global ranking signals, topic priorities, and content rules. A closed round is reviewed and approved before its complete policy is applied and the feed is rescored.
 
 Bluesky renders the ordered posts. Corgi provides the governance and explanation layer: the active policy, score decomposition, epoch history, counterfactuals, and available ranking receipts.
 
 > **Research question:** Can a community meaningfully govern its own recommendation algorithm without giving up speed, legibility, or operational control?
+
+See [BRAND.md](BRAND.md) for the canonical product, publisher, feed, and research naming system.
 
 ## Start Here
 
@@ -156,8 +158,8 @@ flowchart LR
 ### Install and run
 
 ```bash
-git clone https://github.com/andrewnordstrom-eng/bluesky-community-feed.git
-cd bluesky-community-feed
+git clone https://github.com/andrewnordstrom-eng/corgi.git
+cd corgi
 
 # The full verification gate covers the backend and both frontends.
 npm install
@@ -198,8 +200,6 @@ npm test -- --run
 npm --prefix web-next run build
 npm run cli -- --help
 ```
-
-> **Known limitation (2026-07-21):** `npm run docs:verify` exits nonzero on a clean checkout because 12 tracked documents in `docs/freshness.json` exceed the 120-day review window. The command still checks links, commands, and repository references before reporting that repository-wide freshness debt.
 
 ## Interfaces
 

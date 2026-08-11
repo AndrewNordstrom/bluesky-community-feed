@@ -5,7 +5,7 @@
 -- they use indexes properly and don't do sequential scans on large tables.
 
 \echo '============================================================'
-\echo 'Query Analysis for Community Feed Generator'
+\echo 'Query Analysis for Corgi Feed Generator'
 \echo '============================================================'
 \echo ''
 

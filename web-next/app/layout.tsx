@@ -18,9 +18,35 @@ const _ibmPlexMono = IBM_Plex_Mono({
 })
 
 const SITE_URL = "https://feed.corgi.network"
-const SITE_TITLE = "Corgi — Your community runs the feed."
+const SITE_TITLE = "Corgi — Community-Governed Feeds for Bluesky"
 const SITE_DESCRIPTION =
-  "Corgi is a community-governed Bluesky feed with inspectable ranking. Bluesky shows the ordered posts and Corgi shows the receipt."
+  "Corgi is an open-source, community-governed Bluesky feed with inspectable ranking. Bluesky shows the ordered posts and Corgi shows the policy and receipts."
+
+const BRAND_STRUCTURED_DATA = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://corgi.network/#organization",
+      name: "Corgi Network",
+      url: "https://corgi.network",
+      email: "hello@corgi.network",
+      sameAs: [
+        "https://github.com/andrewnordstrom-eng/corgi",
+        "https://bsky.app/profile/corgi-network.bsky.social",
+      ],
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${SITE_URL}/#website`,
+      name: "Corgi",
+      alternateName: "CORGI",
+      url: SITE_URL,
+      description: SITE_DESCRIPTION,
+      publisher: { "@id": "https://corgi.network/#organization" },
+    },
+  ],
+}
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -64,6 +90,12 @@ export default function RootLayout({
         className={`${_plusJakartaSans.variable} ${_inter.variable} ${_ibmPlexMono.variable} font-sans antialiased`}
       >
         <Providers>{children}</Providers>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(BRAND_STRUCTURED_DATA).replace(/</g, "\\u003c"),
+          }}
+        />
       </body>
     </html>
   )

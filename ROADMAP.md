@@ -11,7 +11,7 @@ Make community-governed ranking credible at production scale:
 
 ## 2026 Priorities
 
-### Q2 2026 (Now)
+### RecSys release window (Now)
 
 - Governance reliability hardening
   - Enforce CI/security gates on every PR and `main` merge
@@ -22,7 +22,7 @@ Make community-governed ranking credible at production scale:
 - Contributor experience
   - Tighten docs, release process, and issue triage policy
 
-### Q3 2026 (Next)
+### After RecSys (Next)
 
 - Governance product maturity
   - Parameter registry for controlled expansion of votable settings
@@ -34,7 +34,7 @@ Make community-governed ranking credible at production scale:
   - Reduce ingestion backpressure drop rate during peak Jetstream traffic
   - Improve frontend bundle splitting and first-load latency
 
-### Q4 2026 (Later)
+### Later
 
 - Multi-feed experimentation
   - Optional side-by-side feed variants for governance experiments

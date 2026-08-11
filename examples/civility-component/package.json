@@ -2,7 +2,7 @@
   "name": "@corgi-example/civility-component",
   "version": "0.0.1",
   "private": true,
-  "description": "Example external scoring component for the bluesky-community-feed. Proof-of-concept that the @corgi/feed-sdk public contract is sufficient to author a custom component without touching internal paths.",
+  "description": "Example external scoring component for Corgi. Proof-of-concept that the @corgi/feed-sdk public contract is sufficient to author a custom component without touching internal paths.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

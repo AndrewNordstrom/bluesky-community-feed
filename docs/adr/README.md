@@ -1,8 +1,8 @@
-# ADR Index — bluesky-community-feed
+# ADR Index — Corgi
 
 Status: canonical ADR index
 Owner: bluesky-feed
-Last updated: 2026-04-05
+Last updated: 2026-08-10
 
 This folder should record decisions that permanently shape governance integrity,
 feed serving, and research posture.
