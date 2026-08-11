@@ -49,12 +49,15 @@ jobs:
         with:
           node-version: "20.19.0"
           cache: "npm"
+          cache-dependency-path: |
+            package-lock.json
+            cli/package-lock.json
 
       - name: Install backend dependencies
         run: npm ci --ignore-scripts
 
       - name: Install CLI dependencies
-        run: cd cli && npm ci
+        run: cd cli && npm ci --ignore-scripts
 
       - name: Prepare backend test env
         run: cp .env.example .env
@@ -72,7 +75,11 @@ jobs:
         run: npm run build:mcp-local
 
       - name: Security audit (backend)
-        run: node scripts/audit-allowlist.mjs --audit-level=moderate
+        run: node scripts/audit-allowlist.mjs --workspace=root --audit-level=moderate
+
+      - name: Security audit (CLI)
+        working-directory: cli
+        run: node ../scripts/audit-allowlist.mjs --workspace=cli --audit-level=moderate
 
   frontend-verify:
     name: frontend-verify
@@ -89,10 +96,15 @@ jobs:
         with:
           node-version: "20.19.0"
           cache: "npm"
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: |
+            web/package-lock.json
+            web-next/package-lock.json
 
       - name: Install frontend dependencies
-        run: cd web && npm ci
+        run: cd web && npm ci --ignore-scripts
+
+      - name: Install Next.js frontend dependencies
+        run: cd web-next && npm ci --ignore-scripts
 
       # Supply-chain guard for axios: require an EXACT pin (no ^/~/range) that
       # matches the resolved package-lock version. Self-maintaining — Dependabot
@@ -104,15 +116,27 @@ jobs:
           node --input-type=module -e '
             import fs from "node:fs";
 
-            const pkg = JSON.parse(fs.readFileSync("web/package.json", "utf8"));
-            const lock = JSON.parse(fs.readFileSync("web/package-lock.json", "utf8"));
-            const declared = pkg.dependencies?.axios;
-            const resolved = lock.packages?.["node_modules/axios"]?.version;
-            if (!declared || !/^\d+\.\d+\.\d+$/.test(declared)) {
-              throw new Error(`web/package.json must pin axios to an exact version (no ^/~/range); found ${declared ?? "missing"}`);
-            }
-            if (declared !== resolved) {
-              throw new Error(`web/package.json axios (${declared}) must match package-lock.json resolved axios (${resolved ?? "missing"})`);
+            for (const workspace of ["web", "web-next"]) {
+              const packagePath = `${workspace}/package.json`;
+              const lockPath = `${workspace}/package-lock.json`;
+              const pkg = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+              const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+              const declared = pkg.dependencies?.axios;
+              const resolved = lock.packages?.["node_modules/axios"]?.version;
+              const axiosEntries = Object.entries(lock.packages ?? {}).filter(
+                ([location]) => location === "node_modules/axios" || location.endsWith("/node_modules/axios"),
+              );
+              if (!declared || !/^\d+\.\d+\.\d+$/.test(declared)) {
+                throw new Error(`${packagePath} must pin axios to an exact version (no ^/~/range); found ${declared ?? "missing"}`);
+              }
+              if (declared !== resolved) {
+                throw new Error(`${packagePath} axios (${declared}) must match ${lockPath} resolved axios (${resolved ?? "missing"})`);
+              }
+              for (const [location, entry] of axiosEntries) {
+                if (entry.version !== declared) {
+                  throw new Error(`${lockPath} has ${location} at ${entry.version ?? "missing"}; expected ${declared}`);
+                }
+              }
             }
           '
 
@@ -122,8 +146,16 @@ jobs:
       - name: Build frontend
         run: cd web && npm run build
 
+      - name: Build Next.js frontend
+        run: cd web-next && npm run build
+
       - name: Security audit (frontend)
-        run: cd web && npm audit --audit-level=moderate
+        working-directory: web
+        run: node ../scripts/audit-allowlist.mjs --workspace=web --audit-level=moderate
+
+      - name: Security audit (Next.js frontend)
+        working-directory: web-next
+        run: node ../scripts/audit-allowlist.mjs --workspace=web-next --audit-level=moderate
 
   report-scripts-verify:
     name: report-scripts-verify
