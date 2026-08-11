@@ -1,5 +1,5 @@
 /**
- * @corgi/feed-sdk — Public type contract for custom scoring components.
+ * @corgi-network/feed-sdk — Public type contract for custom scoring components.
  *
  * This package is the importable surface for third-party scoring component
  * authors who want to extend Corgi without forking the monolith.
@@ -177,7 +177,7 @@ export interface PostForScoring {
  *
  * @example
  * ```ts
- * import { createComponent } from '@corgi/feed-sdk';
+ * import { createComponent } from '@corgi-network/feed-sdk';
  *
  * export const civilityComponent = createComponent({
  *   key: 'civility',

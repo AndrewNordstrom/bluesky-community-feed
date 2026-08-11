@@ -1,7 +1,11 @@
 {
-  "name": "@corgi/feed-sdk",
+  "name": "@corgi-network/feed-sdk",
   "version": "0.1.0",
   "private": false,
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "description": "Public type contract and helpers for Corgi scoring components. Community-governed feeds for Bluesky.",
   "repository": {
     "type": "git",

@@ -56,7 +56,7 @@ The system has four major surfaces:
 - `docs/SYSTEM_OVERVIEW.md`, `docs/OPS_RUNBOOK.md`, `docs/DEPLOYMENT.md`: deeper operational references
 - `docs/contributing-scoring-components.md`: end-to-end author guide for new scoring components
 - `docs/adr/ADR-0001-extensible-scoring-components.md`: architectural rationale for the registry-driven, long-table-backed component contract
-- `packages/feed-sdk/`: current `@corgi/feed-sdk` workspace package — the public type surface external component authors depend on; migration to `@corgi-network/feed-sdk` remains gated on namespace registration
+- `packages/feed-sdk/`: `@corgi-network/feed-sdk` workspace package — the public type surface external component authors depend on; first publication remains gated on release review and CI-generated provenance
 - `examples/civility-component/`: working external component example, CI-validated on every PR
 
 ## External Dependencies

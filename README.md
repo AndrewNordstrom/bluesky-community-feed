@@ -105,7 +105,7 @@ total score = Σ(raw component score × approved signal weight)
 
 Global signal weights sum to `1.0`. Topic priorities affect the relevance component. Eligibility rules and publication-stage adjustments are applied separately. Corgi persists each component's raw value, approved weight, and weighted contribution so a ranking can be reconstructed rather than merely described.
 
-The scoring contract is registry-driven and extensible. External authors can implement `ScoringComponent` against the public `@corgi/feed-sdk` surface, then follow the [component contribution guide](docs/contributing-scoring-components.md) and [working civility example](examples/civility-component/).
+The scoring contract is registry-driven and extensible. External authors can implement `ScoringComponent` against the public `@corgi-network/feed-sdk` surface, then follow the [component contribution guide](docs/contributing-scoring-components.md) and [working civility example](examples/civility-component/).
 
 ## Architecture
 

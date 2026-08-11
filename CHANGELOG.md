@@ -21,6 +21,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 - Locked the Corgi product, Corgi Commons feed, Corgi Network publisher, and CORGI research naming architecture across public metadata, documentation, support links, and repository references.
+- Reserved the `@corgi-network` npm namespace, migrated the public feed SDK identity to `@corgi-network/feed-sdk`, and protected non-published workspace packages from accidental publication.
 - Production governance now closes voting into an explicit results-review phase, applies approved signal weights, topic weights, and content rules together, and durably requests a full same-epoch rescore for the updated policy.
 - Public `web-next` homepage refreshed around the reviewer-safe live snapshot, anonymized receipt copy, and demo-first CTA path.
 - README command examples and tooling descriptions updated to match current CLI and MCP behavior

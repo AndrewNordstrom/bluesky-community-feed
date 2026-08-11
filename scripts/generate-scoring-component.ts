@@ -168,7 +168,7 @@ function main(): void {
   console.log(`VOTABLE_WEIGHT_PARAMS, and reject any mismatch with a clear error.`);
   console.log('');
   console.log('See docs/contributing-scoring-components.md (PROJ-820) for the full');
-  console.log('contribution flow including the @corgi/feed-sdk external author path.');
+  console.log('contribution flow including the @corgi-network/feed-sdk external author path.');
 }
 
 main();

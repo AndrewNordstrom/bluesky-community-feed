@@ -1,7 +1,7 @@
 /**
  * Example external scoring component — civility.
  *
- * Imports ONLY from @corgi/feed-sdk. If this file fails to type-check
+ * Imports ONLY from @corgi-network/feed-sdk. If this file fails to type-check
  * against the SDK exports alone, the public contract has a leak and
  * PROJ-818's plug-in claim is incomplete. The CI workflow at
  * .github/workflows/examples-build.yml exercises this build on every PR.
@@ -15,7 +15,7 @@ import {
   type PostForScoring,
   type ScoringComponent,
   type ScoringContext,
-} from '@corgi/feed-sdk';
+} from '@corgi-network/feed-sdk';
 
 /**
  * Simple lexicon-based proxy for civility. Real components would swap in

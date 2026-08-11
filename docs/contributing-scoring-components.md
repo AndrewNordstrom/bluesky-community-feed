@@ -18,7 +18,7 @@ need a starting point, copy that directory.
 ## At a glance
 
 1. Implement [`ScoringComponent`](../packages/feed-sdk/src/index.ts) using
-   only `@corgi/feed-sdk` imports.
+   only `@corgi-network/feed-sdk` imports.
 2. Write a unit test that exercises your `score()` function.
 3. Open a GitHub issue describing the component (purpose, expected score
    distribution, external dependencies, governance implications). The
@@ -42,7 +42,7 @@ and Bluesky Corgi project, and intentionally skips issues authored by
 ### 1. Set up
 
 You can develop your component either in a fork of this repo or in a
-separate package that depends on `@corgi/feed-sdk`. The example uses the
+separate package that depends on `@corgi-network/feed-sdk`. The example uses the
 in-repo `examples/civility-component/` layout — copy it as a template:
 
 ```bash
@@ -56,9 +56,9 @@ published) or from a packed tarball:
 
 ```bash
 cd packages/feed-sdk && npm pack
-# produces corgi-feed-sdk-0.1.0.tgz
+# produces corgi-network-feed-sdk-0.1.0.tgz
 cd ~/your-fork
-npm install /path/to/corgi-feed-sdk-0.1.0.tgz
+npm install /path/to/corgi-network-feed-sdk-0.1.0.tgz
 ```
 
 ### 2. Implement the contract
@@ -71,7 +71,7 @@ import {
   type PostForScoring,
   type ScoringComponent,
   type ScoringContext,
-} from '@corgi/feed-sdk';
+} from '@corgi-network/feed-sdk';
 
 export const myComponent: ScoringComponent = createComponent({
   key: 'myComponent',         // camelCase; matches votable-params entry

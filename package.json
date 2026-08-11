@@ -1,6 +1,7 @@
 {
-  "name": "community-feed",
+  "name": "corgi",
   "version": "1.2.0",
+  "private": true,
   "type": "module",
   "description": "A community-governed Bluesky feed generator where subscribers vote on algorithm parameters",
   "main": "dist/index.js",

@@ -57,17 +57,18 @@ Preferred concrete description:
 | Documentation | `https://docs.corgi.network` |
 | Source permalink | `https://corgi.network/code` |
 | GitHub repository | `andrewnordstrom-eng/corgi` |
-| Target developer namespace (gated) | `@corgi-network` |
-| Target feed SDK package (gated) | `@corgi-network/feed-sdk` |
+| Developer namespace | `@corgi-network` |
+| Feed SDK package (release-gated) | `@corgi-network/feed-sdk` |
 | Bluesky identity | `corgi-network.bsky.social` |
 | Flagship feed | `Corgi Commons` |
 
-The GitHub organization and npm namespace are availability-setting gates, not
-facts to claim before successful registration. The GitHub repository remains in
-`andrewnordstrom-eng` through the RecSys release window; a future organization
-transfer requires a separate integration plan. Until npm registration and an
-atomic lockfile migration are complete, the repository continues to use the
-existing local `@corgi/feed-sdk` package name.
+The `corgi-network` npm organization is registered and owned by the maintainer,
+so the repository uses `@corgi-network/feed-sdk` as the canonical SDK identity.
+The first public package release remains gated on release review and
+CI-generated provenance. The defensive GitHub organization is still an
+availability-setting gate, not a fact to claim before successful registration.
+The GitHub repository remains in `andrewnordstrom-eng` through the RecSys release
+window; a future organization transfer requires a separate integration plan.
 
 ## Voice and visual character
 

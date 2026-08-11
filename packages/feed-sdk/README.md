@@ -1,6 +1,6 @@
-# @corgi/feed-sdk
+# @corgi-network/feed-sdk
 
-> Planned migration to `@corgi-network/feed-sdk` is gated on registration of the `corgi-network` npm organization.
+> The package identity is reserved and configured for public npm publication. The first release remains gated on release review and CI-generated provenance.
 
 Public type contract for implementing custom scoring components for
 [Corgi](https://github.com/andrewnordstrom-eng/corgi).
@@ -20,7 +20,7 @@ The package exports the minimum surface a third-party component author needs:
 ## Quickstart
 
 ```ts
-import { createComponent, type PostForScoring, type ScoringContext } from '@corgi/feed-sdk';
+import { createComponent, type PostForScoring, type ScoringContext } from '@corgi-network/feed-sdk';
 
 export const civilityComponent = createComponent({
   key: 'civility',
@@ -41,8 +41,8 @@ async function classifyCivility(text: string): Promise<number> {
 
 This package is the type contract. To register a component for community
 voting, follow the contribution flow in
-[`docs/contributing-scoring-components.md`](../../docs/contributing-scoring-components.md)
-in the main repo (added in PROJ-820 / P7).
+[`docs/contributing-scoring-components.md`](https://github.com/andrewnordstrom-eng/corgi/blob/main/docs/contributing-scoring-components.md)
+in the main repository.
 
 The short version:
 
@@ -50,23 +50,19 @@ The short version:
 2. Open a GitHub issue; the repository workflow routes it to the maintainers'
    Bluesky Corgi Linear project.
 3. Add the component to `src/scoring/registry.ts` `DEFAULT_COMPONENTS`.
-4. Seed an initial weight in `governance_epoch_weights` if you want it to count
-   from epoch 1.
+4. Include an initial governance weight if the component should participate in
+   ranking immediately.
 5. Open a PR.
-
-After PROJ-819 (P5) lands, no DB migration is needed for the addition — the
-long-table schema accepts any registered key.
 
 ## Versioning
 
 The SDK lives in the same monorepo as the feed implementation. Type changes
-that would break component authors get a major-version bump and a Linear
-issue annotating the migration. PROJ-816 (P3) was the first such change — the
-literal-union widening to `string`.
+that would break component authors receive a major-version bump and documented
+migration guidance.
 
 ## Architecture context
 
 For the rationale behind the registry-driven, long-table-backed contract, see
-[`docs/adr/ADR-0001-extensible-scoring-components.md`](../../docs/adr/ADR-0001-extensible-scoring-components.md).
+[`docs/adr/ADR-0001-extensible-scoring-components.md`](https://github.com/andrewnordstrom-eng/corgi/blob/main/docs/adr/ADR-0001-extensible-scoring-components.md).
 
 License: MIT.

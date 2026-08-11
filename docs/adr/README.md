@@ -18,4 +18,4 @@ feed serving, and research posture.
 ## Current ADR Status
 
 - [ADR-0001 — Extensible scoring components via a registry-driven, long-table-backed contract](ADR-0001-extensible-scoring-components.md) (Accepted, 2026-05-26)
-  - Codifies the architectural shape that emerges from PROJ-814 through PROJ-820: registry-driven component contract, normalized long-table schema for per-component decomposition, `Record<>`-shaped types, `@corgi/feed-sdk` workspace package for external contributors.
+  - Codifies the architectural shape that emerges from PROJ-814 through PROJ-820: registry-driven component contract, normalized long-table schema for per-component decomposition, `Record<>`-shaped types, `@corgi-network/feed-sdk` workspace package for external contributors.

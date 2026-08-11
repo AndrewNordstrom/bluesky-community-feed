@@ -30,7 +30,7 @@ algorithm, and cannot audit the consequences of policy changes.
 - The system can support research workflows such as consent-aware exports and
   participant gating without forking a separate product architecture.
 - The scoring contract is genuinely pluggable: third-party authors can
-  implement and propose a new component using only the `@corgi/feed-sdk`
+  implement and propose a new component using only the `@corgi-network/feed-sdk`
   public type surface, with no internal-path imports and no schema
   migration. See [`docs/contributing-scoring-components.md`](contributing-scoring-components.md)
   and [`examples/civility-component/`](../examples/civility-component/).
