@@ -17,72 +17,77 @@
     {
       "path": "README.md",
       "owner": "core",
-      "lastReviewed": "2026-03-16"
+      "lastReviewed": "2026-08-10"
     },
     {
       "path": "CONTRIBUTING.md",
       "owner": "core",
-      "lastReviewed": "2026-03-16"
+      "lastReviewed": "2026-08-10"
     },
     {
       "path": "RELEASING.md",
       "owner": "core",
-      "lastReviewed": "2026-03-16"
+      "lastReviewed": "2026-08-10"
     },
     {
       "path": "ROADMAP.md",
       "owner": "core",
-      "lastReviewed": "2026-03-16"
+      "lastReviewed": "2026-08-10"
     },
     {
       "path": "SUPPORT.md",
       "owner": "core",
-      "lastReviewed": "2026-03-16"
+      "lastReviewed": "2026-08-10"
     },
     {
       "path": "docs/SYSTEM_OVERVIEW.md",
       "owner": "core",
-      "lastReviewed": "2026-03-16"
+      "lastReviewed": "2026-08-10"
     },
     {
       "path": "docs/DEPLOYMENT.md",
       "owner": "ops",
-      "lastReviewed": "2026-03-16"
+      "lastReviewed": "2026-08-10"
     },
     {
       "path": "docs/OPS_RUNBOOK.md",
       "owner": "ops",
-      "lastReviewed": "2026-03-16"
+      "lastReviewed": "2026-08-10"
     },
     {
       "path": "docs/MCP_SETUP.md",
       "owner": "platform",
-      "lastReviewed": "2026-03-16"
+      "lastReviewed": "2026-08-10"
     },
     {
       "path": "docs/STABILITY_TEST.md",
       "owner": "ops",
-      "lastReviewed": "2026-03-16"
+      "lastReviewed": "2026-08-10"
     },
     {
       "path": "docs/ISSUE_TRIAGE.md",
       "owner": "core",
-      "lastReviewed": "2026-03-16"
+      "lastReviewed": "2026-08-10"
     },
     {
       "path": "docs/SECURITY.md",
       "owner": "security",
-      "lastReviewed": "2026-03-16"
+      "lastReviewed": "2026-08-10"
     },
     {
       "path": "docs/openapi-public.json",
       "owner": "core",
-      "lastReviewed": "2026-07-04"
+      "lastReviewed": "2026-08-10"
+    },
+    {
+      "path": "docs/openapi.json",
+      "owner": "core",
+      "lastReviewed": "2026-08-10"
     },
     {
       "path": "docs/docs-site/openapi.json",
       "owner": "core",
-      "lastReviewed": "2026-07-04"
+      "lastReviewed": "2026-08-10"
     }
   ]
 }
