@@ -130,25 +130,13 @@ export function parseOptions(argv) {
       if (candidate.length === 0) {
         throw new AuditGateError('audit-allowlist: --audit-level requires a value');
       }
-    } else if (argument === '--workspace') {
-      if (index + 1 >= argv.length || argv[index + 1].startsWith('--')) {
+    } else if (argument === '--workspace' || argument.startsWith('--workspace=')) {
+      const usesSeparateValue = argument === '--workspace';
+      if (usesSeparateValue && (index + 1 >= argv.length || argv[index + 1].startsWith('--'))) {
         throw new AuditGateError('audit-allowlist: --workspace requires a value');
       }
-      candidate = argv[index + 1];
-      index += 1;
-      if (workspaceSeen) {
-        throw new AuditGateError('audit-allowlist: --workspace may be provided only once');
-      }
-      if (!WORKSPACES.includes(candidate)) {
-        throw new AuditGateError(
-          `audit-allowlist: unsupported workspace ${candidate}; expected one of ${WORKSPACES.join(', ')}`,
-        );
-      }
-      workspace = candidate;
-      workspaceSeen = true;
-      continue;
-    } else if (argument.startsWith('--workspace=')) {
-      candidate = argument.slice('--workspace='.length);
+      candidate = usesSeparateValue ? argv[index + 1] : argument.slice('--workspace='.length);
+      if (usesSeparateValue) index += 1;
       if (candidate.length === 0) {
         throw new AuditGateError('audit-allowlist: --workspace requires a value');
       }

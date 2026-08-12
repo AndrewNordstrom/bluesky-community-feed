@@ -1,8 +1,16 @@
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
-import { chmodSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   collectBlockingAdvisories,
   partitionAdvisories,
@@ -12,30 +20,64 @@ import {
 
 const REPOSITORY_ROOT = process.cwd();
 const SCRIPT = path.join(REPOSITORY_ROOT, 'scripts', 'audit-allowlist.mjs');
-const TEMP_DIRECTORY = mkdtempSync(path.join(tmpdir(), 'corgi-audit-allowlist-'));
-const FAKE_NPM = path.join(TEMP_DIRECTORY, 'npm');
-const SCRIPT_SYMLINK = path.join(TEMP_DIRECTORY, 'audit-allowlist.mjs');
+let tempDirectory = '';
+let fakeNpm = '';
+let scriptSymlink = '';
+let allowlistRepositoryRoot = '';
+let allowlistScript = '';
 
-writeFileSync(
-  FAKE_NPM,
-  `#!/usr/bin/env node
+beforeAll(() => {
+  tempDirectory = mkdtempSync(path.join(tmpdir(), 'corgi-audit-allowlist-'));
+  fakeNpm = path.join(tempDirectory, 'npm');
+  scriptSymlink = path.join(tempDirectory, 'audit-allowlist.mjs');
+  allowlistRepositoryRoot = path.join(tempDirectory, 'allowlist-repository');
+  allowlistScript = path.join(allowlistRepositoryRoot, 'scripts', 'audit-allowlist.mjs');
+
+  writeFileSync(
+    fakeNpm,
+    `#!/usr/bin/env node
+const { existsSync, writeFileSync } = require('node:fs');
 if (process.env.FAKE_NPM_MODE === 'signal') {
   process.kill(process.pid, 'SIGTERM');
 } else if (process.env.FAKE_NPM_MODE === 'hang') {
   setInterval(() => {}, 1_000);
+} else if (process.env.FAKE_NPM_MODE === 'retry-success') {
+  if (existsSync(process.env.FAKE_NPM_RETRY_STATE)) {
+    process.stdout.write(process.env.FAKE_NPM_RETRY_STDOUT ?? '');
+    process.exit(0);
+  }
+  writeFileSync(process.env.FAKE_NPM_RETRY_STATE, 'failed-once', 'utf8');
+  process.stdout.write(JSON.stringify({ error: { code: 'ENETUNREACH', summary: 'registry unavailable' } }));
+  process.exit(1);
 } else {
   process.stdout.write(process.env.FAKE_NPM_STDOUT ?? '');
   process.exit(Number(process.env.FAKE_NPM_STATUS ?? '0'));
 }
 `,
-  'utf8',
-);
-chmodSync(FAKE_NPM, 0o755);
-symlinkSync(SCRIPT, SCRIPT_SYMLINK);
+    'utf8',
+  );
+  chmodSync(fakeNpm, 0o755);
+  symlinkSync(SCRIPT, scriptSymlink);
+
+  mkdirSync(path.dirname(allowlistScript), { recursive: true });
+  const source = readFileSync(SCRIPT, 'utf8');
+  const sourceWithAllowlist = source.replace(
+    'const ALLOWLIST = [];',
+    `const ALLOWLIST = [{ id: 'GHSA-2345-CFGH-JMPQ', workspace: 'root', expires: '2099-12-31', tracking: 'PROJ-TEST' }];`,
+  );
+  if (sourceWithAllowlist === source) {
+    throw new Error(`audit allowlist test fixture could not replace ALLOWLIST in ${SCRIPT}`);
+  }
+  writeFileSync(allowlistScript, sourceWithAllowlist, 'utf8');
+});
 
 afterAll(() => {
-  rmSync(TEMP_DIRECTORY, { recursive: true, force: true });
+  if (tempDirectory.length > 0) {
+    rmSync(tempDirectory, { recursive: true, force: true });
+  }
 });
+
+type FakeNpmMode = 'exit' | 'hang' | 'retry-success' | 'signal';
 
 function cleanReport(): Record<string, unknown> {
   return {
@@ -55,7 +97,7 @@ function cleanReport(): Record<string, unknown> {
 }
 
 function runWrapper(
-  mode: 'exit' | 'hang' | 'signal',
+  mode: FakeNpmMode,
   stdout: string,
   status: number,
   arguments_: string[],
@@ -65,33 +107,49 @@ function runWrapper(
 
 function runWrapperScript(
   script: string,
-  mode: 'exit' | 'hang' | 'signal',
+  mode: FakeNpmMode,
   stdout: string,
   status: number,
   arguments_: string[],
 ): SpawnSyncReturns<string> {
-  return runWrapperScriptFromDirectory(script, REPOSITORY_ROOT, mode, stdout, status, arguments_);
+  return runWrapperScriptFromDirectory(
+    script,
+    REPOSITORY_ROOT,
+    mode,
+    stdout,
+    status,
+    arguments_,
+    {},
+  );
 }
 
 function runWrapperScriptFromDirectory(
   script: string,
   workingDirectory: string,
-  mode: 'exit' | 'hang' | 'signal',
+  mode: FakeNpmMode,
   stdout: string,
   status: number,
   arguments_: string[],
+  environmentOverrides: Record<string, string>,
 ): SpawnSyncReturns<string> {
+  const retryState = path.join(tempDirectory, 'retry-state');
+  if (mode === 'retry-success') rmSync(retryState, { force: true });
   return spawnSync(process.execPath, [script, ...arguments_], {
     cwd: workingDirectory,
     encoding: 'utf8',
     env: {
       ...process.env,
-      PATH: `${TEMP_DIRECTORY}${path.delimiter}${process.env.PATH ?? ''}`,
+      PATH: `${tempDirectory}${path.delimiter}${process.env.PATH ?? ''}`,
       FAKE_NPM_MODE: mode,
       FAKE_NPM_STDOUT: stdout,
       FAKE_NPM_STATUS: String(status),
+      FAKE_NPM_RETRY_STATE: retryState,
+      FAKE_NPM_RETRY_STDOUT: stdout,
       ...(mode === 'hang' ? { AUDIT_ALLOWLIST_TIMEOUT_MS: '50' } : {}),
+      ...environmentOverrides,
     },
+    killSignal: 'SIGKILL',
+    timeout: 30_000,
   });
 }
 
@@ -146,6 +204,16 @@ describe('audit allowlist command', () => {
     expect(result.stderr).toContain('retrying');
   });
 
+  it('passes when a transient npm audit failure succeeds on retry', () => {
+    const result = runWrapper('retry-success', JSON.stringify(cleanReport()), 0, [
+      '--audit-level=moderate',
+    ]);
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('retrying');
+    expect(result.stdout).toContain('audit-allowlist: PASS');
+  });
+
   it('redacts credentials from npm error diagnostics', () => {
     const result = runWrapper(
       'exit',
@@ -183,6 +251,21 @@ describe('audit allowlist command', () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('ETIMEDOUT');
+  });
+
+  it.each(['abc', '0', '120001'])('rejects invalid audit timeout value %s', (timeout) => {
+    const result = runWrapperScriptFromDirectory(
+      SCRIPT,
+      REPOSITORY_ROOT,
+      'exit',
+      JSON.stringify(cleanReport()),
+      0,
+      ['--audit-level=moderate'],
+      { AUDIT_ALLOWLIST_TIMEOUT_MS: timeout },
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('AUDIT_ALLOWLIST_TIMEOUT_MS');
   });
 
   it('fails closed on unexpected npm audit exit status', () => {
@@ -322,7 +405,7 @@ describe('audit allowlist command', () => {
     };
 
     const result = runWrapperScript(
-      SCRIPT_SYMLINK,
+      scriptSymlink,
       'exit',
       JSON.stringify(report),
       1,
@@ -341,6 +424,7 @@ describe('audit allowlist command', () => {
       JSON.stringify(cleanReport()),
       0,
       ['--workspace=root', '--audit-level=moderate'],
+      {},
     );
 
     expect(result.status).toBe(1);
@@ -504,6 +588,78 @@ describe('audit allowlist command', () => {
     expect(unknown.status).toBe(1);
     expect(unknown.stderr).toContain('unsupported audit level urgent');
   });
+
+  it('accepts the space-separated workspace form', () => {
+    const result = runWrapper('exit', JSON.stringify(cleanReport()), 0, [
+      '--workspace',
+      'root',
+      '--audit-level=moderate',
+    ]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('audit-allowlist: PASS');
+  });
+
+  it.each([
+    [['--workspace'], '--workspace requires a value'],
+    [
+      ['--workspace=root', '--workspace', 'root'],
+      '--workspace may be provided only once',
+    ],
+    [
+      ['--workspace', 'root', '--workspace=root'],
+      '--workspace may be provided only once',
+    ],
+    [
+      ['--audit-level=moderate', '--audit-level', 'high'],
+      '--audit-level may be provided only once',
+    ],
+  ])('rejects duplicate or incomplete option form %#', (arguments_, expectedError) => {
+    const result = runWrapper('exit', JSON.stringify(cleanReport()), 0, arguments_);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(expectedError);
+  });
+
+  it('reports an honored allowlist entry and passes end to end', () => {
+    const report = cleanReport();
+    report.vulnerabilities = {
+      example: {
+        severity: 'high',
+        via: [
+          {
+            severity: 'high',
+            url: 'https://github.com/advisories/GHSA-2345-cfgh-jmpq',
+          },
+        ],
+      },
+    };
+    report.metadata = {
+      vulnerabilities: {
+        info: 0,
+        low: 0,
+        moderate: 0,
+        high: 1,
+        critical: 0,
+        total: 1,
+      },
+    };
+
+    const result = runWrapperScriptFromDirectory(
+      allowlistScript,
+      allowlistRepositoryRoot,
+      'exit',
+      JSON.stringify(report),
+      1,
+      ['--workspace=root', '--audit-level=high'],
+      {},
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('honoring 1 time-boxed exception');
+    expect(result.stdout).toContain('GHSA-2345-CFGH-JMPQ');
+    expect(result.stdout).toContain('audit-allowlist: PASS');
+  });
 });
 
 describe('audit allowlist validation', () => {
@@ -523,6 +679,22 @@ describe('audit allowlist validation', () => {
         now,
       ),
     ).toThrow(/expired 2026-08-09/);
+  });
+
+  it('accepts an allowlist entry through the end of its UTC expiration date', () => {
+    const entry = {
+      id: 'GHSA-2222-3333-4444',
+      workspace: 'root',
+      expires: '2026-08-10',
+      tracking: 'PROJ-1',
+    };
+
+    expect(() =>
+      validateAllowlist([entry], new Date('2026-08-10T23:59:59.999Z')),
+    ).not.toThrow();
+    expect(() => validateAllowlist([entry], new Date('2026-08-11T00:00:00.000Z'))).toThrow(
+      /expired 2026-08-10/,
+    );
   });
 
   it('rejects invalid dates, missing tracking references, and duplicate IDs', () => {
@@ -613,6 +785,36 @@ describe('audit allowlist validation', () => {
       blocking: [{ id: advisoryId }],
     });
     expect(partitionAdvisories(present, matchingWeb, 'web')).toMatchObject({
+      honored: [{ id: advisoryId }],
+      blocking: [],
+    });
+  });
+
+  it('matches lowercase allowlist IDs to uppercase advisory IDs', () => {
+    const advisoryId = 'GHSA-2345-CFGH-JMPQ';
+    const present = new Map([
+      [
+        advisoryId,
+        {
+          severity: 'high',
+          url: `https://github.com/advisories/${advisoryId}`,
+          packages: new Set(['example']),
+        },
+      ],
+    ]);
+    const active = validateAllowlist(
+      [
+        {
+          id: advisoryId.toLowerCase(),
+          workspace: 'root',
+          expires: '2026-08-11',
+          tracking: 'PROJ-1',
+        },
+      ],
+      now,
+    );
+
+    expect(partitionAdvisories(present, active, 'root')).toMatchObject({
       honored: [{ id: advisoryId }],
       blocking: [],
     });
