@@ -18,7 +18,7 @@ const _ibmPlexMono = IBM_Plex_Mono({
 })
 
 const SITE_URL = "https://feed.corgi.network"
-const SITE_TITLE = "Corgi — Community-Governed Feeds for Bluesky"
+const SITE_TITLE = "Corgi — Community-Governed Feed for Bluesky"
 const SITE_DESCRIPTION =
   "Corgi is an open-source, community-governed Bluesky feed with inspectable ranking. Bluesky shows the ordered posts and Corgi shows the policy and receipts."
 
@@ -40,7 +40,6 @@ const BRAND_STRUCTURED_DATA = {
       "@type": "WebSite",
       "@id": `${SITE_URL}/#website`,
       name: "Corgi",
-      alternateName: "CORGI",
       url: SITE_URL,
       description: SITE_DESCRIPTION,
       publisher: { "@id": "https://corgi.network/#organization" },

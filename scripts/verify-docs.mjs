@@ -16,6 +16,10 @@ const REPO_CONTRACT_PATH = path.join(repoRoot, 'docs', 'agent', 'REPO_CONTRACT.m
 const SUPPORT_PATH = path.join(repoRoot, 'SUPPORT.md');
 const CODE_OF_CONDUCT_PATH = path.join(repoRoot, 'CODE_OF_CONDUCT.md');
 const OPENAPI_INFO_PATH = path.join(repoRoot, 'src', 'feed', 'openapi-info.json');
+const PUBLIC_SDK_GUIDANCE_PATHS = [
+  path.join(repoRoot, 'packages', 'feed-sdk', 'README.md'),
+  path.join(repoRoot, 'packages', 'feed-sdk', 'src', 'index.ts'),
+];
 const MCP_TOOL_SOURCE_DIR = path.join(repoRoot, 'src', 'mcp', 'tools');
 const OLD_REPO_PATTERNS = [
   /github\.com\/AndrewNordstrom\/bluesky-community-feed/,
@@ -270,6 +274,18 @@ export function validateOpenApiMetadataFiles(expectedInfoPath, artifactPaths, pr
     };
     if (!isDeepStrictEqual(comparableInfo, expectedInfo)) {
       problems.push(`OpenAPI metadata differs from ${expectedInfoPath}: ${artifactPath}`);
+    }
+  }
+}
+
+export function validatePublicSdkGuidance(guidancePaths, problems) {
+  for (const guidancePath of guidancePaths) {
+    const content = readFileSync(guidancePath, 'utf8');
+    if (/\bLinear packet\b/i.test(content)) {
+      problems.push(`stale Linear-only SDK guidance found: ${relative(guidancePath)}`);
+    }
+    if (!/\bGitHub issue\b/i.test(content)) {
+      problems.push(`SDK guidance is missing the GitHub issue workflow: ${relative(guidancePath)}`);
     }
   }
 }
@@ -633,6 +649,7 @@ function main() {
   validateFreshness(config, problems);
   validateOpenApiFreshnessCoverage(config, problems);
   validateOpenApiMetadata(problems);
+  validatePublicSdkGuidance(PUBLIC_SDK_GUIDANCE_PATHS, problems);
   validateMarkdownLinks(markdownFiles, problems);
   validateNpmRunCommands(markdownFiles, problems);
   validateDeprecatedPatterns(markdownFiles, ignoreSet, problems);

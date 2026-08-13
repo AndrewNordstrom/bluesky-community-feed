@@ -10,6 +10,7 @@ import {
   findNextTopLevelHeadingIndex,
   isMarkdownSeparatorRow,
   validateOpenApiMetadataFiles,
+  validatePublicSdkGuidance,
 } from '../scripts/verify-docs.mjs';
 
 const temporaryDirectories: string[] = [];
@@ -115,6 +116,32 @@ describe('verify-docs helpers', () => {
     expect(problems[0]).toContain(`Unable to read OpenAPI artifact ${missingPath}`);
   });
 
+  it('accepts matching OpenAPI metadata', () => {
+    const { directory, expectedPath, expectedInfo } = createOpenApiFixture();
+    const artifactPath = path.join(directory, 'artifact.json');
+    const problems: string[] = [];
+    writeFileSync(artifactPath, JSON.stringify({ info: expectedInfo }));
+
+    validateOpenApiMetadataFiles(expectedPath, [artifactPath], problems);
+
+    expect(problems).toEqual([]);
+  });
+
+  it('reports a missing canonical OpenAPI metadata file without throwing', () => {
+    const { directory } = createOpenApiFixture();
+    const missingExpectedPath = path.join(directory, 'missing-openapi-info.json');
+    const artifactPath = path.join(directory, 'artifact.json');
+    const problems: string[] = [];
+    writeFileSync(artifactPath, JSON.stringify({ info: {} }));
+
+    validateOpenApiMetadataFiles(missingExpectedPath, [artifactPath], problems);
+
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain(
+      `Unable to read canonical OpenAPI metadata ${missingExpectedPath}`,
+    );
+  });
+
   it('reports malformed OpenAPI JSON without throwing', () => {
     const { directory, expectedPath } = createOpenApiFixture();
     const malformedPath = path.join(directory, 'malformed.json');
@@ -141,5 +168,31 @@ describe('verify-docs helpers', () => {
     expect(problems).toEqual([
       `OpenAPI metadata differs from ${expectedPath}: ${artifactPath}`,
     ]);
+  });
+
+  it('accepts GitHub-issue guidance in every public SDK instruction surface', () => {
+    const { directory } = createOpenApiFixture();
+    const readmePath = path.join(directory, 'README.md');
+    const sourcePath = path.join(directory, 'index.ts');
+    const problems: string[] = [];
+    writeFileSync(readmePath, 'Open a GitHub issue; the workflow routes it to Linear.');
+    writeFileSync(sourcePath, 'Propose changes through a GitHub issue.');
+
+    validatePublicSdkGuidance([readmePath, sourcePath], problems);
+
+    expect(problems).toEqual([]);
+  });
+
+  it('rejects stale Linear-only public SDK guidance', () => {
+    const { directory } = createOpenApiFixture();
+    const guidancePath = path.join(directory, 'index.ts');
+    const problems: string[] = [];
+    writeFileSync(guidancePath, 'Submit a Linear packet against Corgi.');
+
+    validatePublicSdkGuidance([guidancePath], problems);
+
+    expect(problems).toHaveLength(2);
+    expect(problems[0]).toContain('stale Linear-only SDK guidance found');
+    expect(problems[1]).toContain('SDK guidance is missing the GitHub issue workflow');
   });
 });

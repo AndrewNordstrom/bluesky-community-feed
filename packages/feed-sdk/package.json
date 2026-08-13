@@ -6,7 +6,7 @@
     "access": "public",
     "registry": "https://registry.npmjs.org/"
   },
-  "description": "Public type contract and helpers for Corgi scoring components. Community-governed feeds for Bluesky.",
+  "description": "Public type contract and helpers for Corgi scoring components. Corgi Commons is the live feed for Bluesky.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/andrewnordstrom-eng/corgi.git",

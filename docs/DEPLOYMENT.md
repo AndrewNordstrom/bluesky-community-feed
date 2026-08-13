@@ -16,14 +16,18 @@ This guide is for deploying your own instance of Corgi, a community-governed Blu
 3. Resolve its DID:
 
 ```bash
-curl "https://bsky.social/xrpc/com.atproto.identity.resolveHandle?handle=my-feed.bsky.social"
+set -euo pipefail
+curl -fsS "https://bsky.social/xrpc/com.atproto.identity.resolveHandle?handle=my-feed.bsky.social"
 ```
 
+Do not continue unless the command exits successfully. The `-f` flag makes an
+HTTP 4xx or 5xx response fail instead of presenting an error body as a DID.
 Save the returned `did`.
 
 ## 2. Install system dependencies
 
 ```bash
+set -euo pipefail
 sudo apt update && sudo apt upgrade -y
 sudo apt install -y acl curl git jq nginx certbot python3-certbot-nginx redis-server postgresql
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
@@ -33,18 +37,27 @@ sudo apt install -y nodejs
 ## 3. Create PostgreSQL database
 
 ```bash
-sudo -u postgres psql
-```
-
-```sql
+set -euo pipefail
+sudo -u postgres psql --set ON_ERROR_STOP=1 <<'SQL'
 CREATE USER feeduser WITH PASSWORD 'replace-with-strong-password';
 CREATE DATABASE community_feed OWNER feeduser;
-\q
+SQL
+if ! ROLE_EXISTS="$(sudo -u postgres psql --set ON_ERROR_STOP=1 --tuples-only --no-align --command "SELECT 1 FROM pg_roles WHERE rolname = 'feeduser'")"; then
+  printf 'Unable to verify PostgreSQL role feeduser\n' >&2
+  exit 1
+fi
+test "$ROLE_EXISTS" = "1"
+if ! DATABASE_EXISTS="$(sudo -u postgres psql --set ON_ERROR_STOP=1 --tuples-only --no-align --command "SELECT 1 FROM pg_database WHERE datname = 'community_feed'")"; then
+  printf 'Unable to verify PostgreSQL database community_feed\n' >&2
+  exit 1
+fi
+test "$DATABASE_EXISTS" = "1"
 ```
 
 ## 4. Clone repository
 
 ```bash
+set -euo pipefail
 cd /opt
 sudo git clone https://github.com/andrewnordstrom-eng/corgi.git /opt/bluesky-feed
 DEPLOY_USER="$(id -un)"
@@ -60,6 +73,7 @@ install, build, test, and migration commands without `sudo`.
 ## 5. Configure environment
 
 ```bash
+set -euo pipefail
 cp .env.example .env
 ```
 
@@ -83,6 +97,7 @@ Recommended security defaults:
 Resolve and print `.env` DID values:
 
 ```bash
+set -euo pipefail
 npm run generate-feed-did -- my-feed.bsky.social
 ```
 
@@ -91,6 +106,7 @@ Then copy the printed `FEEDGEN_SERVICE_DID` and `FEEDGEN_PUBLISHER_DID` into `.e
 ## 6. Install dependencies and build
 
 ```bash
+set -euo pipefail
 npm install
 npm --prefix web-next install
 npm --prefix web install
@@ -100,12 +116,14 @@ npm run verify
 ## 7. Run migrations
 
 ```bash
+set -euo pipefail
 npm run migrate
 ```
 
 ## 8. Publish feed record to Bluesky
 
 ```bash
+set -euo pipefail
 npm run publish-feed
 ```
 
@@ -118,6 +136,7 @@ separate, read-only runtime identity. Resolve the operator identity and create
 the runtime account only when it does not already exist:
 
 ```bash
+set -euo pipefail
 DEPLOY_USER="$(id -un)"
 DEPLOY_GROUP="$(id -gn "$DEPLOY_USER")"
 test "$DEPLOY_USER" != "root"
@@ -126,7 +145,10 @@ test "$(stat -c '%G' /opt/bluesky-feed)" = "$DEPLOY_GROUP"
 test -w /opt/bluesky-feed/.git
 for OPERATOR_PATH in .git node_modules dist web/dist web-next/out; do
   test -e "/opt/bluesky-feed/$OPERATOR_PATH"
-  OWNER_MISMATCH="$(sudo find "/opt/bluesky-feed/$OPERATOR_PATH" \( ! -user "$DEPLOY_USER" -o ! -group "$DEPLOY_GROUP" \) -print -quit)"
+  if ! OWNER_MISMATCH="$(sudo find "/opt/bluesky-feed/$OPERATOR_PATH" \( ! -user "$DEPLOY_USER" -o ! -group "$DEPLOY_GROUP" \) -print -quit)"; then
+    printf 'Unable to validate ownership for %s\n' "$OPERATOR_PATH" >&2
+    exit 1
+  fi
   if [ -n "$OWNER_MISMATCH" ]; then
     printf 'Deployment operator does not own %s: %s\n' "$OPERATOR_PATH" "$OWNER_MISMATCH" >&2
     exit 1
@@ -142,6 +164,13 @@ getent passwd corgi-runtime | awk -F: '$1 == "corgi-runtime" && $6 == "/nonexist
 test "$(id -gn corgi-runtime)" = "corgi-runtime"
 RUNTIME_GID="$(getent group corgi-runtime | awk -F: '{ print $3 }')"
 test -n "$RUNTIME_GID"
+RUNTIME_UID="$(id -u corgi-runtime)"
+RUNTIME_PRIMARY_GID="$(id -g corgi-runtime)"
+RUNTIME_GROUP_IDS="$(id -G corgi-runtime)"
+test "$RUNTIME_UID" -ne 0
+test "$RUNTIME_PRIMARY_GID" -ne 0
+test "$RUNTIME_PRIMARY_GID" = "$RUNTIME_GID"
+test "$RUNTIME_GROUP_IDS" = "$RUNTIME_PRIMARY_GID"
 test -z "$(getent group corgi-runtime | awk -F: '$4 != "" { print $4 }')"
 test -z "$(getent passwd | awk -F: -v gid="$RUNTIME_GID" '$4 == gid && $1 != "corgi-runtime" { print $1 }')"
 ```
@@ -159,6 +188,7 @@ gate above rejects root-owned or otherwise foreign build and Git artifacts
 before runtime ACLs are applied.
 
 ```bash
+set -euo pipefail
 cd /opt/bluesky-feed
 DEPLOY_USER="$(id -un)"
 sudo chgrp corgi-runtime /opt/bluesky-feed /opt/bluesky-feed/web /opt/bluesky-feed/web-next
@@ -184,9 +214,17 @@ sudo -u corgi-runtime test -r .env
 sudo -u corgi-runtime test ! -w /opt/bluesky-feed
 sudo -u corgi-runtime test ! -w /opt/bluesky-feed/.git
 sudo -u corgi-runtime test ! -r /opt/bluesky-feed/.git/objects
-test -z "$(sudo -u corgi-runtime find /opt/bluesky-feed -xdev -path /opt/bluesky-feed/.git -prune -o -writable -print -quit)"
+if ! WRITABLE_RUNTIME_PATH="$(sudo -u corgi-runtime find /opt/bluesky-feed -xdev -path /opt/bluesky-feed/.git -prune -o -writable -print -quit)"; then
+  printf 'Unable to validate runtime write access\n' >&2
+  exit 1
+fi
+test -z "$WRITABLE_RUNTIME_PATH"
 for RUNTIME_PATH in dist node_modules web/dist web-next/out legal; do
-  test -z "$(sudo find "$RUNTIME_PATH" -perm /022 -print -quit)"
+  if ! GROUP_WRITABLE_PATH="$(sudo find "$RUNTIME_PATH" -perm /022 -print -quit)"; then
+    printf 'Unable to validate permissions for %s\n' "$RUNTIME_PATH" >&2
+    exit 1
+  fi
+  test -z "$GROUP_WRITABLE_PATH"
 done
 ```
 
@@ -220,6 +258,7 @@ WantedBy=multi-user.target
 Enable/start:
 
 ```bash
+set -euo pipefail
 sudo systemctl daemon-reload
 sudo systemctl enable bluesky-feed
 sudo systemctl start bluesky-feed
@@ -250,6 +289,7 @@ server {
 Enable and validate:
 
 ```bash
+set -euo pipefail
 sudo ln -sf /etc/nginx/sites-available/bluesky-feed /etc/nginx/sites-enabled/bluesky-feed
 sudo nginx -t
 sudo systemctl reload nginx
@@ -258,6 +298,7 @@ sudo systemctl reload nginx
 Issue certificate:
 
 ```bash
+set -euo pipefail
 sudo certbot --nginx -d feed.yourdomain.com
 ```
 
@@ -266,6 +307,7 @@ After enabling Nginx, confirm the app is not directly exposed on `FEEDGEN_PORT` 
 ## 11. Verify deployment
 
 ```bash
+set -euo pipefail
 curl -f https://feed.yourdomain.com/health
 curl -f "https://feed.yourdomain.com/xrpc/app.bsky.feed.describeFeedGenerator"
 ```
@@ -273,6 +315,7 @@ curl -f "https://feed.yourdomain.com/xrpc/app.bsky.feed.describeFeedGenerator"
 Also verify logs:
 
 ```bash
+set -euo pipefail
 sudo journalctl -u bluesky-feed -f
 ```
 
@@ -283,6 +326,7 @@ sudo journalctl -u bluesky-feed -f
 - Restart service after `.env` changes:
 
 ```bash
+set -euo pipefail
 sudo systemctl restart bluesky-feed
 ```
 

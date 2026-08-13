@@ -143,7 +143,8 @@ export interface GovernanceEpoch {
  * Post data as fetched for scoring. The shape mirrors what the production
  * pipeline assembles from `posts` + `post_engagement`. Component authors who
  * need additional fields (e.g. post images) should propose extending this
- * interface via a Linear packet against Corgi.
+ * interface via a GitHub issue; the repository workflow routes it to the
+ * maintainers' Bluesky Corgi Linear project.
  */
 export interface PostForScoring {
   uri: string;
