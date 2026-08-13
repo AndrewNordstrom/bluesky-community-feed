@@ -1,9 +1,9 @@
-# Operability — bluesky-community-feed
+# Operability — Corgi
 
 Status: canonical operability doc
 Owner: bluesky-feed
 Service class: production_service
-Last updated: 2026-04-12
+Last updated: 2026-08-10
 
 ## Release Path
 

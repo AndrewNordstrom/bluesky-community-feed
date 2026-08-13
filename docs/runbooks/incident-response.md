@@ -1,4 +1,4 @@
-# Incident Response — bluesky-community-feed
+# Incident Response — Corgi
 
 Status: canonical incident runbook
 Owner: bluesky-feed

@@ -8,8 +8,8 @@ export const metadata: Metadata = {
   alternates: { canonical: "/support/" },
 }
 
-const GITHUB_ISSUES = "https://github.com/andrewnordstrom-eng/bluesky-community-feed/issues"
-const PRIVATE_SECURITY_REPORT = "https://github.com/andrewnordstrom-eng/bluesky-community-feed/security/advisories/new"
+const GITHUB_ISSUES = "https://github.com/andrewnordstrom-eng/corgi/issues"
+const PRIVATE_SECURITY_REPORT = "https://github.com/andrewnordstrom-eng/corgi/security/advisories/new"
 const SUPPORT_EMAIL = "mailto:hello@corgi.network"
 
 const SECTIONS = [

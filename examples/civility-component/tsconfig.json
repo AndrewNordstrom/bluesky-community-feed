@@ -14,7 +14,7 @@
     "noEmitOnError": true,
     "types": ["node"],
     "paths": {
-      "@corgi/feed-sdk": ["../../packages/feed-sdk/dist/index.d.ts"]
+      "@corgi-network/feed-sdk": ["../../packages/feed-sdk/dist/index.d.ts"]
     }
   },
   "include": ["src/**/*"],

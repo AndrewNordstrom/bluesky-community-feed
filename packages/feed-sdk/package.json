@@ -1,8 +1,21 @@
 {
-  "name": "@corgi/feed-sdk",
+  "name": "@corgi-network/feed-sdk",
   "version": "0.1.0",
   "private": false,
-  "description": "Public type contract and helpers for implementing custom scoring components for the bluesky-community-feed",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "description": "Public type contract and helpers for Corgi scoring components. Corgi Commons is the live feed for Bluesky.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrewnordstrom-eng/corgi.git",
+    "directory": "packages/feed-sdk"
+  },
+  "homepage": "https://corgi.network/code",
+  "bugs": {
+    "url": "https://github.com/andrewnordstrom-eng/corgi/issues"
+  },
   "type": "module",
   "exports": {
     ".": {

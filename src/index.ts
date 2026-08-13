@@ -24,7 +24,7 @@ import { loadGovernanceGateWeights } from './ingestion/governance-gate.js';
 import { sdNotifyReady, startWatchdog, stopWatchdog } from './lib/watchdog.js';
 
 async function main() {
-  logger.info('Starting Community Feed Generator...');
+  logger.info('Starting Corgi feed generator...');
 
   // 0. Run startup checks (fail fast if dependencies are down)
   try {

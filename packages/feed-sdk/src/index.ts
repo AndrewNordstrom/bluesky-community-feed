@@ -1,9 +1,8 @@
 /**
- * @corgi/feed-sdk — Public type contract for custom scoring components.
+ * @corgi-network/feed-sdk — Public type contract for custom scoring components.
  *
  * This package is the importable surface for third-party scoring component
- * authors who want to extend the bluesky-community-feed without forking the
- * monolith.
+ * authors who want to extend Corgi without forking the monolith.
  *
  * The shapes here are intentionally minimal — just enough type information to
  * implement a component, write a unit test against the contract, and have the
@@ -144,7 +143,8 @@ export interface GovernanceEpoch {
  * Post data as fetched for scoring. The shape mirrors what the production
  * pipeline assembles from `posts` + `post_engagement`. Component authors who
  * need additional fields (e.g. post images) should propose extending this
- * interface via a Linear packet against `bluesky-community-feed`.
+ * interface via a GitHub issue; the repository workflow routes it to the
+ * maintainers' Bluesky Corgi Linear project.
  */
 export interface PostForScoring {
   uri: string;
@@ -178,7 +178,7 @@ export interface PostForScoring {
  *
  * @example
  * ```ts
- * import { createComponent } from '@corgi/feed-sdk';
+ * import { createComponent } from '@corgi-network/feed-sdk';
  *
  * export const civilityComponent = createComponent({
  *   key: 'civility',

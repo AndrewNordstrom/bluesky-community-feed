@@ -87,7 +87,7 @@ Redis snapshot write.
 
 ### The SDK boundary
 
-The public type surface is published as the `@corgi/feed-sdk`
+The public type surface is maintained as the `@corgi-network/feed-sdk`
 workspace package (`packages/feed-sdk/`). A third-party component
 author depends on the SDK, implements `ScoringComponent`, and writes
 a unit test — without cloning the monolith or touching internal paths.
@@ -102,13 +102,14 @@ the contribution flow.
 
 External component proposals follow this path (codified in PROJ-820 / P7):
 
-1. Author implements `ScoringComponent` against `@corgi/feed-sdk` in
+1. Author implements `ScoringComponent` against `@corgi-network/feed-sdk` in
    their fork or workspace.
 2. Author writes a unit test that exercises the component without DB
    dependencies.
-3. Author opens a Linear issue under `bluesky-feed` describing the
-   component (purpose, expected score distribution, any external
-   dependencies, governance implications).
+3. Author opens a GitHub issue describing the component (purpose, expected
+   score distribution, any external dependencies, governance implications).
+   The `issue-to-linear` workflow routes it to the maintainers' Bluesky Corgi
+   project automatically.
 4. Author opens a PR that registers the component in
    `DEFAULT_COMPONENTS` and adds the matching `VOTABLE_WEIGHT_PARAMS`
    entry. The drift check at module load proves the wiring.
@@ -118,7 +119,7 @@ External component proposals follow this path (codified in PROJ-820 / P7):
 
 CI exercises the contribution flow via an example external component
 fixture (`tests/fixtures/example-external-component.ts`) that imports
-only from `@corgi/feed-sdk`. If the SDK ever loses an export the
+only from `@corgi-network/feed-sdk`. If the SDK ever loses an export the
 external surface needs, CI breaks.
 
 ## Consequences
@@ -192,7 +193,7 @@ The long-table option keeps queries idiomatic and indexable. Rejected.
 
 Adds release-coordination overhead for what is fundamentally a
 type-only package. The monorepo workspace gives external contributors
-the same import path (`@corgi/feed-sdk`) without the version-skew risk.
+the same import path (`@corgi-network/feed-sdk`) without the version-skew risk.
 A separate repo is a reasonable future move if the SDK grows runtime
 helpers that need independent versioning. Deferred.
 

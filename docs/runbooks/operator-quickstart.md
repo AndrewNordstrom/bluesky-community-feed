@@ -1,4 +1,4 @@
-# Operator Quickstart — bluesky-community-feed
+# Operator Quickstart — Corgi
 
 Status: canonical operator runbook
 Owner: bluesky-feed

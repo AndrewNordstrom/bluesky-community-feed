@@ -1,7 +1,7 @@
 name: examples-build
 
 # Validates every example component under examples/* still builds and
-# tests cleanly against the published @corgi/feed-sdk surface. If the SDK
+# tests cleanly against the current @corgi-network/feed-sdk surface. If the SDK
 # loses an export an external contributor relies on, this workflow breaks
 # the PR before merge.
 #

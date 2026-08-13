@@ -1,7 +1,7 @@
 /**
  * Example external scoring component.
  *
- * This file exists to prove the @corgi/feed-sdk public surface is
+ * This file exists to prove the @corgi-network/feed-sdk public surface is
  * self-contained — an external contributor can implement a ScoringComponent
  * using only the SDK exports, with zero imports from `src/` or any other
  * internal path.
@@ -23,7 +23,7 @@ import {
   type ScoringContext,
   type GovernanceWeights,
   type WeightedScore,
-} from '@corgi/feed-sdk';
+} from '@corgi-network/feed-sdk';
 
 /**
  * Stub "civility" component — returns a fixed 0.5 for every post. A real

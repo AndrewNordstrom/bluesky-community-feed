@@ -1,7 +1,7 @@
 # Contributing a scoring component
 
 This guide walks through proposing and registering a new scoring
-component for the bluesky-community-feed. Reading time ~10 min;
+component for Corgi. Reading time ~10 min;
 implementing time depends on your scoring logic.
 
 A scoring component takes a `PostForScoring` plus a `ScoringContext` and
@@ -18,11 +18,12 @@ need a starting point, copy that directory.
 ## At a glance
 
 1. Implement [`ScoringComponent`](../packages/feed-sdk/src/index.ts) using
-   only `@corgi/feed-sdk` imports.
+   only `@corgi-network/feed-sdk` imports.
 2. Write a unit test that exercises your `score()` function.
-3. Open a Linear issue under the `bluesky-feed` project describing the
-   component (purpose, expected score distribution, external
-   dependencies, governance implications).
+3. Open a GitHub issue describing the component (purpose, expected score
+   distribution, external dependencies, governance implications). The
+   `issue-to-linear` workflow routes it to the maintainers' Bluesky Corgi
+   project automatically.
 4. Open a PR that registers your component in
    `src/scoring/registry.ts` and adds a matching entry to
    `src/config/votable-params.ts`. The registry drift check at module
@@ -30,12 +31,18 @@ need a starting point, copy that directory.
 5. (Optional) Seed an initial weight in the active `governance_epochs`
    row so the community starts voting on it immediately.
 
+The repository maintainers keep `LINEAR_API_KEY_PUBLIC` configured for this
+route. It handles issue `opened` and `reopened` events, targets the `PROJ` team
+and Bluesky Corgi project, and intentionally skips issues authored by
+`dependabot[bot]` or `github-actions[bot]` and issues labeled `eng-digest`,
+`quality-digest`, or `cto-brief`.
+
 ## Step-by-step
 
 ### 1. Set up
 
 You can develop your component either in a fork of this repo or in a
-separate package that depends on `@corgi/feed-sdk`. The example uses the
+separate package that depends on `@corgi-network/feed-sdk`. The example uses the
 in-repo `examples/civility-component/` layout — copy it as a template:
 
 ```bash
@@ -49,9 +56,9 @@ published) or from a packed tarball:
 
 ```bash
 cd packages/feed-sdk && npm pack
-# produces corgi-feed-sdk-0.1.0.tgz
+# produces corgi-network-feed-sdk-0.1.0.tgz
 cd ~/your-fork
-npm install /path/to/corgi-feed-sdk-0.1.0.tgz
+npm install /path/to/corgi-network-feed-sdk-0.1.0.tgz
 ```
 
 ### 2. Implement the contract
@@ -64,7 +71,7 @@ import {
   type PostForScoring,
   type ScoringComponent,
   type ScoringContext,
-} from '@corgi/feed-sdk';
+} from '@corgi-network/feed-sdk';
 
 export const myComponent: ScoringComponent = createComponent({
   key: 'myComponent',         // camelCase; matches votable-params entry
@@ -109,11 +116,12 @@ test('score is in [0, 1]', async () => {
 See [`examples/civility-component/src/civility.test.ts`](../examples/civility-component/src/civility.test.ts)
 for a complete example with helper functions.
 
-### 4. Open a Linear issue
+### 4. Open a GitHub issue
 
-Using the project's
-[GitHub Issues](https://github.com/andrewnordstrom-eng/bluesky-community-feed/issues),
-file an issue describing:
+File an issue in
+[GitHub Issues](https://github.com/andrewnordstrom-eng/corgi/issues). The
+`issue-to-linear` workflow synchronizes new and reopened issues to the
+maintainers' Bluesky Corgi Linear project. Describe:
 
 - **Purpose:** What signal does this component capture? Why does
   community-voted weighting matter for it?

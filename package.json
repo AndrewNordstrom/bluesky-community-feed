@@ -1,6 +1,7 @@
 {
-  "name": "community-feed",
+  "name": "corgi",
   "version": "1.2.0",
+  "private": true,
   "type": "module",
   "description": "A community-governed Bluesky feed generator where subscribers vote on algorithm parameters",
   "main": "dist/index.js",
@@ -36,7 +37,7 @@
     "sdk:build": "cd packages/feed-sdk && tsc -p tsconfig.json",
     "sdk:clean": "cd packages/feed-sdk && rm -rf dist",
     "sdk:fixture": "tsc -p tests/fixtures/example-external-component.tsconfig.json",
-    "verify": "npm run build && npm test -- --run && npm run cli:build && npm run build:mcp-local && npm run sdk:build && npm run sdk:fixture && cd web && npm run lint && npm run build && cd ../web-next && npm run build",
+    "verify": "npm run build && npm test -- --run && npm run cli:build && npm run build:mcp-local && npm run sdk:build && npm run sdk:fixture && cd web && npm run lint && npm run build && cd ../web-next && npm run lint && npm run build",
     "prepare": "husky"
   },
   "workspaces": [
@@ -90,7 +91,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/andrewnordstrom-eng/bluesky-community-feed.git"
+    "url": "https://github.com/andrewnordstrom-eng/corgi.git"
   },
   "homepage": "https://feed.corgi.network",
   "author": "Corgi Network",

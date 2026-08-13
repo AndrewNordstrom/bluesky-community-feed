@@ -149,9 +149,9 @@ Persists cursor every 1000 events to resume without gaps.
 
 ---
 
-## Transparency Dashboard
+## Product UI
 
-The React frontend provides:
+The canonical Next.js frontend provides:
 
 - **Current Weights**: Radar chart showing active epoch's weight distribution
 - **Feed Statistics**: Posts scored, unique authors, average bridging
@@ -193,8 +193,9 @@ Content rules are part of the current ballot. Include-keyword rules form an allo
 DATABASE_URL=postgresql://...
 REDIS_URL=redis://...
 JETSTREAM_URL=wss://jetstream1.us-east.bsky.network/subscribe
-FEED_GENERATOR_DID=did:plc:your-did
-FEED_HOSTNAME=feed.yourdomain.com
+FEEDGEN_SERVICE_DID=did:plc:your-service-did
+FEEDGEN_PUBLISHER_DID=did:plc:your-publisher-did
+FEEDGEN_HOSTNAME=feed.yourdomain.com
 ```
 
 ---
@@ -209,8 +210,8 @@ FEED_HOSTNAME=feed.yourdomain.com
 | `src/feed/routes/feed-skeleton.ts` | AT Protocol feed endpoint |
 | `src/governance/routes/vote.ts` | Vote submission API |
 | `src/governance/aggregation.ts` | Trimmed mean calculation |
-| `web/src/pages/Vote.tsx` | Voting UI with linked sliders |
-| `web/src/pages/Dashboard.tsx` | Transparency dashboard |
+| `web-next/app/vote/page.tsx` | Voting UI |
+| `web-next/app/dashboard/page.tsx` | Transparency dashboard |
 
 ---
 
@@ -219,7 +220,7 @@ FEED_HOSTNAME=feed.yourdomain.com
 ```bash
 # Development
 npm run dev              # Start backend (port 3000)
-cd web && npm run dev    # Start frontend (port 5173)
+npm --prefix web-next run dev  # Start canonical frontend
 
 # Database
 npm run migrate          # Run migrations

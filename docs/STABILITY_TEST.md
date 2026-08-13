@@ -1,6 +1,6 @@
 # 24-Hour Stability Test Plan
 
-This document outlines the procedure for running a 24-hour stability test to verify the Community Feed Generator is production-ready.
+This document outlines the procedure for running a 24-hour stability test to verify the Corgi feed generator is production-ready.
 
 ## Overview
 

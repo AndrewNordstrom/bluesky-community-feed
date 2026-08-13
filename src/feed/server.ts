@@ -5,6 +5,7 @@ import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
+import openApiInfo from './openapi-info.json' with { type: 'json' };
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -106,20 +107,7 @@ export async function createServer(options?: CreateServerOptions) {
   await app.register(swagger, {
     openapi: {
       info: {
-        title: 'Community Feed API',
-        description:
-          'Corgi Commons is a Bluesky feed with inspectable, community-shaped ranking. Approved pilot participants can vote on ranking signals, topic priorities, and content rules; reviewed policy changes are applied before rescoring. ' +
-          'Built on AT Protocol.\n\n' +
-          '## Authentication\n' +
-          '- **Governance endpoints** require a session cookie or bearer token from `POST /api/governance/auth/login`.\n' +
-          '- **Admin endpoints** additionally require the caller\'s DID to be in the `BOT_ADMIN_DIDS` allowlist.\n' +
-          '- **Feed endpoints** are public (called by the Bluesky app). Viewing the feed and using the shadow demo do not require governance access.\n' +
-          '- **Transparency endpoints** are public and unauthenticated.',
-        version: '1.2.0',
-        contact: {
-          name: 'Community Feed',
-          url: 'https://github.com/andrewnordstrom-eng/bluesky-community-feed',
-        },
+        ...openApiInfo,
         license: { name: 'MIT' },
       },
       servers: [

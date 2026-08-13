@@ -1,9 +1,9 @@
-# PRD — bluesky-community-feed
+# PRD — Corgi
 
 Status: canonical product brief
 Owner: bluesky-feed
 Service class: production_service
-Last updated: 2026-07-13
+Last updated: 2026-08-10
 
 ## Mission
 
@@ -30,7 +30,7 @@ algorithm, and cannot audit the consequences of policy changes.
 - The system can support research workflows such as consent-aware exports and
   participant gating without forking a separate product architecture.
 - The scoring contract is genuinely pluggable: third-party authors can
-  implement and propose a new component using only the `@corgi/feed-sdk`
+  implement and propose a new component using only the `@corgi-network/feed-sdk`
   public type surface, with no internal-path imports and no schema
   migration. See [`docs/contributing-scoring-components.md`](contributing-scoring-components.md)
   and [`examples/civility-component/`](../examples/civility-component/).

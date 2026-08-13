@@ -1,7 +1,7 @@
 // Governance API contract types.
 //
 // Mirrored from the backend source of truth:
-//   bluesky-community-feed/src/shared/api-types.ts
+//   src/shared/api-types.ts
 // Keep these in sync when the governance weight / content-rule shapes change.
 // (Extracted here so web-next stays a self-contained frontend package rather
 // than reaching into the backend src tree via a path alias.)

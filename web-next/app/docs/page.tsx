@@ -119,9 +119,9 @@ const SECTIONS = [
       <>
         <P>
           Corgi is open source. The ranking engine, governance pipeline, and this site live on{" "}
-          <InlineLink href="https://github.com/andrewnordstrom-eng/bluesky-community-feed">GitHub</InlineLink>. The
+          <InlineLink href="https://github.com/andrewnordstrom-eng/corgi">GitHub</InlineLink>. The
           public read endpoints are documented in the{" "}
-          <InlineLink href="https://github.com/andrewnordstrom-eng/bluesky-community-feed/blob/main/docs/openapi-public.json">
+          <InlineLink href="https://github.com/andrewnordstrom-eng/corgi/blob/main/docs/openapi-public.json">
             OpenAPI specification
           </InlineLink>.
         </P>
