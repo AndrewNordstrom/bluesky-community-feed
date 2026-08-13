@@ -1,6 +1,6 @@
 # @corgi-network/feed-sdk
 
-> The package identity is reserved and configured for public npm publication. The first release remains gated on release review and CI-generated provenance.
+> The package identity is reserved and configured for public npm publication. The first release remains gated on release review, licensing review, and CI-generated npm provenance.
 
 Public type contract for implementing custom scoring components for
 [Corgi](https://github.com/andrewnordstrom-eng/corgi).

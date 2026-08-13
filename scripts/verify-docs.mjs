@@ -280,7 +280,14 @@ export function validateOpenApiMetadataFiles(expectedInfoPath, artifactPaths, pr
 
 export function validatePublicSdkGuidance(guidancePaths, problems) {
   for (const guidancePath of guidancePaths) {
-    const content = readFileSync(guidancePath, 'utf8');
+    let content;
+    try {
+      content = readFileSync(guidancePath, 'utf8');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      problems.push(`Unable to read public SDK guidance ${guidancePath}: ${message}`);
+      continue;
+    }
     if (/\bLinear packet\b/i.test(content)) {
       problems.push(`stale Linear-only SDK guidance found: ${relative(guidancePath)}`);
     }

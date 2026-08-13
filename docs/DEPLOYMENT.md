@@ -38,21 +38,50 @@ sudo apt install -y nodejs
 
 ```bash
 set -euo pipefail
-sudo -u postgres psql --set ON_ERROR_STOP=1 <<'SQL'
-CREATE USER feeduser WITH PASSWORD 'replace-with-strong-password';
-CREATE DATABASE community_feed OWNER feeduser;
-SQL
 if ! ROLE_EXISTS="$(sudo -u postgres psql --set ON_ERROR_STOP=1 --tuples-only --no-align --command "SELECT 1 FROM pg_roles WHERE rolname = 'feeduser'")"; then
-  printf 'Unable to verify PostgreSQL role feeduser\n' >&2
+  printf 'Unable to inspect PostgreSQL role feeduser\n' >&2
   exit 1
 fi
-test "$ROLE_EXISTS" = "1"
+case "$ROLE_EXISTS" in
+  "") sudo -u postgres createuser --pwprompt feeduser ;;
+  "1") printf 'PostgreSQL role feeduser already exists; preserving it.\n' ;;
+  *) printf 'Unexpected role lookup result: %s\n' "$ROLE_EXISTS" >&2; exit 1 ;;
+esac
 if ! DATABASE_EXISTS="$(sudo -u postgres psql --set ON_ERROR_STOP=1 --tuples-only --no-align --command "SELECT 1 FROM pg_database WHERE datname = 'community_feed'")"; then
-  printf 'Unable to verify PostgreSQL database community_feed\n' >&2
+  printf 'Unable to inspect PostgreSQL database community_feed\n' >&2
   exit 1
 fi
+case "$DATABASE_EXISTS" in
+  "") sudo -u postgres createdb --owner=feeduser community_feed ;;
+  "1") printf 'PostgreSQL database community_feed already exists; preserving it.\n' ;;
+  *) printf 'Unexpected database lookup result: %s\n' "$DATABASE_EXISTS" >&2; exit 1 ;;
+esac
+ROLE_EXISTS="$(sudo -u postgres psql --set ON_ERROR_STOP=1 --tuples-only --no-align --command "SELECT 1 FROM pg_roles WHERE rolname = 'feeduser'")"
+test "$ROLE_EXISTS" = "1"
+ROLE_CAN_LOGIN="$(sudo -u postgres psql --set ON_ERROR_STOP=1 --tuples-only --no-align --command "SELECT CASE WHEN rolcanlogin THEN 1 ELSE 0 END FROM pg_roles WHERE rolname = 'feeduser'")"
+test "$ROLE_CAN_LOGIN" = "1"
+DATABASE_EXISTS="$(sudo -u postgres psql --set ON_ERROR_STOP=1 --tuples-only --no-align --command "SELECT 1 FROM pg_database WHERE datname = 'community_feed'")"
 test "$DATABASE_EXISTS" = "1"
+DATABASE_OWNER="$(sudo -u postgres psql --set ON_ERROR_STOP=1 --tuples-only --no-align --command "SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = 'community_feed'")"
+test "$DATABASE_OWNER" = "feeduser"
 ```
+
+On the first run, `createuser --pwprompt` securely prompts for the new role
+password twice. `<database-password>` is a documentation placeholder, never a
+password to use literally. On a rerun, the existing role and database are
+preserved and their login/ownership contracts are revalidated. Use the existing
+`feeduser` password on a rerun. If it is unavailable, reset it interactively
+before continuing:
+
+```bash
+set -euo pipefail
+sudo -u postgres psql --set ON_ERROR_STOP=1 --command '\password feeduser'
+```
+
+Use the same logical password in `DATABASE_URL`, percent-encoding URI-reserved
+characters such as `@`, `#`, `/`, `:`, `%`, and `?`. For example, use
+`postgresql://feeduser:<percent-encoded-database-password>@127.0.0.1:5432/community_feed`.
+Do not place the real password in shell history or commit it to the repository.
 
 ## 4. Clone repository
 
@@ -79,7 +108,7 @@ cp .env.example .env
 
 Edit `.env` and set required values:
 
-- `DATABASE_URL`
+- `DATABASE_URL` (with the same `feeduser` password entered above)
 - `REDIS_URL`
 - `FEEDGEN_HOSTNAME`
 - `BSKY_IDENTIFIER`
@@ -167,7 +196,17 @@ test -n "$RUNTIME_GID"
 RUNTIME_UID="$(id -u corgi-runtime)"
 RUNTIME_PRIMARY_GID="$(id -g corgi-runtime)"
 RUNTIME_GROUP_IDS="$(id -G corgi-runtime)"
+SYSTEM_UID_MIN="$(awk '$1 == "SYS_UID_MIN" { print $2; found=1 } END { exit !found }' /etc/login.defs)"
+SYSTEM_UID_MAX="$(awk '$1 == "SYS_UID_MAX" { print $2; found=1 } END { exit !found }' /etc/login.defs)"
+case "$SYSTEM_UID_MIN:$SYSTEM_UID_MAX:$RUNTIME_UID" in
+  *[!0-9:]*|:*|*::*|*:)
+    printf 'Unable to validate the system-account UID range\n' >&2
+    exit 1
+    ;;
+esac
 test "$RUNTIME_UID" -ne 0
+test "$RUNTIME_UID" -ge "$SYSTEM_UID_MIN"
+test "$RUNTIME_UID" -le "$SYSTEM_UID_MAX"
 test "$RUNTIME_PRIMARY_GID" -ne 0
 test "$RUNTIME_PRIMARY_GID" = "$RUNTIME_GID"
 test "$RUNTIME_GROUP_IDS" = "$RUNTIME_PRIMARY_GID"

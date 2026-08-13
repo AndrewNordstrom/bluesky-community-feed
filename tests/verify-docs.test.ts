@@ -195,4 +195,19 @@ describe('verify-docs helpers', () => {
     expect(problems[0]).toContain('stale Linear-only SDK guidance found');
     expect(problems[1]).toContain('SDK guidance is missing the GitHub issue workflow');
   });
+
+  it('reports unreadable guidance and continues validating later files', () => {
+    const { directory } = createOpenApiFixture();
+    const missingPath = path.join(directory, 'missing.md');
+    const stalePath = path.join(directory, 'stale.md');
+    const problems: string[] = [];
+    writeFileSync(stalePath, 'Submit a Linear packet against Corgi.');
+
+    validatePublicSdkGuidance([missingPath, stalePath], problems);
+
+    expect(problems).toHaveLength(3);
+    expect(problems[0]).toContain(`Unable to read public SDK guidance ${missingPath}`);
+    expect(problems[1]).toContain('stale Linear-only SDK guidance found');
+    expect(problems[2]).toContain('SDK guidance is missing the GitHub issue workflow');
+  });
 });
