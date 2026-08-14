@@ -13,6 +13,28 @@ const FRESHNESS_CONFIG_PATH = path.join(repoRoot, 'docs', 'freshness.json');
 const MCP_SETUP_PATH = path.join(repoRoot, 'docs', 'MCP_SETUP.md');
 const REPO_CONTRACT_PATH = path.join(repoRoot, 'docs', 'agent', 'REPO_CONTRACT.md');
 const MCP_TOOL_SOURCE_DIR = path.join(repoRoot, 'src', 'mcp', 'tools');
+const LICENSE_PATH = path.join(repoRoot, 'LICENSE');
+const LICENSE_COPY_PATHS = [
+  'packages/feed-sdk/LICENSE',
+];
+const EXPECTED_LICENSE = 'Apache-2.0';
+const APACHE_LICENSE_HEADER = [
+  'Apache License',
+  'Version 2.0, January 2004',
+  'http://www.apache.org/licenses/',
+];
+const OPENAPI_LICENSE_PATHS = [
+  'docs/openapi-public.json',
+  'docs/openapi.json',
+  'docs/docs-site/openapi.json',
+];
+const PACKAGE_SCAN_EXCLUDES = new Set([
+  '.git',
+  '.next',
+  'coverage',
+  'dist',
+  'node_modules',
+]);
 const OLD_REPO_PATTERNS = [
   /github\.com\/AndrewNordstrom\/bluesky-community-feed/,
   /\bAndrewNordstrom\/bluesky-community-feed\b/,
@@ -105,6 +127,25 @@ function walkTextFiles(rootDir, extensions) {
     }
   }
   return files;
+}
+
+function collectPackageManifests(rootDir) {
+  const files = [];
+  const queue = [rootDir];
+  while (queue.length > 0) {
+    const current = queue.pop();
+    if (!current) continue;
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        if (PACKAGE_SCAN_EXCLUDES.has(entry.name)) continue;
+        queue.push(fullPath);
+      } else if (entry.isFile() && entry.name === 'package.json') {
+        files.push(fullPath);
+      }
+    }
+  }
+  return files.sort();
 }
 
 function collectMarkdownFiles(scanPaths) {
@@ -325,6 +366,65 @@ function validateLegacyRepoReferences(files, problems) {
     const hasLegacyReference = OLD_REPO_PATTERNS.some(pattern => pattern.test(content));
     if (hasLegacyReference) {
       problems.push(`legacy repo URL reference found: ${rel}`);
+    }
+  }
+}
+
+function validateLicenseConsistency(problems) {
+  if (!existsSync(LICENSE_PATH)) {
+    problems.push('license consistency: LICENSE is missing');
+  } else {
+    const licenseText = readFileSync(LICENSE_PATH, 'utf8');
+    const licenseLines = licenseText
+      .replace(/\r\n/g, '\n')
+      .trimStart()
+      .split('\n')
+      .slice(0, APACHE_LICENSE_HEADER.length)
+      .map(line => line.trim());
+    APACHE_LICENSE_HEADER.forEach((expectedLine, index) => {
+      if (licenseLines[index] !== expectedLine) {
+        problems.push(
+          `license consistency: LICENSE is not canonical ${EXPECTED_LICENSE} text (line ${index + 1})`
+        );
+      }
+    });
+
+    for (const licenseCopyPath of LICENSE_COPY_PATHS) {
+      const absolutePath = path.join(repoRoot, licenseCopyPath);
+      if (!existsSync(absolutePath)) {
+        problems.push(`license consistency: ${licenseCopyPath} is missing`);
+        continue;
+      }
+      if (readFileSync(absolutePath, 'utf8') !== licenseText) {
+        problems.push(`license consistency: ${licenseCopyPath} differs from LICENSE`);
+      }
+    }
+  }
+
+  for (const manifestPath of collectPackageManifests(repoRoot)) {
+    const manifest = readJson(manifestPath);
+    if (!Object.hasOwn(manifest, 'license')) {
+      problems.push(`license consistency: ${relative(manifestPath)} is missing "license"`);
+      continue;
+    }
+    if (manifest.license !== EXPECTED_LICENSE) {
+      problems.push(
+        `license consistency: ${relative(manifestPath)} has license "${String(manifest.license)}"; expected "${EXPECTED_LICENSE}"`
+      );
+    }
+  }
+
+  for (const openApiPath of OPENAPI_LICENSE_PATHS) {
+    const absolutePath = path.join(repoRoot, openApiPath);
+    if (!existsSync(absolutePath)) {
+      problems.push(`license consistency: ${openApiPath} is missing`);
+      continue;
+    }
+    const licenseName = readJson(absolutePath).info?.license?.name;
+    if (licenseName !== EXPECTED_LICENSE) {
+      problems.push(
+        `license consistency: ${openApiPath} has info.license.name "${String(licenseName)}"; expected "${EXPECTED_LICENSE}"`
+      );
     }
   }
 }
@@ -555,6 +655,7 @@ function main() {
   validateMcpToolCount(problems);
   validateCiHasDocsVerify(path.join(repoRoot, '.github', 'workflows', 'ci.yml'), problems);
   validateLegacyRepoReferences(repoGuardFiles, problems);
+  validateLicenseConsistency(problems);
   validateRepoContract(problems);
 
   if (problems.length > 0) {

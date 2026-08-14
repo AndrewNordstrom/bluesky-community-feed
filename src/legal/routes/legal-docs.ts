@@ -12,8 +12,10 @@ import { logger } from '../../lib/logger.js';
 import { ErrorResponseSchema } from '../../lib/openapi.js';
 
 const LEGAL_DIR = path.resolve(process.cwd(), 'legal');
-const VERSION = '2026-02-19-v3';
-const LAST_UPDATED = '2026-02-19';
+const TOS_VERSION = '2026-08-13-v4';
+const TOS_LAST_UPDATED = '2026-08-13';
+const PRIVACY_VERSION = '2026-02-19-v3';
+const PRIVACY_LAST_UPDATED = '2026-02-19';
 
 interface LegalDocResponse {
   content: string;
@@ -67,8 +69,8 @@ export function registerLegalDocsRoute(app: FastifyInstance): void {
     const response: LegalDocResponse = {
       content: tosContent,
       document: 'tos',
-      version: VERSION,
-      lastUpdated: LAST_UPDATED,
+      version: TOS_VERSION,
+      lastUpdated: TOS_LAST_UPDATED,
     };
     return reply.send(response);
   });
@@ -91,8 +93,8 @@ export function registerLegalDocsRoute(app: FastifyInstance): void {
     const response: LegalDocResponse = {
       content: privacyContent,
       document: 'privacy',
-      version: VERSION,
-      lastUpdated: LAST_UPDATED,
+      version: PRIVACY_VERSION,
+      lastUpdated: PRIVACY_LAST_UPDATED,
     };
     return reply.send(response);
   });

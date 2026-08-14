@@ -41,6 +41,7 @@ npm run migrate
 
 ## Contribution Guidelines
 
+- Contributions are accepted under Apache-2.0 under the inbound-license terms in Apache License 2.0 §5.
 - Keep core governance invariants intact (decomposed scores, epoch tagging, soft deletes)
 - Add or update tests for behavior changes
 - Avoid adding external API calls in feed serving paths

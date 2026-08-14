@@ -6,7 +6,7 @@
   "description": "Frontend dashboard for the community-governed Bluesky feed generator",
   "homepage": "https://feed.corgi.network",
   "author": "Corgi Network",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

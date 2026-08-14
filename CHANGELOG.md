@@ -27,6 +27,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - PR template and contributor guide now enforce small, single-purpose PR scope and Linear-linked branch/PR conventions
 - MCP/setup, stability, status, and system-overview docs updated to match current command syntax and tool counts
 
+## [1.3.0]
+
+### Changed
+
+- Relicensed the project from MIT to Apache-2.0. Releases through v1.2.0 remain available under MIT.
+
 ## [1.2.0] — 2026-03-09
 
 ### Added

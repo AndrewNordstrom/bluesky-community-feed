@@ -5,7 +5,7 @@ specific to the **feed.corgi.network** instance of this software.
 
 ## License Exclusion
 
-These documents are **NOT** covered by the MIT license that governs the rest of
+These documents are **NOT** covered by the Apache-2.0 license that governs the rest of
 this repository. All rights are reserved by the copyright holder (Andrew Nordstrom).
 
 ## For Forks
