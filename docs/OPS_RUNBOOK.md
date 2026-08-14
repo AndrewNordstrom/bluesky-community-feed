@@ -3,6 +3,10 @@
 This runbook covers day-2 operations for the production Bluesky feed stack.
 It is written for the current VPS deployment model and can be adapted for other hosts.
 
+Commands that mutate the host or GitHub workflows require a separate explicit
+production gate. Reading status, logs, and health endpoints does not grant
+permission to deploy, migrate, restart, or activate services.
+
 ## Scope
 
 - Service lifecycle and deploy procedure
@@ -36,29 +40,36 @@ df -h /
 free -h
 ```
 
-## Standard Deploy (main branch)
+## Deployment Gate (main branch)
 
-```bash
-cd /opt/bluesky-feed
-git fetch origin
-git checkout main
-git pull --ff-only origin main
-npm install --no-audit --no-fund
-npm run build
-npm run migrate
-sudo systemctl restart bluesky-feed
-sudo systemctl is-active bluesky-feed
-```
+The current `.github/workflows/deploy.yml` is a manual exact-SHA promotion
+gateway. It rejects commits that are not on `main`, verifies the candidate on a
+runner, requires `CORGI_PRODUCTION_DEPLOY_ENABLED=true`, and gates production
+mutation through the protected `production` environment.
+
+- do not dispatch or approve `Deploy to VPS` without an explicit production
+  gate;
+- do not use a manual pull/build/migrate/restart sequence as a substitute;
+- require exact-head CI and record the full 40-character candidate SHA;
+- treat `/health/ready` as a database-and-Redis dependency check, not proof of
+  ingestion freshness, scoring freshness, feed integrity, or release fitness.
+
+The loopback-only `/health/promotion-ready` route is an internal input to the
+promotion workflow and must remain absent from public OpenAPI artifacts. Its
+response is only one composite-health input: the workflow separately binds the
+requested, built, deployed, and process-reported revisions to the intended full
+SHA. Loopback access or a successful route response alone is never release
+authorization or release evidence.
 
 ## Post-Transfer Validation (Manual Dispatch)
 
 Use this after repository ownership transfer and for recurring manual verification.
 This project intentionally uses a deploy-only model for ongoing checks (no extra scheduled smoke workflow).
 
-Set the repo target once:
+Set the repo target once for read-only verification:
 
 ```bash
-REPO="andrewnordstrom-eng/bluesky-community-feed"
+REPO="andrewnordstrom-eng/corgi"
 ```
 
 ### 1) Verify required repository secrets
@@ -74,34 +85,25 @@ Expected required names:
 - `DATABASE_URL`
 - `EXPORT_ANONYMIZATION_SALT`
 
-### 2) Trigger and watch required workflows on `main`
+### 2) Inspect workflow history on `main`
+
+Inspect existing runs without dispatching a production workflow:
 
 ```bash
-# CI
-gh workflow run "CI" --repo "$REPO" --ref main
-gh run watch "$(gh run list --repo "$REPO" --workflow "CI" --branch main --limit 1 --json databaseId --jq '.[0].databaseId')" --repo "$REPO" --exit-status
-
-# Deploy Docs
-gh workflow run "Deploy Docs" --repo "$REPO" --ref main
-gh run watch "$(gh run list --repo "$REPO" --workflow "Deploy Docs" --branch main --limit 1 --json databaseId --jq '.[0].databaseId')" --repo "$REPO" --exit-status
-
-# Deploy to VPS
-gh workflow run "Deploy to VPS" --repo "$REPO" --ref main
-gh run watch "$(gh run list --repo "$REPO" --workflow "Deploy to VPS" --branch main --limit 1 --json databaseId --jq '.[0].databaseId')" --repo "$REPO" --exit-status
-
-# Daily Health Check
-gh workflow run "Daily Health Check" --repo "$REPO" --ref main
-gh run watch "$(gh run list --repo "$REPO" --workflow "Daily Health Check" --branch main --limit 1 --json databaseId --jq '.[0].databaseId')" --repo "$REPO" --exit-status
-
-# Weekly Research Export
-gh workflow run "Weekly Research Export" --repo "$REPO" --ref main
-gh run watch "$(gh run list --repo "$REPO" --workflow "Weekly Research Export" --branch main --limit 1 --json databaseId --jq '.[0].databaseId')" --repo "$REPO" --exit-status
+CANDIDATE_SHA="<full-40-character-main-sha>"
+gh run list \
+  --repo "$REPO" \
+  --branch main \
+  --commit "$CANDIDATE_SHA" \
+  --limit 50 \
+  --json databaseId,workflowName,headSha,status,conclusion,url
 ```
 
-Expected pass criteria:
-- Each workflow concludes with `success`.
-- `Daily Health Check` creates no incident issue when the run passes.
-- `Weekly Research Export` uploads the expected CSV artifacts.
+Every accepted CI receipt must be successful and have `headSha` exactly equal
+to `CANDIDATE_SHA`. Inspect deployment receipts separately: a deploy is valid
+only when the exact-SHA gateway reports the same requested, built, deployed,
+and runtime SHA. Historical success does not prove the current checkout is
+deployable or that a new workflow dispatch is authorized.
 
 ### 3) Validate live runtime endpoints
 

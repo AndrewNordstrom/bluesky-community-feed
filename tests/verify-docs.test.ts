@@ -5,15 +5,117 @@ import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 
 import {
+  collectSchemaEnumValues,
   collectTopLevelHeadings,
+  filesHaveIdenticalBytes,
   findHeadingLineIndex,
   findNextTopLevelHeadingIndex,
+  hasExactSchemaEnumValues,
   isCanonicalApacheLicense,
   isMarkdownSeparatorRow,
   readJson,
+  validateOpenApiOperations,
 } from '../scripts/verify-docs.mjs';
 
 describe('verify-docs helpers', () => {
+  it('compares inline schema enums independent of member order', () => {
+    const schema = {
+      properties: {
+        status: { enum: ['ok', 'degraded'] },
+      },
+    };
+
+    expect(collectSchemaEnumValues(schema, {}, new Set())).toEqual(['degraded', 'ok']);
+  });
+
+  it('resolves status enums through local refs and composed schemas', () => {
+    const spec = {
+      components: {
+        schemas: {
+          Status: { enum: ['ready'] },
+        },
+      },
+    };
+    const schema = {
+      allOf: [
+        {
+          properties: {
+            status: { $ref: '#/components/schemas/Status' },
+          },
+        },
+      ],
+    };
+
+    expect(collectSchemaEnumValues(schema, spec, new Set())).toEqual(['ready']);
+  });
+
+  it('intersects constrained allOf enums without narrowing on unconstrained branches', () => {
+    const schema = {
+      allOf: [
+        { properties: { status: { enum: ['ok', 'degraded'] } } },
+        {},
+        { properties: { status: { enum: ['ok'] } } },
+      ],
+    };
+
+    expect(collectSchemaEnumValues(schema, {}, new Set())).toEqual(['ok']);
+  });
+
+  it.each(['anyOf', 'oneOf'])('rejects an indeterminate %s status union', (keyword) => {
+    const schema = {
+      [keyword]: [
+        { properties: { status: { enum: ['ok'] } } },
+        { properties: { status: {} } },
+      ],
+    };
+
+    expect(collectSchemaEnumValues(schema, {}, new Set())).toBeNull();
+    expect(hasExactSchemaEnumValues(schema, {}, ['ok'])).toBe(false);
+  });
+
+  it('reports an eligible full operation missing from the public specification', () => {
+    const fullSpec = {
+      paths: {
+        '/health': {
+          get: { tags: ['Health'], responses: {} },
+        },
+      },
+    };
+    const publicSpec = { paths: {} };
+    const problems: string[] = [];
+
+    validateOpenApiOperations(fullSpec, publicSpec, problems);
+
+    expect(problems).toContain('OpenAPI drift: public specification is missing GET /health');
+  });
+
+  it('handles missing, unresolved, cyclic, and escaped local refs', () => {
+    const spec = {
+      components: {
+        schemas: {
+          A: { $ref: '#/components/schemas/B' },
+          B: { $ref: '#/components/schemas/A' },
+          'Status/With~Token': { enum: ['ready'] },
+        },
+      },
+    };
+
+    expect(collectSchemaEnumValues(null, spec, new Set())).toEqual([]);
+    expect(
+      collectSchemaEnumValues({ $ref: '#/components/schemas/Missing' }, spec, new Set()),
+    ).toEqual([]);
+    expect(
+      collectSchemaEnumValues({ $ref: '#/components/schemas/A' }, spec, new Set()),
+    ).toEqual([]);
+    expect(
+      collectSchemaEnumValues(
+        { $ref: '#/components/schemas/Status~1With~0Token' },
+        spec,
+        new Set(),
+      ),
+    ).toEqual(['ready']);
+  });
+
   it('returns an empty list when no top-level headings exist', () => {
     expect(collectTopLevelHeadings('')).toEqual([]);
   });
@@ -109,6 +211,21 @@ describe('verify-docs helpers', () => {
       expect(readJson(filePath, problems)).toBeNull();
       expect(problems).toHaveLength(1);
       expect(problems[0]).toContain(filename);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('treats whitespace-only JSON differences as artifact byte drift', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'corgi-openapi-bytes-'));
+    const publicPath = path.join(root, 'public.json');
+    const sitePath = path.join(root, 'site.json');
+    try {
+      writeFileSync(publicPath, '{"openapi":"3.0.0"}\n');
+      writeFileSync(sitePath, '{\n  "openapi": "3.0.0"\n}\n');
+      expect(filesHaveIdenticalBytes(publicPath, sitePath)).toBe(false);
+      writeFileSync(sitePath, '{"openapi":"3.0.0"}\n');
+      expect(filesHaveIdenticalBytes(publicPath, sitePath)).toBe(true);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

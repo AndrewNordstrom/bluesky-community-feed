@@ -16,8 +16,6 @@ This document covers operational and contributor security expectations for this 
 - Feed availability matters: ingestion/scoring outages affect trust and demos.
 - Operator mistakes (bad env, permissive network rules, leaked app password) are the largest practical risk.
 
-## Operator checklist
-
 ## Secrets and credentials
 
 - Never commit `.env`.
@@ -45,7 +43,8 @@ This document covers operational and contributor security expectations for this 
 
 ## Runtime health
 
-- Monitor `/health`, `/health/ready`, `/health/live`.
+- Monitor `/health`, `/health/ready`, `/health/live`. `/health/ready` checks
+  PostgreSQL and Redis only; it does not prove ingestion or scoring freshness.
 - Alert on:
   - Redis or PostgreSQL unhealthy
   - Jetstream disconnected

@@ -1,6 +1,9 @@
 # 24-Hour Stability Test Plan
 
-This document outlines the procedure for running a 24-hour stability test to verify the Community Feed Generator is production-ready.
+This document outlines a candidate-validation procedure for a 24-hour Corgi
+feed-generator stability test. A passing run is engineering evidence for the
+tested commit and environment; it does not by itself establish production,
+participant, or research readiness.
 
 ## Overview
 
@@ -32,7 +35,7 @@ Before starting the test, verify:
 - [ ] Feed endpoint returns data (`curl "http://localhost:3000/xrpc/app.bsky.feed.getFeedSkeleton?feed=..."`)
 - [ ] Log files configured (or `docker logs` available)
 
-Current PROJ-1551 status: the Jetstream replay, real HTTP voting, and process-isolated memory lab gates have passing local receipts. The current Jetstream receipt is `artifacts/lab/PROJ-1551/2026-07-06T19-37-49-725Z/`; the HTTP voting receipt is `artifacts/lab/PROJ-1551/2026-07-06T19-38-04-859Z/`. The fixed tsx memory receipt is `artifacts/lab/PROJ-1551/2026-07-06T19-38-23-532Z/`. The compiled prod-parity memory receipt is `artifacts/lab/PROJ-1551/2026-07-06T19-42-01-707Z/`, with compiled heap-snapshot diagnostics in `artifacts/lab/PROJ-1551/2026-07-05T17-42-12-174Z/`. One preceding local 100-connection vote-load attempt failed with PostgreSQL pool connection timeouts before the current pass, so the staging gate must record repeated voting runs and DB pool utilization. The memory gates use `--max-old-space-size=896 --max-semi-space-size=16` and a 1,000-request external warmup baseline before the before-GC snapshot. The tracked systemd unit already has `--max-old-space-size=896`; the approval-gated next step is verifying/adopting the missing `--max-semi-space-size=16` on an approved staging or shadow target. This does not authorize staging or production saturation by itself; shared-environment load still requires an approved target, abort thresholds, rollback plan, and no production blast radius.
+Historical PROJ-1551 status (2026-07-06): the Jetstream replay, real HTTP voting, and process-isolated memory lab gates had passing local receipts. The cited receipts remain useful provenance for those exact runs; they are not current-main or production-readiness evidence. One preceding local 100-connection vote-load attempt failed with PostgreSQL pool connection timeouts before the recorded pass, so any new staging gate must record repeated voting runs and DB pool utilization. The memory gates use `--max-old-space-size=896 --max-semi-space-size=16` and a 1,000-request external warmup baseline before the before-GC snapshot. This document does not authorize staging or production saturation; shared-environment load and failure injection require an approved target, abort thresholds, rollback plan, and no production blast radius.
 
 ## Starting the Test
 
