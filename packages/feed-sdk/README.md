@@ -66,4 +66,4 @@ literal-union widening to `string`.
 For the rationale behind the registry-driven, long-table-backed contract, see
 [`docs/adr/ADR-0001-extensible-scoring-components.md`](../../docs/adr/ADR-0001-extensible-scoring-components.md).
 
-License: MIT.
+License: Apache-2.0. See [`LICENSE`](LICENSE).

@@ -14,7 +14,9 @@
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -29,7 +31,7 @@
     "sdk"
   ],
   "author": "Corgi Network",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "engines": {
     "node": ">=20.19.0"
   },

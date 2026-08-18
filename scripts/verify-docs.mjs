@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -13,6 +14,29 @@ const FRESHNESS_CONFIG_PATH = path.join(repoRoot, 'docs', 'freshness.json');
 const MCP_SETUP_PATH = path.join(repoRoot, 'docs', 'MCP_SETUP.md');
 const REPO_CONTRACT_PATH = path.join(repoRoot, 'docs', 'agent', 'REPO_CONTRACT.md');
 const MCP_TOOL_SOURCE_DIR = path.join(repoRoot, 'src', 'mcp', 'tools');
+const LICENSE_PATH = path.join(repoRoot, 'LICENSE');
+const NOTICE_PATH = path.join(repoRoot, 'NOTICE');
+const LICENSE_COPY_PATHS = [
+  'packages/feed-sdk/LICENSE',
+];
+const NOTICE_COPY_PATHS = [
+  'packages/feed-sdk/NOTICE',
+];
+const EXPECTED_LICENSE = 'Apache-2.0';
+// Canonical Apache-2.0 text after CRLF normalization and trailing-whitespace removal.
+const APACHE_LICENSE_SHA256 = '58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd';
+const OPENAPI_LICENSE_PATHS = [
+  'docs/openapi-public.json',
+  'docs/openapi.json',
+  'docs/docs-site/openapi.json',
+];
+const PACKAGE_SCAN_EXCLUDES = new Set([
+  '.git',
+  '.next',
+  'coverage',
+  'dist',
+  'node_modules',
+]);
 const OLD_REPO_PATTERNS = [
   /github\.com\/AndrewNordstrom\/bluesky-community-feed/,
   /\bAndrewNordstrom\/bluesky-community-feed\b/,
@@ -107,6 +131,25 @@ function walkTextFiles(rootDir, extensions) {
   return files;
 }
 
+function collectPackageManifests(rootDir) {
+  const files = [];
+  const queue = [rootDir];
+  while (queue.length > 0) {
+    const current = queue.pop();
+    if (!current) continue;
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        if (PACKAGE_SCAN_EXCLUDES.has(entry.name)) continue;
+        queue.push(fullPath);
+      } else if (entry.isFile() && entry.name === 'package.json') {
+        files.push(fullPath);
+      }
+    }
+  }
+  return files.sort();
+}
+
 function collectMarkdownFiles(scanPaths) {
   const out = new Set();
   for (const relPath of scanPaths) {
@@ -145,8 +188,30 @@ function collectTextFiles(scanPaths, extensions) {
   return Array.from(out);
 }
 
-function readJson(filePath) {
-  return JSON.parse(readFileSync(filePath, 'utf8'));
+export function readJson(filePath, problems) {
+  try {
+    const parsed = JSON.parse(readFileSync(filePath, 'utf8'));
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      problems.push(`invalid JSON object: ${relative(filePath)} must contain an object`);
+      return null;
+    }
+    return parsed;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    problems.push(`invalid JSON: ${relative(filePath)} (${message})`);
+    return null;
+  }
+}
+
+function normalizeLicenseText(content) {
+  return content.replace(/\r\n/g, '\n').trimEnd();
+}
+
+export function isCanonicalApacheLicense(content) {
+  const digest = createHash('sha256')
+    .update(normalizeLicenseText(content), 'utf8')
+    .digest('hex');
+  return digest === APACHE_LICENSE_SHA256;
 }
 
 function relative(filePath) {
@@ -238,9 +303,12 @@ function validateMarkdownLinks(markdownFiles, problems) {
 }
 
 function validateNpmRunCommands(markdownFiles, problems) {
-  const rootScripts = new Set(Object.keys(readJson(path.join(repoRoot, 'package.json')).scripts ?? {}));
-  const webScripts = new Set(Object.keys(readJson(path.join(repoRoot, 'web', 'package.json')).scripts ?? {}));
-  const cliScripts = new Set(Object.keys(readJson(path.join(repoRoot, 'cli', 'package.json')).scripts ?? {}));
+  const rootPackage = readJson(path.join(repoRoot, 'package.json'), problems);
+  const webPackage = readJson(path.join(repoRoot, 'web', 'package.json'), problems);
+  const cliPackage = readJson(path.join(repoRoot, 'cli', 'package.json'), problems);
+  const rootScripts = new Set(Object.keys(rootPackage?.scripts ?? {}));
+  const webScripts = new Set(Object.keys(webPackage?.scripts ?? {}));
+  const cliScripts = new Set(Object.keys(cliPackage?.scripts ?? {}));
 
   for (const file of markdownFiles) {
     const lines = readFileSync(file, 'utf8').split('\n');
@@ -325,6 +393,74 @@ function validateLegacyRepoReferences(files, problems) {
     const hasLegacyReference = OLD_REPO_PATTERNS.some(pattern => pattern.test(content));
     if (hasLegacyReference) {
       problems.push(`legacy repo URL reference found: ${rel}`);
+    }
+  }
+}
+
+function validateLicenseConsistency(problems) {
+  if (!existsSync(LICENSE_PATH)) {
+    problems.push('license consistency: LICENSE is missing');
+  } else {
+    const licenseText = readFileSync(LICENSE_PATH, 'utf8');
+    if (!isCanonicalApacheLicense(licenseText)) {
+      problems.push(`license consistency: LICENSE is not complete canonical ${EXPECTED_LICENSE} text`);
+    }
+
+    for (const licenseCopyPath of LICENSE_COPY_PATHS) {
+      const absolutePath = path.join(repoRoot, licenseCopyPath);
+      if (!existsSync(absolutePath)) {
+        problems.push(`license consistency: ${licenseCopyPath} is missing`);
+        continue;
+      }
+      if (readFileSync(absolutePath, 'utf8') !== licenseText) {
+        problems.push(`license consistency: ${licenseCopyPath} differs from LICENSE`);
+      }
+    }
+  }
+
+  if (!existsSync(NOTICE_PATH)) {
+    problems.push('license consistency: NOTICE is missing');
+  } else {
+    const noticeText = readFileSync(NOTICE_PATH, 'utf8');
+    for (const noticeCopyPath of NOTICE_COPY_PATHS) {
+      const absolutePath = path.join(repoRoot, noticeCopyPath);
+      if (!existsSync(absolutePath)) {
+        problems.push(`license consistency: ${noticeCopyPath} is missing`);
+        continue;
+      }
+      if (readFileSync(absolutePath, 'utf8') !== noticeText) {
+        problems.push(`license consistency: ${noticeCopyPath} differs from NOTICE`);
+      }
+    }
+  }
+
+  for (const manifestPath of collectPackageManifests(repoRoot)) {
+    const manifest = readJson(manifestPath, problems);
+    if (!manifest) continue;
+    if (!Object.hasOwn(manifest, 'license')) {
+      problems.push(`license consistency: ${relative(manifestPath)} is missing "license"`);
+      continue;
+    }
+    if (manifest.license !== EXPECTED_LICENSE) {
+      problems.push(
+        `license consistency: ${relative(manifestPath)} has license "${String(manifest.license)}"; expected "${EXPECTED_LICENSE}"`
+      );
+    }
+  }
+
+  for (const openApiPath of OPENAPI_LICENSE_PATHS) {
+    const absolutePath = path.join(repoRoot, openApiPath);
+    if (!existsSync(absolutePath)) {
+      problems.push(`license consistency: ${openApiPath} is missing`);
+      continue;
+    }
+    const openApi = readJson(absolutePath, problems);
+    if (!openApi) continue;
+    const licenseName = openApi.info?.license?.name;
+    if (licenseName !== EXPECTED_LICENSE) {
+      problems.push(
+        `license consistency: ${openApiPath} has info.license.name "${String(licenseName)}"; expected "${EXPECTED_LICENSE}"`
+      );
     }
   }
 }
@@ -540,7 +676,7 @@ function main() {
     process.exit(1);
   }
 
-  const config = readJson(FRESHNESS_CONFIG_PATH);
+  const config = readJson(FRESHNESS_CONFIG_PATH, problems) ?? {};
   const scanPaths = Array.isArray(config.scanPaths) && config.scanPaths.length > 0
     ? config.scanPaths
     : DEFAULT_SCAN_PATHS;
@@ -555,6 +691,7 @@ function main() {
   validateMcpToolCount(problems);
   validateCiHasDocsVerify(path.join(repoRoot, '.github', 'workflows', 'ci.yml'), problems);
   validateLegacyRepoReferences(repoGuardFiles, problems);
+  validateLicenseConsistency(problems);
   validateRepoContract(problems);
 
   if (problems.length > 0) {

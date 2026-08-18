@@ -1,8 +1,8 @@
 # Terms of Service
 
-**Last Updated:** February 19, 2026
+**Last Updated:** August 13, 2026
 
-**Effective Date:** February 19, 2026
+**Effective Date:** August 13, 2026
 
 ---
 
@@ -17,7 +17,7 @@ The Service consists of:
 - A **transparency dashboard** showing current algorithm weights, score breakdowns, and redacted audit history
 - A **bot account** (@corgi-network.bsky.social) that posts governance announcements to Bluesky
 
-The source code is publicly available under the MIT License at the project's GitHub repository. The MIT License covers the software. These Terms cover your use of the hosted Service.
+The source code is publicly available under the Apache License 2.0 at the project's GitHub repository. The Apache License 2.0 covers the software. These Terms cover your use of the hosted Service.
 
 ## 2. Acceptance of Terms
 

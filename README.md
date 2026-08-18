@@ -28,7 +28,7 @@
   <a href="https://github.com/andrewnordstrom-eng/bluesky-community-feed/actions/workflows/deploy.yml"><img src="https://github.com/andrewnordstrom-eng/bluesky-community-feed/actions/workflows/deploy.yml/badge.svg" alt="Deploy status"></a>
   <a href="https://github.com/andrewnordstrom-eng/bluesky-community-feed/actions/workflows/ci.yml"><img src="https://github.com/andrewnordstrom-eng/bluesky-community-feed/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status"></a>
   <a href="https://github.com/andrewnordstrom-eng/bluesky-community-feed/actions/workflows/codeql.yml"><img src="https://github.com/andrewnordstrom-eng/bluesky-community-feed/actions/workflows/codeql.yml/badge.svg?branch=main" alt="CodeQL status"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT license"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/andrewnordstrom-eng/bluesky-community-feed" alt="Repository license"></a>
   <img src="https://img.shields.io/badge/Node-%3E%3D20.19-339933" alt="Node.js 20.19 or newer">
   <img src="https://img.shields.io/badge/TypeScript-strict-3178C6" alt="TypeScript strict mode">
 </p>
@@ -255,4 +255,4 @@ If you use Corgi in research, cite the repository URL and the exact commit SHA u
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+Apache-2.0 — see [`LICENSE`](LICENSE).
