@@ -108,6 +108,40 @@ jobs:
           printf 'archive=%s\n' "$RELEASE_ARCHIVE" >> "$GITHUB_OUTPUT"
           printf 'archive_sha256=%s\n' "$ARCHIVE_SHA256" >> "$GITHUB_OUTPUT"
 
+      - name: Smoke-test packaged native runtime modules
+        env:
+          RELEASE_ARCHIVE: ${{ steps.package-release.outputs.archive }}
+        run: |
+          set -euo pipefail
+          # --ignore-scripts (above) is a deliberate supply-chain protection
+          # and stays on. onnxruntime-node's postinstall only fetches
+          # optional CUDA execution-provider binaries (unused here -- this
+          # service does CPU inference); its base binding for every OS/arch
+          # ships pre-built inside its own npm tarball. sharp ships its
+          # native libvips binary as a platform-specific optionalDependency
+          # (e.g. @img/sharp-linux-x64), which --ignore-scripts does not
+          # skip -- only lifecycle scripts are skipped, not dependency
+          # resolution. Rather than trust that reasoning indefinitely, prove
+          # it against the exact archive that ships to production: extract
+          # it and actually require() each flagged native module.
+          SMOKE_TEST_ROOT="${RUNNER_TEMP}/corgi-native-smoke-test"
+          rm -rf "$SMOKE_TEST_ROOT"
+          mkdir -p "$SMOKE_TEST_ROOT"
+          tar -xzf "$RELEASE_ARCHIVE" -C "$SMOKE_TEST_ROOT" -- \
+            node_modules \
+            web-next/node_modules
+          for NATIVE_MODULE_PATH in \
+            "$SMOKE_TEST_ROOT/node_modules/onnxruntime-node" \
+            "$SMOKE_TEST_ROOT/node_modules/sharp" \
+            "$SMOKE_TEST_ROOT/web-next/node_modules/sharp"; do
+            if [ ! -d "$NATIVE_MODULE_PATH" ]; then
+              echo "Packaged native module directory is missing: path=$NATIVE_MODULE_PATH" >&2
+              exit 1
+            fi
+            node -e "require(process.argv[1]); process.stdout.write('Packaged native module loaded: ' + process.argv[1] + '\n');" "$NATIVE_MODULE_PATH"
+          done
+          rm -rf "$SMOKE_TEST_ROOT"
+
       - name: Retain verified runtime artifact for deploy job
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:

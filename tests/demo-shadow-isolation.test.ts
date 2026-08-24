@@ -496,6 +496,28 @@ describe('production deploy ordering guards', () => {
     expect(remoteScript).not.toContain('restore_env_file');
   });
 
+  it('smoke-tests the flagged native runtime modules from the packaged archive', () => {
+    const deploy = readFileSync(DEPLOY_FILE, 'utf8');
+    const packageIndex = deploy.indexOf('      - name: Package verified runtime artifacts\n');
+    const smokeTestIndex = deploy.indexOf('      - name: Smoke-test packaged native runtime modules\n');
+    const retainIndex = deploy.indexOf('      - name: Retain verified runtime artifact for deploy job\n');
+    const runnerInstallScript = extractRunnerValidationScript(deploy);
+    const smokeTestScript = extractNativeModuleSmokeTestScript(deploy);
+
+    // --ignore-scripts stays on for every workspace install; the smoke test
+    // is additional verification, not a replacement for it.
+    expect(runnerInstallScript).toContain('npm ci --ignore-scripts');
+    expect(runnerInstallScript.match(/npm ci --ignore-scripts/g)).toHaveLength(4);
+    expect(packageIndex).toBeGreaterThanOrEqual(0);
+    expect(smokeTestIndex).toBeGreaterThan(packageIndex);
+    expect(retainIndex).toBeGreaterThan(smokeTestIndex);
+    expect(smokeTestScript).toContain('node_modules/onnxruntime-node');
+    expect(smokeTestScript).toContain('node_modules/sharp');
+    expect(smokeTestScript).toContain('web-next/node_modules/sharp');
+    expect(smokeTestScript).toContain('require(process.argv[1])');
+    expect(smokeTestScript).toContain('tar -xzf "$RELEASE_ARCHIVE"');
+  });
+
   it('rejects a deploy script with a missing required gate', () => {
     const deploy = readFileSync(DEPLOY_FILE, 'utf8');
     const marker = DEPLOY_GATE_MARKERS.find(({ name }) => name === 'archive checksum');
@@ -1184,6 +1206,7 @@ describe('production exact-SHA promotion guards', () => {
     for (const script of [
       extractRunnerValidationScript(deploy),
       extractProductionCredentialGuard(deploy),
+      extractNativeModuleSmokeTestScript(deploy),
       extractTransferAdmissionScript(deploy),
       extractRemoteDeployScript(deploy),
       extractReceiptValidationScript(deploy),
@@ -3226,6 +3249,21 @@ function extractProductionCredentialGuard(workflow: string): string {
   const end = workflow.indexOf('\n      - name:', start);
   if (start < 0 || end <= start) {
     throw new Error('Missing bounded production credential guard');
+  }
+  return workflow.slice(start + scriptMarker.length, end);
+}
+
+function extractNativeModuleSmokeTestScript(workflow: string): string {
+  const stepMarker = '      - name: Smoke-test packaged native runtime modules\n';
+  const stepStart = workflow.indexOf(stepMarker);
+  if (stepStart < 0) {
+    throw new Error('Missing bounded native-module smoke-test script');
+  }
+  const scriptMarker = '        run: |\n';
+  const start = workflow.indexOf(scriptMarker, stepStart);
+  const end = workflow.indexOf('\n      - name:', start);
+  if (start < 0 || end <= start) {
+    throw new Error('Missing bounded native-module smoke-test script');
   }
   return workflow.slice(start + scriptMarker.length, end);
 }
