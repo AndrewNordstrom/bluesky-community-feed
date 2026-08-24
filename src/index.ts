@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { config } from './config.js';
 import { logger } from './lib/logger.js';
 import { createServer } from './feed/server.js';
@@ -6,7 +7,7 @@ import { startScoring, stopScoring, isScoringInProgress } from './scoring/schedu
 import { getLastScoringRunAt } from './scoring/pipeline.js';
 import { runStartupChecks } from './lib/startup-checks.js';
 import { registerShutdownHandlers } from './lib/shutdown.js';
-import { registerJetstreamHealth, registerScoringHealth, registerDiskHealth, JetstreamHealth, ScoringHealth } from './lib/health.js';
+import { registerJetstreamHealth, registerScoringHealth, registerDiskHealth, initializeRuntimeRelease, JetstreamHealth, ScoringHealth } from './lib/health.js';
 import { getDiskStatus } from './maintenance/disk-monitor.js';
 import { registerBotRoutes } from './bot/server.js';
 import { initializeBot } from './bot/agent.js';
@@ -26,7 +27,12 @@ import { sdNotifyReady, startWatchdog, stopWatchdog } from './lib/watchdog.js';
 async function main() {
   logger.info('Starting Community Feed Generator...');
 
-  // 0. Run startup checks (fail fast if dependencies are down)
+  // 0. Initialize the runtime release identity used by /health and
+  // /health/promotion-ready (see src/lib/health.ts for why this is not
+  // computed automatically at module import time).
+  initializeRuntimeRelease(resolve(process.cwd(), 'dist', '.release-sha'));
+
+  // 0.5. Run startup checks (fail fast if dependencies are down)
   try {
     await runStartupChecks();
   } catch (err) {

@@ -11,7 +11,6 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { db, healthDb } from '../db/client.js';
 import { redis } from '../db/redis.js';
 import { logger } from './logger.js';
@@ -118,9 +117,19 @@ function loadRuntimeReleaseState(revisionPath: string): RuntimeReleaseState {
   }
 }
 
-const runtimeReleaseState = loadRuntimeReleaseState(
-  resolve(process.cwd(), 'dist', '.release-sha')
-);
+// Deliberately NOT computed from `process.cwd()` at module import time: that
+// read is not Vitest-thread-safe. Vitest's default threaded pool runs test
+// files as worker threads sharing one OS process, and `process.chdir()` is a
+// process-global mutation — a concurrently running test file's chdir can race
+// with this module's first import. Callers must call
+// `initializeRuntimeRelease()` explicitly with an already-resolved absolute
+// path (production: src/index.ts at startup; tests: directly, with no need
+// to touch `process.cwd()` at all).
+let runtimeReleaseState: RuntimeReleaseState = { revision: null, state: 'missing' };
+
+export function initializeRuntimeRelease(artifactPath: string): void {
+  runtimeReleaseState = loadRuntimeReleaseState(artifactPath);
+}
 
 // Timeout for health check queries (ms)
 const HEALTH_CHECK_TIMEOUT = 2000;
@@ -240,13 +249,13 @@ async function hasFreshPersistedIngestion(): Promise<boolean> {
         COALESCE(
           (SELECT cursor_us FROM jetstream_cursor WHERE id = 1)
             BETWEEN FLOOR(EXTRACT(EPOCH FROM clock_timestamp() - ($1::double precision * INTERVAL '1 millisecond')) * 1000000)::bigint
-                AND FLOOR(EXTRACT(EPOCH FROM clock_timestamp() + ($1::double precision * INTERVAL '1 millisecond')) * 1000000)::bigint,
+                AND FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000000)::bigint,
           FALSE
         ) AS cursor_fresh,
         COALESCE(
           (SELECT MAX(indexed_at) FROM posts WHERE deleted = FALSE)
             BETWEEN clock_timestamp() - ($1::double precision * INTERVAL '1 millisecond')
-                AND clock_timestamp() + ($1::double precision * INTERVAL '1 millisecond'),
+                AND clock_timestamp(),
           FALSE
         ) AS newest_post_fresh
     `, [INGESTION_FRESHNESS_SLO_MS]);
@@ -341,7 +350,7 @@ function checkDisk(): DiskHealth {
     };
   }
 
-  if (diskStatus === null) {
+  if (diskStatus === null || diskStatus === undefined) {
     return {
       status: 'healthy',
       used_percent: 0,

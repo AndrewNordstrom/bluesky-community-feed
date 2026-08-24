@@ -84,6 +84,7 @@ vi.mock('../src/config.js', async () => {
 
 import {
   getPublicHealthStatus,
+  initializeRuntimeRelease,
   isPromotionReady,
   isReady,
   readReleaseRevision,
@@ -95,10 +96,19 @@ import { registerAdminHealthRoutes } from '../src/admin/routes/health.js';
 import { createServer, isLoopbackAddress } from '../src/feed/server.js';
 import type { DiskStatus } from '../src/maintenance/disk-monitor.js';
 
+// health.ts wraps this query in a try/catch that swallows any error
+// (including a thrown assertion) and returns `false`. An `expect()` call
+// inside the mock implementation itself would therefore be neutered by that
+// catch: a failing assertion here would just make the freshness check
+// resolve false, not fail the test. Record the received arguments instead and
+// assert on them after the act phase, once the surrounding catch can no
+// longer intercept a failure.
+let capturedFreshnessQueryParameters: readonly unknown[] | undefined;
+
 function mockHealthyDatabase(cursorFresh: boolean, newestPostFresh: boolean): void {
   healthDbQueryMock.mockImplementation((query: string, parameters?: readonly unknown[]) => {
     if (query.includes('cursor_fresh')) {
-      expect(parameters).toEqual([120_000]);
+      capturedFreshnessQueryParameters = parameters;
       return Promise.resolve({
         rows: [{ cursor_fresh: cursorFresh, newest_post_fresh: newestPostFresh }],
       });
@@ -111,6 +121,7 @@ describe('health response redaction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     rateLimitState.enabled = false;
+    capturedFreshnessQueryParameters = undefined;
 
     registerJetstreamHealth(() => ({
       status: 'healthy',
@@ -251,21 +262,23 @@ describe('health response redaction', () => {
 
   it('supports a missing startup release artifact for legacy runtimes', async () => {
     const originalNodeEnvironment = process.env.NODE_ENV;
-    const originalWorkingDirectory = process.cwd();
     const directory = mkdtempSync(join(tmpdir(), 'corgi-missing-release-revision-'));
 
     try {
       process.env.NODE_ENV = 'test';
-      process.chdir(directory);
       vi.resetModules();
       const {
         getPublicHealthStatus: getPublicHealthStatusFresh,
+        initializeRuntimeRelease: initializeRuntimeReleaseFresh,
         isLive: isLiveFresh,
         isPromotionReady: isPromotionReadyFresh,
         isReady: isReadyFresh,
         registerJetstreamHealth: registerJetstreamHealthFresh,
         registerScoringHealth: registerScoringHealthFresh,
       } = await import('../src/lib/health.js');
+      // No process.cwd()/chdir() here: the artifact path is passed explicitly
+      // and this directory never contains a dist/.release-sha file.
+      initializeRuntimeReleaseFresh(join(directory, 'dist', '.release-sha'));
       mockHealthyDatabase(true, true);
       redisPingMock.mockResolvedValue('PONG');
       registerJetstreamHealthFresh(() => ({
@@ -290,7 +303,6 @@ describe('health response redaction', () => {
       } else {
         process.env.NODE_ENV = originalNodeEnvironment;
       }
-      process.chdir(originalWorkingDirectory);
       vi.resetModules();
       rmSync(directory, { recursive: true, force: true });
     }
@@ -298,18 +310,18 @@ describe('health response redaction', () => {
 
   it('fails production readiness when the startup release artifact is missing', async () => {
     const originalNodeEnvironment = process.env.NODE_ENV;
-    const originalWorkingDirectory = process.cwd();
     const directory = mkdtempSync(join(tmpdir(), 'corgi-production-release-revision-'));
 
     try {
       process.env.NODE_ENV = 'production';
-      process.chdir(directory);
       vi.resetModules();
       const {
         getPublicHealthStatus: getPublicHealthStatusFresh,
+        initializeRuntimeRelease: initializeRuntimeReleaseFresh,
         isPromotionReady: isPromotionReadyFresh,
         isReady: isReadyFresh,
       } = await import('../src/lib/health.js');
+      initializeRuntimeReleaseFresh(join(directory, 'dist', '.release-sha'));
       mockHealthyDatabase(true, true);
       redisPingMock.mockResolvedValue('PONG');
 
@@ -325,7 +337,6 @@ describe('health response redaction', () => {
       } else {
         process.env.NODE_ENV = originalNodeEnvironment;
       }
-      process.chdir(originalWorkingDirectory);
       vi.resetModules();
       rmSync(directory, { recursive: true, force: true });
     }
@@ -363,6 +374,7 @@ describe('health response redaction', () => {
     expect(healthDbQueryMock.mock.calls.some(([query]) =>
       typeof query === 'string' && query.includes('cursor_fresh')
     )).toBe(true);
+    expect(capturedFreshnessQueryParameters).toEqual([120_000]);
   });
 
   it.each([
@@ -372,9 +384,10 @@ describe('health response redaction', () => {
       rows: [{ cursor_fresh: null, newest_post_fresh: null }],
     },
   ])('blocks promotion when the freshness query returns $name', async ({ rows }) => {
+    let receivedParameters: readonly unknown[] | undefined;
     healthDbQueryMock.mockImplementation((query: string, parameters?: readonly unknown[]) => {
       if (query.includes('cursor_fresh')) {
-        expect(parameters).toEqual([120_000]);
+        receivedParameters = parameters;
         return Promise.resolve({ rows });
       }
       return Promise.resolve({ rows: [{ '?column?': 1 }] });
@@ -385,14 +398,16 @@ describe('health response redaction', () => {
     expect(healthDbQueryMock.mock.calls.some(([query]) =>
       typeof query === 'string' && query.includes('cursor_fresh')
     )).toBe(true);
+    expect(receivedParameters).toEqual([120_000]);
   });
 
   it('times out a hung freshness query and clears the timeout', async () => {
     vi.useFakeTimers();
+    let receivedParameters: readonly unknown[] | undefined;
     try {
       healthDbQueryMock.mockImplementation((query: string, parameters?: readonly unknown[]) => {
         if (query.includes('cursor_fresh')) {
-          expect(parameters).toEqual([120_000]);
+          receivedParameters = parameters;
           return new Promise(() => {});
         }
         return Promise.resolve({ rows: [{ '?column?': 1 }] });
@@ -408,15 +423,17 @@ describe('health response redaction', () => {
         typeof query === 'string' && query.includes('cursor_fresh')
       )).toBe(true);
       expect(vi.getTimerCount()).toBe(0);
+      expect(receivedParameters).toEqual([120_000]);
     } finally {
       vi.useRealTimers();
     }
   });
 
   it('keeps dependency readiness while a freshness query failure blocks promotion', async () => {
+    let receivedParameters: readonly unknown[] | undefined;
     healthDbQueryMock.mockImplementation((query: string, parameters?: readonly unknown[]) => {
       if (query.includes('cursor_fresh')) {
-        expect(parameters).toEqual([120_000]);
+        receivedParameters = parameters;
         return Promise.reject(new Error('freshness query failed'));
       }
       return Promise.resolve({ rows: [{ '?column?': 1 }] });
@@ -425,6 +442,59 @@ describe('health response redaction', () => {
 
     await expect(isReady()).resolves.toBe(true);
     await expect(isPromotionReady()).resolves.toBe(false);
+    expect(receivedParameters).toEqual([120_000]);
+  });
+
+  it('fails dependency readiness and promotion when checkRedis() rejects uncaught', async () => {
+    mockHealthyDatabase(true, true);
+    redisPingMock.mockRejectedValue(new Error('redis connection refused'));
+
+    // checkRedis() wraps redis.ping() in its own try/catch, so a rejection
+    // here must resolve to `false`, not propagate as an unhandled rejection
+    // out of isReady()/isPromotionReady().
+    await expect(isReady()).resolves.toBe(false);
+    await expect(isPromotionReady()).resolves.toBe(false);
+  });
+
+  it('blocks promotion on a Redis failure even while the database succeeds', async () => {
+    mockHealthyDatabase(true, true);
+    redisPingMock.mockRejectedValue(new Error('redis connection refused'));
+
+    const status = await isReady();
+    // Redis alone must be able to fail readiness -- the database side of
+    // this same call is healthy, proving the two checks are independent.
+    expect(status).toBe(false);
+    expect(healthDbQueryMock).toHaveBeenCalled();
+    await expect(isPromotionReady()).resolves.toBe(false);
+  });
+
+  it('caps the persisted-ingestion freshness window at the DB clock with no future slack', async () => {
+    // This suite mocks healthDb.query() entirely (see the module header
+    // comment and tests/harness/global-setup.ts, which keeps the default
+    // `npm test` suite Docker-free), so it cannot execute the real SQL
+    // against a live clock to prove a value 60 seconds in the future, or one
+    // sitting exactly on the 120-second boundary, is (or isn't) reported
+    // fresh. Instead this pins the query TEXT: the upper bound of both
+    // BETWEEN clauses must be exactly `clock_timestamp()`. Reintroducing
+    // `+ ($1::double precision * INTERVAL '1 millisecond')` on either upper
+    // bound would silently restore up to 120s of future-dated tolerance.
+    mockHealthyDatabase(true, true);
+    redisPingMock.mockResolvedValue('PONG');
+
+    await isPromotionReady();
+
+    const freshnessQuery = healthDbQueryMock.mock.calls
+      .map(([query]) => query)
+      .find((query): query is string => typeof query === 'string' && query.includes('cursor_fresh'));
+
+    expect(freshnessQuery).toBeDefined();
+    expect(freshnessQuery).toContain(
+      "FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000000)::bigint"
+    );
+    expect(freshnessQuery).toContain(
+      "BETWEEN clock_timestamp() - ($1::double precision * INTERVAL '1 millisecond')\n                AND clock_timestamp(),"
+    );
+    expect(freshnessQuery).not.toMatch(/clock_timestamp\(\)\s*\+\s*\(\$1/);
   });
 
   it('keeps dependency readiness isolated from nondependency provider failures', async () => {
@@ -731,23 +801,23 @@ describe('health response redaction', () => {
   ])('keeps health available when the release artifact is $name', async ({
     prepareArtifact,
   }) => {
-    const originalWorkingDirectory = process.cwd();
     const directory = mkdtempSync(join(tmpdir(), 'corgi-malformed-release-revision-'));
     const distDirectory = join(directory, 'dist');
 
     try {
       mkdirSync(distDirectory);
       prepareArtifact(join(distDirectory, '.release-sha'));
-      process.chdir(directory);
       vi.resetModules();
       const {
         getPublicHealthStatus: getPublicHealthStatusFresh,
+        initializeRuntimeRelease: initializeRuntimeReleaseFresh,
         isLive: isLiveFresh,
         isPromotionReady: isPromotionReadyFresh,
         isReady: isReadyFresh,
         registerJetstreamHealth: registerJetstreamHealthFresh,
         registerScoringHealth: registerScoringHealthFresh,
       } = await import('../src/lib/health.js');
+      initializeRuntimeReleaseFresh(join(distDirectory, '.release-sha'));
       mockHealthyDatabase(true, true);
       redisPingMock.mockResolvedValue('PONG');
       registerJetstreamHealthFresh(() => ({
@@ -767,7 +837,6 @@ describe('health response redaction', () => {
       await expect(isReadyFresh()).resolves.toBe(true);
       await expect(isPromotionReadyFresh()).resolves.toBe(false);
     } finally {
-      process.chdir(originalWorkingDirectory);
       vi.resetModules();
       rmSync(directory, { recursive: true, force: true });
     }
@@ -775,14 +844,19 @@ describe('health response redaction', () => {
 
   it('keeps the Docker health-check command pointed at /health/ready', () => {
     const dockerfile = readFileSync(join(process.cwd(), 'Dockerfile'), 'utf8');
+    const healthcheckIndex = dockerfile.indexOf('HEALTHCHECK');
+    expect(healthcheckIndex).toBeGreaterThanOrEqual(0);
+    const healthcheckBlock = dockerfile.slice(healthcheckIndex, dockerfile.indexOf('\n\n', healthcheckIndex));
 
-    expect(dockerfile).toContain(
-      'CMD wget -qO- http://localhost:3000/health/ready || exit 1'
-    );
+    // Loosened to the container's own contract (references /health/ready,
+    // never the loopback-only /health/promotion-ready) rather than the exact
+    // command string, so unrelated wget flag/timeout tuning doesn't fail
+    // this test.
+    expect(healthcheckBlock).toContain('/health/ready');
+    expect(healthcheckBlock).not.toContain('/health/promotion-ready');
   });
 
   it('loads the startup release artifact through the public health API', async () => {
-    const originalWorkingDirectory = process.cwd();
     const directory = mkdtempSync(join(tmpdir(), 'corgi-public-health-revision-'));
     const distDirectory = join(directory, 'dist');
     const validRevision = '0123456789abcdef0123456789abcdef01234567';
@@ -790,15 +864,16 @@ describe('health response redaction', () => {
     try {
       mkdirSync(distDirectory);
       writeFileSync(join(distDirectory, '.release-sha'), `${validRevision}\n`, 'utf8');
-      process.chdir(directory);
       vi.resetModules();
       const {
         getPublicHealthStatus: getPublicHealthStatusFresh,
+        initializeRuntimeRelease: initializeRuntimeReleaseFresh,
         isPromotionReady: isPromotionReadyFresh,
         isReady: isReadyFresh,
         registerJetstreamHealth: registerJetstreamHealthFresh,
         registerScoringHealth: registerScoringHealthFresh,
       } = await import('../src/lib/health.js');
+      initializeRuntimeReleaseFresh(join(distDirectory, '.release-sha'));
       mockHealthyDatabase(true, true);
       redisPingMock.mockResolvedValue('PONG');
       registerJetstreamHealthFresh(() => ({
@@ -823,7 +898,6 @@ describe('health response redaction', () => {
       await expect(isReadyFresh()).resolves.toBe(false);
       await expect(isPromotionReadyFresh()).resolves.toBe(false);
     } finally {
-      process.chdir(originalWorkingDirectory);
       vi.resetModules();
       rmSync(directory, { recursive: true, force: true });
     }
