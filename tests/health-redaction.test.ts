@@ -550,8 +550,8 @@ describe('health response redaction', () => {
     expect(freshnessQuery).toContain(
       "FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000000)::bigint"
     );
-    expect(freshnessQuery).toContain(
-      "BETWEEN clock_timestamp() - ($1::double precision * INTERVAL '1 millisecond')\n                AND clock_timestamp(),"
+    expect(freshnessQuery).toMatch(
+      /BETWEEN clock_timestamp\(\) - \(\$1::double precision \* INTERVAL '1 millisecond'\)\s+AND clock_timestamp\(\),/
     );
     expect(freshnessQuery).not.toMatch(/clock_timestamp\(\)\s*\+\s*\(\$1/);
   });

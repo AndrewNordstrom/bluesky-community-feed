@@ -1,4 +1,5 @@
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
 import { logger } from './lib/logger.js';
 import { createServer } from './feed/server.js';
@@ -29,8 +30,11 @@ async function main() {
 
   // 0. Initialize the runtime release identity used by /health and
   // /health/promotion-ready (see src/lib/health.ts for why this is not
-  // computed automatically at module import time).
-  initializeRuntimeRelease(resolve(process.cwd(), 'dist', '.release-sha'));
+  // computed automatically at module import time). Resolved relative to
+  // this compiled module's own location (dist/index.js sits next to
+  // dist/.release-sha), not process.cwd(), so it's correct regardless of
+  // the working directory the process was started from.
+  initializeRuntimeRelease(resolve(dirname(fileURLToPath(import.meta.url)), '.release-sha'));
 
   // 0.5. Run startup checks (fail fast if dependencies are down)
   try {
