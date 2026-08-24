@@ -36,6 +36,7 @@ import {
 } from '../demo/rate-limit.js';
 import { buildRouteRateLimitConfig } from './rate-limit-config.js';
 import { applyStaticExportResponseHeaders, discoverStaticExportHtmlPaths } from './static-export-headers.js';
+import packageMetadata from '../../package.json' with { type: 'json' };
 
 // Extend FastifyRequest to include correlationId
 declare module 'fastify' {
@@ -120,7 +121,7 @@ export async function createServer(options?: CreateServerOptions) {
           name: 'Community Feed',
           url: 'https://github.com/andrewnordstrom-eng/bluesky-community-feed',
         },
-        license: { name: 'MIT' },
+        license: { name: packageMetadata.license },
       },
       servers: [
         { url: `https://${config.FEEDGEN_HOSTNAME}`, description: 'Production' },

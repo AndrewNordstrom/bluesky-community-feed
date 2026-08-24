@@ -9,7 +9,7 @@
       "url": "https://github.com/andrewnordstrom-eng/bluesky-community-feed"
     },
     "license": {
-      "name": "MIT"
+      "name": "Apache-2.0"
     }
   },
   "components": {

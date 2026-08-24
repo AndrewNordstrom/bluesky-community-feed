@@ -1,10 +1,16 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 
 import {
   collectTopLevelHeadings,
   findHeadingLineIndex,
   findNextTopLevelHeadingIndex,
+  isCanonicalApacheLicense,
   isMarkdownSeparatorRow,
+  readJson,
 } from '../scripts/verify-docs.mjs';
 
 describe('verify-docs helpers', () => {
@@ -75,5 +81,57 @@ describe('verify-docs helpers', () => {
     expect(
       isMarkdownSeparatorRow(['--------------', '---x---', '--------', '-------'], 4),
     ).toBe(false);
+  });
+
+  it.each([
+    ['section 2', 'copyright license to reproduce', 'copyright license to inspect'],
+    ['section 3', 'patent license to make', 'patent license to inspect'],
+    ['section 4', 'You may reproduce and distribute copies', 'You may inspect and distribute copies'],
+    ['section 7', 'WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND', 'WITHOUT WARRANTIES OF ANY KIND'],
+    ['section 8', 'In no event and under no legal theory', 'In an event and under no legal theory'],
+  ])('rejects altered Apache-2.0 terms in %s', (_section, original, replacement) => {
+    const canonicalLicense = readFileSync(path.resolve('LICENSE'), 'utf8');
+    expect(canonicalLicense).toContain(original);
+    expect(isCanonicalApacheLicense(canonicalLicense.replace(original, replacement))).toBe(false);
+  });
+
+  it.each([
+    ['manifest malformed JSON', 'package.json', '{'],
+    ['manifest JSON null', 'package.json', 'null'],
+    ['OpenAPI malformed JSON', 'openapi.json', '{'],
+    ['OpenAPI JSON null', 'openapi.json', 'null'],
+  ])('records %s as a verification problem', (_name, filename, content) => {
+    const root = mkdtempSync(path.join(tmpdir(), 'corgi-verify-docs-'));
+    const filePath = path.join(root, filename);
+    try {
+      writeFileSync(filePath, content);
+      const problems: string[] = [];
+      expect(readJson(filePath, problems)).toBeNull();
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toContain(filename);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('packs both LICENSE and NOTICE in the feed SDK archive', () => {
+    const cache = mkdtempSync(path.join(tmpdir(), 'corgi-sdk-pack-cache-'));
+    try {
+      const result = spawnSync(
+        'npm',
+        ['pack', '--dry-run', '--ignore-scripts', '--json', '--cache', cache],
+        {
+          cwd: path.resolve('packages/feed-sdk'),
+          encoding: 'utf8',
+        },
+      );
+      expect(result.status, result.stderr).toBe(0);
+      const packResult = JSON.parse(result.stdout) as Array<{ files: Array<{ path: string }> }>;
+      const archivePaths = packResult[0]?.files.map(file => file.path) ?? [];
+      expect(archivePaths).toContain('LICENSE');
+      expect(archivePaths).toContain('NOTICE');
+    } finally {
+      rmSync(cache, { recursive: true, force: true });
+    }
   });
 });
