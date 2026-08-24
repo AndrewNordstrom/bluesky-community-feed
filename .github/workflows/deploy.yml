@@ -334,7 +334,8 @@ jobs:
               /opt/bluesky-feed/web-next/.next \
               /opt/bluesky-feed/web-next/out \
               /opt/bluesky-feed/cli/node_modules \
-              /opt/bluesky-feed/cli/dist; do
+              /opt/bluesky-feed/cli/dist \
+              /opt/bluesky-feed/packages/feed-sdk/dist; do
               if [ -e "$DEPLOY_PATH" ] || [ -L "$DEPLOY_PATH" ]; then
                 require_transfer_path_access "$DEPLOY_PATH" "$DEPLOY_USER"
               fi
@@ -399,6 +400,7 @@ jobs:
                 exit 1
               fi
               flock -u 9
+              exec 9<&-
             fi
             if [ -e "${INCOMING_ARTIFACT_ROOT}/${CURRENT_ATTEMPT}" ] || \
                [ -L "${INCOMING_ARTIFACT_ROOT}/${CURRENT_ATTEMPT}" ]; then
@@ -530,7 +532,8 @@ jobs:
               /opt/bluesky-feed/web-next/.next \
               /opt/bluesky-feed/web-next/out \
               /opt/bluesky-feed/cli/node_modules \
-              /opt/bluesky-feed/cli/dist; do
+              /opt/bluesky-feed/cli/dist \
+              /opt/bluesky-feed/packages/feed-sdk/dist; do
               if [ -e "$DEPLOY_PATH" ] || [ -L "$DEPLOY_PATH" ]; then
                 require_deploy_path_access "$DEPLOY_PATH" "$DEPLOY_USER"
               fi
@@ -1338,7 +1341,9 @@ jobs:
                 break
               fi
               echo "Composite health check failed (attempt $i/12)"
-              sleep 10
+              if [ "$i" != "12" ]; then
+                sleep 10
+              fi
             done
 
             # Prove the running service stores anonymous demo state in the

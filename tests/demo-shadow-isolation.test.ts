@@ -1275,6 +1275,20 @@ describe('production exact-SHA promotion guards', () => {
     );
   });
 
+  it('includes packages/feed-sdk/dist in both host admission path-validation loops', () => {
+    const deploy = readFileSync(DEPLOY_FILE, 'utf8');
+    const admissionScript = extractTransferAdmissionScript(deploy);
+    const remoteScript = extractRemoteDeployScript(deploy);
+
+    // RUNTIME_ARTIFACT_PATHS (and the runner-side packaging step) already
+    // ship packages/feed-sdk/dist; both host-side admission loops that
+    // validate deployment-path ownership/writability must cover it too, or
+    // an unvalidated path could slip through the same checks every other
+    // runtime directory gets.
+    expect(admissionScript).toContain('/opt/bluesky-feed/packages/feed-sdk/dist');
+    expect(remoteScript).toContain('/opt/bluesky-feed/packages/feed-sdk/dist');
+  });
+
   it('uses only fixed-container read probes and requires demo Redis to preexist', () => {
     const deploy = readFileSync(DEPLOY_FILE, 'utf8');
     const remoteScript = extractRemoteDeployScript(deploy);
