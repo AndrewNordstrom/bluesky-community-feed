@@ -319,6 +319,37 @@ describe('health response redaction', () => {
     }
   });
 
+  it('preserves a route-declared rateLimit object instead of overwriting it with the generated config', async () => {
+    rateLimitState.enabled = true;
+    const app = await createServer({ shadowDemoService: null });
+
+    try {
+      // '/api/admin/' is a URL prefix buildRouteRateLimitConfig() matches
+      // and would generate its own { max, timeWindow } for -- proving the
+      // onRoute hook's guard must check `!== undefined`, not `=== false`,
+      // or this declared object gets silently replaced.
+      const declaredRateLimit = { max: 999, timeWindow: 999_000 };
+      let capturedConfig: Record<string, unknown> | undefined;
+      // Registered after the server's own onRoute hook, so it observes the
+      // route's final config once that hook has already run.
+      app.addHook('onRoute', (routeOptions) => {
+        if (routeOptions.url === '/api/admin/rate-limit-guard-check') {
+          capturedConfig = routeOptions.config as Record<string, unknown>;
+        }
+      });
+      app.get(
+        '/api/admin/rate-limit-guard-check',
+        { config: { rateLimit: declaredRateLimit } },
+        async () => ({ ok: true })
+      );
+
+      expect(capturedConfig?.rateLimit).toEqual(declaredRateLimit);
+    } finally {
+      rateLimitState.enabled = false;
+      await app.close();
+    }
+  });
+
   it('supports a missing startup release artifact for legacy runtimes', async () => {
     const originalNodeEnvironment = process.env.NODE_ENV;
     const directory = mkdtempSync(join(tmpdir(), 'corgi-missing-release-revision-'));

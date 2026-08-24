@@ -190,7 +190,7 @@ export async function createServer(options?: CreateServerOptions) {
         routeOptions.config = { ...routeOptions.config, rateLimit: false };
         return;
       }
-      if (routeOptions.config?.rateLimit === false) {
+      if (routeOptions.config?.rateLimit !== undefined) {
         return;
       }
       const rateLimitConfig = buildRouteRateLimitConfig(
