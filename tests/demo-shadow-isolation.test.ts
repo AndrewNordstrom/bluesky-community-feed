@@ -1312,6 +1312,47 @@ describe('production exact-SHA promotion guards', () => {
     expect(remoteScript).toContain('/opt/bluesky-feed/packages/feed-sdk/dist');
   });
 
+  it('captures the runner Node ABI and rejects a host ABI mismatch before artifact transfer', () => {
+    const deploy = readFileSync(DEPLOY_FILE, 'utf8');
+    const admissionScript = extractTransferAdmissionScript(deploy);
+    const setupNodeIndex = deploy.indexOf('      - name: Set up Node.js\n');
+    const captureAbiIndex = deploy.indexOf('      - name: Capture runner Node ABI\n');
+    const installIndex = deploy.indexOf('      - name: Install exact-SHA dependencies\n');
+    const diskCheckIndex = admissionScript.indexOf(
+      '[ "$AVAILABLE_DEPLOY_KIB" -lt 8388608 ]'
+    );
+    const abiCheckIndex = admissionScript.indexOf(
+      '[ "$HOST_NODE_ABI" != "$EXPECTED_NODE_ABI" ]'
+    );
+    const transferIndex = deploy.indexOf('      - name: Transfer verified runtime artifact\n');
+    const admissionIndex = deploy.indexOf('      - name: Admit artifact transfer\n');
+
+    // Prebuilt native bindings (see the smoke-test step) pin
+    // NODE_MODULE_VERSION -- proving the runner can load them says nothing
+    // about the VPS's own Node build. Captured after setup-node (so it's the
+    // exact Node this job installs/builds with), asserted on the host
+    // read-only admission path (fail-closed, before the artifact swap and
+    // service restart, not after).
+    expect(setupNodeIndex).toBeGreaterThanOrEqual(0);
+    expect(captureAbiIndex).toBeGreaterThan(setupNodeIndex);
+    expect(installIndex).toBeGreaterThan(captureAbiIndex);
+    expect(deploy).toContain("NODE_ABI=\"$(node -p process.versions.modules)\"");
+    expect(deploy).toContain('node_abi: ${{ steps.capture-node-abi.outputs.node_abi }}');
+    expect(deploy).toContain('EXPECTED_NODE_ABI: ${{ needs.validate-target.outputs.node_abi }}');
+    expect(deploy).toContain('envs: DEPLOY_RUN_ATTEMPT,DEPLOY_RUN_ID,EXPECTED_NODE_ABI');
+    expect(diskCheckIndex).toBeGreaterThanOrEqual(0);
+    expect(abiCheckIndex).toBeGreaterThan(diskCheckIndex);
+    expect(admissionScript).toContain('HOST_NODE_ABI="$(node -p process.versions.modules)"');
+    expect(admissionScript).toContain('Host Node ABI does not match');
+    expect(admissionScript).toContain('host_node_version=$HOST_NODE_VERSION');
+    // The ABI check lives inside the bounded admission script (extracted
+    // between these two step markers), so it necessarily runs before the
+    // artifact transfer step -- and before the swap/restart in the later
+    // deploy step, which this admission step always precedes.
+    expect(admissionIndex).toBeGreaterThanOrEqual(0);
+    expect(transferIndex).toBeGreaterThan(admissionIndex);
+  });
+
   it('uses only fixed-container read probes and requires demo Redis to preexist', () => {
     const deploy = readFileSync(DEPLOY_FILE, 'utf8');
     const remoteScript = extractRemoteDeployScript(deploy);

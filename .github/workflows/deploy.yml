@@ -25,6 +25,7 @@ jobs:
       sha: ${{ steps.validate-target.outputs.sha }}
       archive: ${{ steps.package-release.outputs.archive }}
       archive_sha256: ${{ steps.package-release.outputs.archive_sha256 }}
+      node_abi: ${{ steps.capture-node-abi.outputs.node_abi }}
     steps:
       - name: Check out repository history
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -54,6 +55,22 @@ jobs:
         with:
           node-version: "20.19.0"
           cache: npm
+
+      - name: Capture runner Node ABI
+        id: capture-node-abi
+        run: |
+          set -euo pipefail
+          # Prebuilt native bindings (see the native-module smoke test below)
+          # pin NODE_MODULE_VERSION. Captured here, right after setup-node,
+          # so it reflects the exact Node build every subsequent step in
+          # this job installs and builds with -- not whatever Node the
+          # production host happens to run.
+          NODE_ABI="$(node -p process.versions.modules)"
+          if [[ ! "$NODE_ABI" =~ ^[0-9]+$ ]]; then
+            echo "Runner Node ABI must be a decimal NODE_MODULE_VERSION" >&2
+            exit 1
+          fi
+          printf 'node_abi=%s\n' "$NODE_ABI" >> "$GITHUB_OUTPUT"
 
       - name: Install exact-SHA dependencies
         run: |
@@ -277,13 +294,14 @@ jobs:
         env:
           DEPLOY_RUN_ID: ${{ github.run_id }}
           DEPLOY_RUN_ATTEMPT: ${{ github.run_attempt }}
+          EXPECTED_NODE_ABI: ${{ needs.validate-target.outputs.node_abi }}
         with:
           host: ${{ secrets.PRODUCTION_VPS_HOST }}
           username: ${{ secrets.PRODUCTION_VPS_USER }}
           key: ${{ secrets.PRODUCTION_VPS_SSH_KEY }}
           fingerprint: ${{ secrets.PRODUCTION_VPS_SSH_FINGERPRINT }}
           command_timeout: 5m
-          envs: DEPLOY_RUN_ATTEMPT,DEPLOY_RUN_ID
+          envs: DEPLOY_RUN_ATTEMPT,DEPLOY_RUN_ID,EXPECTED_NODE_ABI
           script: |
             set -Eeuo pipefail
             cd /opt/bluesky-feed
@@ -491,6 +509,16 @@ jobs:
             if ! printf '%s\n' "$AVAILABLE_DEPLOY_KIB" | grep -Eq '^[1-9][0-9]*$' || \
                [ "$AVAILABLE_DEPLOY_KIB" -lt 8388608 ]; then
               echo "Production deploy requires at least 8 GiB before artifact transfer: available_kib=$AVAILABLE_DEPLOY_KIB" >&2
+              exit 1
+            fi
+            if [[ ! "$EXPECTED_NODE_ABI" =~ ^[0-9]+$ ]]; then
+              echo "Runner-captured Node ABI is invalid" >&2
+              exit 1
+            fi
+            HOST_NODE_ABI="$(node -p process.versions.modules)"
+            if [ "$HOST_NODE_ABI" != "$EXPECTED_NODE_ABI" ]; then
+              HOST_NODE_VERSION="$(node -p process.version)"
+              echo "Host Node ABI does not match the runner-built artifact's prebuilt native bindings: host_node_abi=$HOST_NODE_ABI expected_node_abi=$EXPECTED_NODE_ABI host_node_version=$HOST_NODE_VERSION" >&2
               exit 1
             fi
 
