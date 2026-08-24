@@ -300,9 +300,27 @@ describe('health response redaction', () => {
     const app = await createServer({ shadowDemoService: null });
 
     try {
+      // '/health/promotion-ready' is registered inside createServer(),
+      // before the app is returned here -- so a second onRoute hook (the
+      // technique used below for the synthetic routes) can't observe it:
+      // onRoute hooks only fire for routes registered *after* the hook is
+      // added (fastify/lib/route.js runs each onRoute hook synchronously
+      // at registration time). Instead, capture this route's *final*
+      // resolved config through the public `request.routeOptions.config`
+      // API via a preHandler hook added before the app is ever
+      // readied/injected -- Fastify compiles each route's request-lifecycle
+      // hook chain lazily at boot (the first .ready()/.inject()), so a hook
+      // added beforehand still applies to routes declared earlier.
+      let capturedConfig: Record<string, unknown> | undefined;
+      app.addHook('preHandler', async (request) => {
+        if (request.routeOptions.url === '/health/promotion-ready') {
+          capturedConfig = request.routeOptions.config as Record<string, unknown>;
+        }
+      });
+
       // The mocked config sets RATE_LIMIT_GLOBAL_MAX to 1 -- three
-      // consecutive 200s prove this route uses its own generous
-      // RATE_LIMIT_PROMOTION_READY_MAX bucket, not the tight global default.
+      // consecutive 200s show this route isn't rejected by the tight
+      // global default, and confirm the route is live end-to-end.
       for (let requestNumber = 0; requestNumber < 3; requestNumber += 1) {
         const response = await app.inject({
           method: 'GET',
@@ -314,6 +332,15 @@ describe('health response redaction', () => {
       // Unlike the old `rateLimit: false` exemption, this route is no longer
       // invisible to the rate limiter entirely.
       expect(redisRateLimitMock).toHaveBeenCalled();
+      // Load-bearing proof of *which* bucket is attached: redisRateLimitMock
+      // always yields [1, 60_000] regardless of the configured max (see the
+      // mock above), so the three 200s alone don't distinguish the dedicated
+      // promotion-ready bucket from any other sufficiently large one.
+      // Assert the route's resolved config directly instead.
+      expect(capturedConfig?.rateLimit).toEqual({
+        max: config.RATE_LIMIT_PROMOTION_READY_MAX,
+        timeWindow: config.RATE_LIMIT_PROMOTION_READY_WINDOW_MS,
+      });
     } finally {
       rateLimitState.enabled = false;
       await app.close();
