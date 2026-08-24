@@ -241,7 +241,8 @@ npm run cli -- --help
    files; non-forward promotions; and a checkout/runtime mismatch. Promotion is
    forward-only: the requested SHA must equal or descend from the deployed
    `PREV_COMMIT`. Redispatching the deployed SHA is permitted and forces a clean
-   rebuild and restart.
+   artifact swap and restart from the runner-verified archive; the host itself
+   never rebuilds.
    Root and `web/` `.env*.bak` files are non-ignored and must be archived outside
    the checkout by an approved recovery procedure before the first dispatch;
    `web-next/` `.env*.bak` files are ignored by that workspace. Any unrelated

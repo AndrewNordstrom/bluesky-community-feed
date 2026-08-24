@@ -148,6 +148,12 @@ Last updated: 2026-08-02
   ```bash
   set -euo pipefail
   cd /opt/bluesky-feed
+  FIRST_CURSOR_US="$(timeout 10s sudo docker exec bluesky-feed-postgres psql -U feed -d bluesky_feed -v ON_ERROR_STOP=1 -tA -c "SELECT COALESCE((SELECT cursor_us FROM jetstream_cursor WHERE id = 1)::text, 'MISSING');" | tr -d '[:space:]')"
+  if ! printf '%s\n' "$FIRST_CURSOR_US" | grep -Eq '^((MISSING)|(0|[1-9][0-9]{0,17}))$'; then
+    echo "Ingestion signal query returned empty or malformed output" >&2
+    exit 1
+  fi
+  sleep 30
   SIGNALS="$(timeout 10s sudo docker exec bluesky-feed-postgres psql -U feed -d bluesky_feed -v ON_ERROR_STOP=1 -tA -c "SELECT COALESCE((SELECT cursor_us FROM jetstream_cursor WHERE id = 1)::text, 'MISSING') || '|' || COALESCE((SELECT FLOOR(EXTRACT(EPOCH FROM MAX(indexed_at)))::bigint::text FROM posts WHERE deleted = FALSE), 'MISSING');" | tr -d '[:space:]')"
   if ! printf '%s\n' "$SIGNALS" | grep -Eq '^((MISSING)|(0|[1-9][0-9]{0,17}))\|((MISSING)|(0|[1-9][0-9]{0,11}))$'; then
     echo "Ingestion signal query returned empty or malformed output" >&2
@@ -157,13 +163,23 @@ Last updated: 2026-08-02
   IFS='|' read -r CURSOR_US NEWEST_POST_EPOCH <<< "$SIGNALS"
   if [ "$CURSOR_US" = "MISSING" ]; then CURSOR_AGE_S="MISSING"; else CURSOR_AGE_S="$((HOST_EPOCH - CURSOR_US / 1000000))"; fi
   if [ "$NEWEST_POST_EPOCH" = "MISSING" ]; then NEWEST_POST_AGE_S="MISSING"; else NEWEST_POST_AGE_S="$((HOST_EPOCH - NEWEST_POST_EPOCH))"; fi
-  printf 'cursor_us=%s cursor_age_s=%s newest_post_epoch=%s newest_post_age_s=%s host_epoch=%s\n' "$CURSOR_US" "$CURSOR_AGE_S" "$NEWEST_POST_EPOCH" "$NEWEST_POST_AGE_S" "$HOST_EPOCH"
+  if [ "$FIRST_CURSOR_US" = "MISSING" ] || [ "$CURSOR_US" = "MISSING" ]; then
+    CURSOR_ADVANCING="MISSING"
+  elif [ "$CURSOR_US" -gt "$FIRST_CURSOR_US" ]; then
+    CURSOR_ADVANCING="yes"
+  else
+    CURSOR_ADVANCING="no"
+  fi
+  printf 'cursor_advancing=%s cursor_us=%s cursor_age_s=%s newest_post_epoch=%s newest_post_age_s=%s host_epoch=%s\n' "$CURSOR_ADVANCING" "$CURSOR_US" "$CURSOR_AGE_S" "$NEWEST_POST_EPOCH" "$NEWEST_POST_AGE_S" "$HOST_EPOCH"
   ```
 
   This read-only diagnostic uses the workflow's fixed container, timeout,
   PostgreSQL argv, and fail-fast settings, but substitutes `MISSING` markers so
   an operator can distinguish an absent cursor from an empty posts table. The
   promotion gate itself treats either missing value as a hard failure.
+  `cursor_advancing=yes` means the cursor increased between the two ~30-second
+  samples (the "Cursor increasing" cases below); `cursor_advancing=no` means it
+  did not (the "Cursor static" case).
 
   `cursor_us` is microseconds since the Unix epoch, so divide it by 1,000,000
   before subtracting it from the VPS `date +%s` value. Interpret both computed
