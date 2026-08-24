@@ -94,6 +94,7 @@ import {
 } from '../src/lib/health.js';
 import { registerAdminHealthRoutes } from '../src/admin/routes/health.js';
 import { createServer, isDirectLoopbackRequest, isLoopbackAddress } from '../src/feed/server.js';
+import { config } from '../src/config.js';
 import type { DiskStatus } from '../src/maintenance/disk-monitor.js';
 
 // health.ts wraps this query in a try/catch that swallows any error
@@ -321,32 +322,52 @@ describe('health response redaction', () => {
 
   it('preserves a route-declared rateLimit object instead of overwriting it with the generated config', async () => {
     rateLimitState.enabled = true;
-    const app = await createServer({ shadowDemoService: null });
+    // Declared outside the try (and only closed if construction actually
+    // succeeded) so a createServer() rejection can't leave rateLimitState
+    // mutated for later tests without running the finally below.
+    let app: Awaited<ReturnType<typeof createServer>> | undefined;
 
     try {
+      app = await createServer({ shadowDemoService: null });
+
       // '/api/admin/' is a URL prefix buildRouteRateLimitConfig() matches
       // and would generate its own { max, timeWindow } for -- proving the
       // onRoute hook's guard must check `!== undefined`, not `=== false`,
       // or this declared object gets silently replaced.
       const declaredRateLimit = { max: 999, timeWindow: 999_000 };
       let capturedConfig: Record<string, unknown> | undefined;
-      // Registered after the server's own onRoute hook, so it observes the
+      let capturedControlConfig: Record<string, unknown> | undefined;
+      // Registered after the server's own onRoute hook, so it observes each
       // route's final config once that hook has already run.
       app.addHook('onRoute', (routeOptions) => {
         if (routeOptions.url === '/api/admin/rate-limit-guard-check') {
           capturedConfig = routeOptions.config as Record<string, unknown>;
         }
+        if (routeOptions.url === '/api/admin/rate-limit-guard-check-control') {
+          capturedControlConfig = routeOptions.config as Record<string, unknown>;
+        }
       });
+
+      // Control route: same method + '/api/admin/' prefix, but no declared
+      // rateLimit at all. This proves buildRouteRateLimitConfig() actually
+      // matches this URL and the hook attaches its generated config --
+      // otherwise the test below would pass vacuously even if the pattern
+      // match drifted and stopped applying to this route entirely.
+      app.get('/api/admin/rate-limit-guard-check-control', async () => ({ ok: true }));
       app.get(
         '/api/admin/rate-limit-guard-check',
         { config: { rateLimit: declaredRateLimit } },
         async () => ({ ok: true })
       );
 
+      expect(capturedControlConfig?.rateLimit).toEqual({
+        max: config.RATE_LIMIT_ADMIN_MAX,
+        timeWindow: config.RATE_LIMIT_ADMIN_WINDOW_MS,
+      });
       expect(capturedConfig?.rateLimit).toEqual(declaredRateLimit);
     } finally {
       rateLimitState.enabled = false;
-      await app.close();
+      await app?.close();
     }
   });
 
