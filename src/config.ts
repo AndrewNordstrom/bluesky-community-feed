@@ -152,6 +152,8 @@ export const ConfigSchema = z.object({
   RATE_LIMIT_ADMIN_CRITICAL_WINDOW_MS: z.coerce.number().default(60_000),
   RATE_LIMIT_INTERACTIONS_MAX: z.coerce.number().default(60),
   RATE_LIMIT_INTERACTIONS_WINDOW_MS: z.coerce.number().default(60_000),
+  RATE_LIMIT_PROMOTION_READY_MAX: z.coerce.number().default(60),
+  RATE_LIMIT_PROMOTION_READY_WINDOW_MS: z.coerce.number().default(60_000),
 
   // Content filtering
   FILTER_NSFW_LABELS: zodEnvBool(true),

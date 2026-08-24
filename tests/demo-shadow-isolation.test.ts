@@ -2653,7 +2653,11 @@ describe('production exact-SHA promotion guards', () => {
     expect(readyRoute).not.toContain('isPromotionReady');
     expect(promotionRoute).toContain('await isPromotionReady()');
     expect(promotionRoute).toContain('hide: true');
-    expect(promotionRoute).toContain('config: { rateLimit: false }');
+    // The promotion-ready route has its own small rate-limit bucket, not the
+    // full `rateLimit: false` exemption from the global limiter.
+    expect(promotionRoute).toContain('RATE_LIMIT_PROMOTION_READY_MAX');
+    expect(promotionRoute).toContain('RATE_LIMIT_PROMOTION_READY_WINDOW_MS');
+    expect(promotionRoute).not.toContain('config: { rateLimit: false }');
     expect(promotionRoute).toContain('isDirectLoopbackRequest(request)');
     expect(promotionRoute).toContain("reply.status(403).send({ status: 'not ready' })");
     expect(promotionRoute).toContain("reply.status(503).send({ status: 'not ready' })");

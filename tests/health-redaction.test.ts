@@ -93,7 +93,7 @@ import {
   registerScoringHealth,
 } from '../src/lib/health.js';
 import { registerAdminHealthRoutes } from '../src/admin/routes/health.js';
-import { createServer, isLoopbackAddress } from '../src/feed/server.js';
+import { createServer, isDirectLoopbackRequest, isLoopbackAddress } from '../src/feed/server.js';
 import type { DiskStatus } from '../src/maintenance/disk-monitor.js';
 
 // health.ts wraps this query in a try/catch that swallows any error
@@ -159,6 +159,59 @@ describe('health response redaction', () => {
     expect(isLoopbackAddress(address)).toBe(expected);
   });
 
+  function fakeLoopbackRequest(options: {
+    remoteAddress?: string;
+    headers?: Record<string, string>;
+  }): Parameters<typeof isDirectLoopbackRequest>[0] {
+    return {
+      raw: { socket: { remoteAddress: options.remoteAddress } },
+      headers: options.headers ?? {},
+    } as Parameters<typeof isDirectLoopbackRequest>[0];
+  }
+
+  it.each([
+    {
+      name: 'clean loopback request',
+      remoteAddress: '127.0.0.1',
+      headers: undefined,
+      expected: true,
+    },
+    {
+      // The socket check is primary: an undefined remoteAddress (e.g. a
+      // torn-down or non-TCP socket) must be rejected outright, not
+      // fall through to the header denylist.
+      name: 'undefined remoteAddress',
+      remoteAddress: undefined,
+      headers: undefined,
+      expected: false,
+    },
+    {
+      // x-client-ip is not one of the three headers the denylist checked
+      // before this fix (forwarded, x-forwarded-for, x-real-ip) -- a proxy
+      // that only sets x-client-ip must still be caught.
+      name: 'x-client-ip spoof attempt',
+      remoteAddress: '127.0.0.1',
+      headers: { 'x-client-ip': '203.0.113.10' },
+      expected: false,
+    },
+    {
+      name: 'true-client-ip spoof attempt',
+      remoteAddress: '127.0.0.1',
+      headers: { 'true-client-ip': '203.0.113.10' },
+      expected: false,
+    },
+    {
+      name: 'non-loopback socket with no forwarding headers',
+      remoteAddress: '203.0.113.10',
+      headers: undefined,
+      expected: false,
+    },
+  ])('isDirectLoopbackRequest: $name', ({ remoteAddress, headers, expected }) => {
+    expect(isDirectLoopbackRequest(fakeLoopbackRequest({ remoteAddress, headers }))).toBe(
+      expected
+    );
+  });
+
   it('serializes a null release revision on the public health route', async () => {
     mockHealthyDatabase(true, true);
     redisPingMock.mockResolvedValue('PONG');
@@ -195,6 +248,7 @@ describe('health response redaction', () => {
         { 'x-forwarded-for': '203.0.113.10' },
         { 'x-real-ip': '127.0.0.1' },
         { 'x-real-ip': '' },
+        { 'x-client-ip': '203.0.113.10' },
       ]) {
         const spoofedResponse = await app.inject({
           method: 'GET',
@@ -238,13 +292,16 @@ describe('health response redaction', () => {
     }
   });
 
-  it('exempts the loopback promotion probe from the enabled global rate limit', async () => {
+  it('gives the loopback promotion probe its own rate-limit bucket instead of the tight global cap', async () => {
     rateLimitState.enabled = true;
     mockHealthyDatabase(true, true);
     redisPingMock.mockResolvedValue('PONG');
     const app = await createServer({ shadowDemoService: null });
 
     try {
+      // The mocked config sets RATE_LIMIT_GLOBAL_MAX to 1 -- three
+      // consecutive 200s prove this route uses its own generous
+      // RATE_LIMIT_PROMOTION_READY_MAX bucket, not the tight global default.
       for (let requestNumber = 0; requestNumber < 3; requestNumber += 1) {
         const response = await app.inject({
           method: 'GET',
@@ -253,7 +310,9 @@ describe('health response redaction', () => {
         });
         expect(response.statusCode).toBe(200);
       }
-      expect(redisRateLimitMock).not.toHaveBeenCalled();
+      // Unlike the old `rateLimit: false` exemption, this route is no longer
+      // invisible to the rate limiter entirely.
+      expect(redisRateLimitMock).toHaveBeenCalled();
     } finally {
       rateLimitState.enabled = false;
       await app.close();

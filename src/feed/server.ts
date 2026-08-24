@@ -386,7 +386,12 @@ export async function createServer(options?: CreateServerOptions) {
 
   // Promotion readiness is intentionally stricter than restart readiness.
   app.get('/health/promotion-ready', {
-    config: { rateLimit: false },
+    config: {
+      rateLimit: {
+        max: config.RATE_LIMIT_PROMOTION_READY_MAX,
+        timeWindow: config.RATE_LIMIT_PROMOTION_READY_WINDOW_MS,
+      },
+    },
     schema: {
       hide: true,
       tags: ['Health'],
@@ -678,11 +683,27 @@ export function isLoopbackAddress(address: string | undefined): boolean {
   );
 }
 
-function isDirectLoopbackRequest(request: FastifyRequest): boolean {
-  return (
-    isLoopbackAddress(request.raw.socket.remoteAddress) &&
-    request.headers.forwarded === undefined &&
-    request.headers['x-forwarded-for'] === undefined &&
-    request.headers['x-real-ip'] === undefined
+// A denylist of forwarding/client-IP headers can never be exhaustive, so the
+// TCP socket address is the primary signal below and is checked first, on
+// its own: a request whose socket peer isn't the loopback interface is
+// rejected outright regardless of headers. The header denylist is additional
+// defense against a reverse proxy that terminates on loopback (so the socket
+// address looks local) without stripping or rewriting client-supplied
+// IP/forwarding headers.
+const FORWARDING_HEADER_DENYLIST = [
+  'forwarded',
+  'x-forwarded-for',
+  'x-real-ip',
+  'x-client-ip',
+  'true-client-ip',
+  'x-cluster-client-ip',
+] as const;
+
+export function isDirectLoopbackRequest(request: FastifyRequest): boolean {
+  if (!isLoopbackAddress(request.raw.socket.remoteAddress)) {
+    return false;
+  }
+  return FORWARDING_HEADER_DENYLIST.every(
+    (header) => request.headers[header] === undefined
   );
 }
