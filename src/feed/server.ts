@@ -23,7 +23,7 @@ import { registerDebugRoutes } from './routes/debug.js';
 import { registerAdminRoutes } from '../admin/routes/index.js';
 import { registerLegalRoutes } from '../legal/server.js';
 import { registerMcpRoutes } from '../mcp/transport.js';
-import { getPublicHealthStatus, isLive, isReady } from '../lib/health.js';
+import { getPublicHealthStatus, isLive, isPromotionReady, isReady } from '../lib/health.js';
 import { generateCorrelationId } from '../lib/correlation.js';
 import { AppError, isAppError } from '../lib/errors.js';
 import { redis } from '../db/redis.js';
@@ -190,6 +190,9 @@ export async function createServer(options?: CreateServerOptions) {
         routeOptions.config = { ...routeOptions.config, rateLimit: false };
         return;
       }
+      if (routeOptions.config?.rateLimit !== undefined) {
+        return;
+      }
       const rateLimitConfig = buildRouteRateLimitConfig(
         routeOptions.url,
         routeOptions.method,
@@ -294,19 +297,25 @@ export async function createServer(options?: CreateServerOptions) {
   // Register MCP (Model Context Protocol) routes
   registerMcpRoutes(app);
 
-  // Public health check endpoint - redacted status only
+  // Public health check endpoint - redacted status and immutable release revision only
   app.get('/health', {
     schema: {
       tags: ['Health'],
       summary: 'Public health check',
-      description: 'Returns a redacted health status (ok or degraded). Does not expose component details.',
+      description: 'Returns redacted health status and the running release revision. Does not expose component details.',
       response: {
         200: {
           type: 'object',
           properties: {
             status: { type: 'string', enum: ['ok', 'degraded'], description: 'Overall system health' },
+            revision: {
+              type: 'string',
+              pattern: '^[0-9a-f]{40}$',
+              nullable: true,
+              description: 'Commit SHA captured by the running process at startup',
+            },
           },
-          required: ['status'],
+          required: ['status', 'revision'],
         },
       },
     },
@@ -344,12 +353,12 @@ export async function createServer(options?: CreateServerOptions) {
     return reply.status(503).send({ status: 'not live' });
   });
 
-  // Readiness probe - checks if all dependencies are healthy (k8s readiness)
+  // Dependency readiness probe used by restart-oriented watchdogs.
   app.get('/health/ready', {
     schema: {
       tags: ['Health'],
       summary: 'Readiness probe',
-      description: 'Returns 200 if database and Redis are healthy. Used by Kubernetes readiness probes.',
+      description: 'Returns 200 if database and Redis are healthy. Used by restart-oriented readiness probes; release promotion uses /health/promotion-ready.',
       response: {
         200: {
           type: 'object',
@@ -371,6 +380,59 @@ export async function createServer(options?: CreateServerOptions) {
     const ready = await isReady();
     if (ready) {
       return reply.status(200).send({ status: 'ready' });
+    }
+    return reply.status(503).send({ status: 'not ready' });
+  });
+
+  // Promotion readiness is intentionally stricter than restart readiness.
+  app.get('/health/promotion-ready', {
+    config: {
+      rateLimit: {
+        max: config.RATE_LIMIT_PROMOTION_READY_MAX,
+        timeWindow: config.RATE_LIMIT_PROMOTION_READY_WINDOW_MS,
+      },
+    },
+    schema: {
+      hide: true,
+      tags: ['Health'],
+      summary: 'Production promotion readiness probe',
+      description: 'Returns 200 if database, Redis, and emergency disk health are clear, persisted cursor and newest-post freshness are within 120 seconds, and the production release artifact is valid. Used only by the protected production promotion workflow.',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            status: { type: 'string', enum: ['ready'], description: 'All promotion gates healthy' },
+          },
+          required: ['status'],
+        },
+        503: {
+          type: 'object',
+          properties: {
+            status: { type: 'string', enum: ['not ready'] },
+          },
+          required: ['status'],
+        },
+        403: {
+          type: 'object',
+          properties: {
+            status: { type: 'string', enum: ['not ready'] },
+          },
+          required: ['status'],
+        },
+      },
+    },
+  }, async (request, reply) => {
+    if (!isDirectLoopbackRequest(request)) {
+      return reply.status(403).send({ status: 'not ready' });
+    }
+
+    try {
+      const ready = await isPromotionReady();
+      if (ready) {
+        return reply.status(200).send({ status: 'ready' });
+      }
+    } catch (error) {
+      logger.warn({ err: error }, 'Promotion readiness check failed');
     }
     return reply.status(503).send({ status: 'not ready' });
   });
@@ -607,4 +669,41 @@ export function parseTrustProxyConfig(value: string): boolean | number | string 
   }
 
   return normalized;
+}
+
+export function isLoopbackAddress(address: string | undefined): boolean {
+  if (address === undefined) {
+    return false;
+  }
+  const normalized = address.toLowerCase();
+  return (
+    normalized === '127.0.0.1' ||
+    normalized === '::1' ||
+    normalized === '::ffff:127.0.0.1'
+  );
+}
+
+// A denylist of forwarding/client-IP headers can never be exhaustive, so the
+// TCP socket address is the primary signal below and is checked first, on
+// its own: a request whose socket peer isn't the loopback interface is
+// rejected outright regardless of headers. The header denylist is additional
+// defense against a reverse proxy that terminates on loopback (so the socket
+// address looks local) without stripping or rewriting client-supplied
+// IP/forwarding headers.
+const FORWARDING_HEADER_DENYLIST = [
+  'forwarded',
+  'x-forwarded-for',
+  'x-real-ip',
+  'x-client-ip',
+  'true-client-ip',
+  'x-cluster-client-ip',
+] as const;
+
+export function isDirectLoopbackRequest(request: FastifyRequest): boolean {
+  if (!isLoopbackAddress(request.raw.socket.remoteAddress)) {
+    return false;
+  }
+  return FORWARDING_HEADER_DENYLIST.every(
+    (header) => request.headers[header] === undefined
+  );
 }

@@ -4,8 +4,8 @@ Status: canonical repo contract
 Owner: bluesky-feed
 Service class: production_service
 Contract version: 2
-Last updated: 2026-07-13
-Last verified: 2026-07-13
+Last updated: 2026-08-02
+Last verified: not yet rehearsed for the 2026-08-02 workflow revision
 
 > Canonical reference for any human or tooling operating in this repo.
 
@@ -189,24 +189,138 @@ npm run cli -- --help
 
 ### Production deploy path
 
-1. Push to `main` (squash merge only).
-2. The `deploy.yml` workflow SSHs to the DigitalOcean VPS and deploys.
-3. Manual deploy alternative:
+1. Squash-merge a green, reviewed release candidate to `main` and copy its exact
+   40-character lowercase hexadecimal commit SHA.
+2. Manually dispatch `deploy.yml` with that SHA and approve the protected
+   `production` environment. The workflow rejects abbreviated, uppercase,
+   nonexistent, or non-`main` commits before SSH access, then deploys a detached
+   exact checkout.
+   Its non-canceling `production` concurrency group permits one running job and
+   one pending job; GitHub replaces an older pending dispatch with a newer one.
+   Do not dispatch another promotion until there is a terminal receipt for the
+   current attempt. Host admission fails closed for `started`,
+   `rollback_interrupted`, `rollback_failed`, malformed, incomplete, or orphaned
+   prior attempt evidence; only an approval-gated incident procedure may clear it.
+   The capture step may report `CORGI_DEPLOY_RECEIPT_ABSENT` only when GitHub's
+   transfer-step outcome explicitly proves artifact transfer was skipped and no
+   incoming payload exists. The checkout and service are unchanged in that
+   state. Any successful, failed, cancelled, partial, attempted, or uncertain
+   transfer without a receipt is `CORGI_DEPLOY_RECEIPT_UNRESOLVED`; freeze
+   dispatches and use the approval-gated incident procedure.
+   A non-blocking, run-independent host lock also serializes remote deploy and
+   rollback processes that outlive the workflow connection.
+3. Do not recover by running `git checkout`, `npm ci`, `npm run build`, migrations,
+   or service restarts directly on the VPS. Recovery and promotion must use the
+   protected `deploy.yml` workflow so the exact-head runner verification,
+   production approval, stage-aware rollback, and durable receipt stay coupled.
+4. Before enabling the workflow for the first time, explicitly create and protect
+   the GitHub `production` environment, require a reviewer, restrict deployments
+   to `main`, add deployment-only `PRODUCTION_VPS_HOST`, `PRODUCTION_VPS_USER`,
+   `PRODUCTION_VPS_SSH_KEY`, and `PRODUCTION_VPS_SSH_FINGERPRINT` secrets there,
+   and set the
+   repository-level Actions variable `CORGI_PRODUCTION_DEPLOY_ENABLED=true`.
+   The fingerprint secret is a SHA256 fingerprint, not the OpenSSH `known_hosts`
+   line used by other workflows. A non-printing local guard requires its exact
+   OpenSSH SHA256 shape before the first connection, and every deploy SSH/SCP
+   invocation verifies it.
+   A missing or false variable skips production mutation; a
+   missing or mismatched host fingerprint fails the SSH connection. This prevents
+   GitHub from silently creating an unprotected environment. These configuration
+   changes are separate approval gates.
+5. The current runtime must already report a lowercase 40-character `revision`
+   matching the clean checkout and overall `status: ok`. A legacy runtime without
+   this contract cannot be promoted by this workflow; it needs a separately
+   reviewed one-time adoption procedure. Current ingestion must also be fresh
+   before rollback is armed: the persisted Jetstream cursor and newest indexed
+   post must both be no more than 120 seconds old. A quiet posting window aborts
+   with `preflight_failed` before any production mutation.
+6. The workflow verifies the exact SHA on the runner before SSH access. On the
+   host it rejects symlinked, foreign-owned, or non-writable checkout, `.git`,
+   dependency, and build paths; a missing, symlinked, or deployment-user-writable
+   production `.env`; tracked changes; non-ignored untracked
+   files; non-forward promotions; and a checkout/runtime mismatch. Promotion is
+   forward-only: the requested SHA must equal or descend from the deployed
+   `PREV_COMMIT`. Redispatching the deployed SHA is permitted and forces a clean
+   artifact swap and restart from the runner-verified archive; the host itself
+   never rebuilds.
+   Root and `web/` `.env*.bak` files are non-ignored and must be archived outside
+   the checkout by an approved recovery procedure before the first dispatch;
+   `web-next/` `.env*.bak` files are ignored by that workspace. Any unrelated
+   non-ignored artifact also blocks promotion.
+   The production `.env` must be root-owned and unreadable by the deployment
+   user, which must not have unrestricted passwordless sudo. Its sudo policy
+   must be reviewed and limited to the exact systemd calls and fixed-container,
+   fixed-command `docker exec` probes used by this workflow before enablement;
+   `docker compose`, container creation, and free-form `docker exec` are not
+   permitted. The demo Redis container must already be running. That host policy change is a separate
+   approval gate. The service must declare an explicit dedicated non-root user
+   and group, distinct from the deployment account, and the active MainPID must
+   be owned by that service user; otherwise both host admissions fail before
+   transfer or mutation. The GitHub runner builds and verifies the exact SHA
+   without production secrets, runs raw moderate-threshold audits for every
+   shipped workspace, and stamps a checksummed runtime archive. It also verifies
+   hardcoded SHA-256 digests for the SSH/SCP runtime binaries before exposing any
+   production credential, then forces the commit-pinned action wrappers to load
+   only those local payloads. The archive's 64-character digest is a separate job
+   output and is rechecked against both the transferred checksum record and the
+   host-computed archive digest. Before SCP, a
+   fingerprinted read-only SSH admission verifies deployment path
+   ownership/writability, `.env` isolation, sudo scope, host-lock availability,
+   prior receipt/payload state, the exact incoming path, and at least 8 GiB free. Only then does the
+   protected job transfer the archive.
+   The host executes no candidate build tooling. It verifies the archive,
+   every runtime directory, and the release stamp before arming rollback,
+   retains the previous runtime directories, and then swaps in the candidate.
+   Terminal `succeeded`, `rolled_back`, and `preflight_failed` attempts remove
+   their large run-scoped payloads. Later runs reclaim payloads only for receipts
+   validated as safe terminal state. Unresolved, rollback-failed, malformed,
+   incomplete, or receipt-less payloads are never age-deleted: they block later
+   transfer and promotion until an approval-gated incident procedure reconciles
+   them.
+   A current transferred payload without a receipt is reported as unresolved,
+   never as proof that production was untouched or as authorization to redispatch.
+7. After restart, promotion requires a new process, the requested runtime SHA,
+   an advancing persisted Jetstream cursor, and both the cursor and newest indexed
+   post no more than 120 seconds old. Both the pre-restart and post-restart
+   `MainPID` values must be nonzero decimal PIDs and must differ. Every HTTP and
+   database probe has a bounded timeout and retry budget.
+8. Read the run-scoped receipt from the GitHub Actions step summary. It records
+   `status`, `requested`, `previous`, `built`, `deployed`, and `runtime` SHAs,
+   migration set, production Compose change set, `operator`, UTC timestamp, and
+   workflow URL. The host copy is
+   retained at `/opt/bluesky-feed/.git/corgi-deploy-receipts/<run-id>-<attempt>.receipt`
+   for incident recovery; the runner requires exactly one valid receipt marker.
+   A `succeeded` receipt requires `requested=built=deployed=runtime`. A
+   `rolled_back` receipt requires `built=requested` and
+   `deployed=runtime=previous`.
+9. Runner clean installs disable package lifecycle scripts in every shipped workspace.
+   This M0 workflow blocks every changed SQL migration and every change to
+   `docker-compose.prod.yml` before rollback is armed. Migration-bearing releases
+   require a separate approval-gated harness that
+   applies the migration to an isolated database, restores `PREV_COMMIT`, and
+   proves representative previous-release health plus read/write compatibility
+   against the post-migration schema before production mutation. Compose-bearing
+   releases require a rehearsed container rollback path in the later runtime-
+   hardening lane.
 
-   ```bash
-   cd /opt/bluesky-feed
-   git fetch origin
-   git checkout main
-   git pull --ff-only origin main
-   npm install --no-audit --no-fund
-   npm run build
-   npm run migrate
-   sudo systemctl restart bluesky-feed
-   ```
+### Docker deploy (not M0-compatible)
 
-4. Verify: `curl https://feed.corgi.network/health`
+The generic image does not yet stamp an immutable reviewed release SHA, so
+its health response reports `revision: null` even though dependency readiness
+can pass. The exact-SHA workflow rejects that missing identity, so do not use
+this path for M0 production promotion. Container release stamping, immutable
+image pinning, and container-level identity evidence belong to the later
+runtime-hardening release.
 
-### Docker deploy (alternative)
+The process-liveness contract is deliberately separate from rollout readiness:
+`/health/live` stays available while the process runs, and the systemd watchdog
+continues heartbeats when database and Redis dependencies are healthy.
+`/health/ready` exposes that same dependency-only contract for restart-oriented
+probes. The direct-loopback-only `/health/promotion-ready` refuses
+proxy-forwarding headers and additionally requires a valid production release
+artifact plus both persisted ingestion signals within 120 seconds and no
+emergency disk pressure. Stale ingestion therefore blocks promotion without
+forcing a watchdog restart loop.
 
 ```bash
 docker build -t bluesky-feed .
@@ -215,15 +329,42 @@ docker run -d --name bluesky-feed --env-file .env -p 3000:3000 bluesky-feed
 
 ### Rollback
 
-```bash
-cd /opt/bluesky-feed
-git fetch origin
-git checkout <known-good-sha-or-tag>
-npm install --no-audit --no-fund
-npm run build
-npm run migrate
-sudo systemctl restart bluesky-feed
-```
+Automatic rollback is part of the protected workflow. The host receipt is
+written with `status=started` before mutation. After acquiring the host lock and
+before mutation, the workflow captures `PREV_COMMIT="$(git rev-parse HEAD)"`.
+After the target checkout is armed, any command failure runs
+`git checkout --detach "$PREV_COMMIT"`, requires checkout equality by proving
+`git rev-parse HEAD` equals
+`PREV_COMMIT` before any restart or terminal receipt,
+restores the retained previous runtime artifacts without registry access or a
+rebuild, and always restarts the restored release after replacing served
+artifacts. Rollback never runs a down migration
+and succeeds only after bounded checks prove an active service reporting the
+previous runtime revision. Cursor advancement and cursor/newest-post freshness remain logged
+as advisory ingestion diagnostics so a quiet posting window cannot turn a successful
+application restoration into `rollback_failed`. A `rolled_back` receipt keeps
+`built` set to the requested candidate SHA while `deployed` and `runtime` prove
+the restored previous SHA. A candidate failure before the
+artifact swap records `preflight_failed` after proving checkout identity and
+the previous process are unchanged; after swap, rollback must prove the restored
+checkout identity before restarting, and the terminal receipt is
+`rolled_back` or `rollback_failed`. Before rollback work begins, the
+workflow writes `rollback_interrupted`; if the SSH action reaches its bounded
+timeout during rollback, that explicit sentinel remains in the retained receipt.
+If the sentinel write fails, the workflow logs the receipt failure and continues
+restoring `PREV_COMMIT`; receipt durability never blocks restoration.
+The remote shell traps `ERR`, `EXIT`, `HUP`, `INT`, and `TERM` and invokes the
+same single-shot rollback path while armed. Subshell failures delegate rollback
+to the main deploy shell, and an atomic per-attempt guard prevents duplicate
+restoration. A hard kill or transport loss cannot be trapped;
+`started` or `rollback_interrupted` is therefore an unresolved production state
+that fails the workflow and may leave the checkout on the requested SHA.
+
+There is no direct-VPS manual rollback shortcut. If the automatic rollback fails,
+is interrupted, or leaves an unresolved receipt, freeze further dispatches,
+preserve the run-scoped host receipt, and open an approval-gated incident
+procedure using that receipt and backup evidence. Do not accept a copied SHA or
+locally existing commit as rollback authorization.
 
 Notes:
 - DB migrations are forward-only by default. For destructive rollback, restore
@@ -249,7 +390,7 @@ docker compose -f docker-compose.prod.yml ps
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
 | `ci.yml` | PR, push to main | Build, test, lint, security audit |
-| `deploy.yml` | Push to main | SSH deploy to VPS |
+| `deploy.yml` | Manual full-SHA dispatch | Protected exact-SHA promotion to VPS |
 | `deploy-docs.yml` | Push to main (docs-site changes) | Deploy API docs to `docs.corgi.network` |
 | `daily-health.yml` | Cron (daily) | Health check, creates incident issue on failure |
 | `weekly-export.yml` | Cron (weekly) | Anonymized research data export |
@@ -368,7 +509,8 @@ See `docs/OPERABILITY.md`, `docs/runbooks/operator-quickstart.md`, and
 | What | How |
 |------|-----|
 | Health check | `GET https://feed.corgi.network/health` |
-| Readiness probe | `GET https://feed.corgi.network/health/ready` |
+| Dependency readiness probe | `GET https://feed.corgi.network/health/ready` |
+| Promotion readiness probe | `GET http://localhost:3001/health/promotion-ready` on the production host only |
 | Liveness probe | `GET https://feed.corgi.network/health/live` |
 | Feed describe | `GET https://feed.corgi.network/xrpc/app.bsky.feed.describeFeedGenerator` |
 | Transparency stats | `GET https://feed.corgi.network/api/transparency/stats` |
