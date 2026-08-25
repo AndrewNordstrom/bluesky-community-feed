@@ -22,8 +22,8 @@ Known warnings: forcing the unstamped source test process to `NODE_ENV=productio
 ## Deterministic Eval
 
 - `npm run docs:verify` passed: 15 tracked documents and 37 Markdown files scanned.
-- Focused docs and generator-cleanup suite passed: 3 files, 55 tests.
-- Canonical `npm run verify` passed: 157 test files and 2,146 tests, plus backend TypeScript, CLI, SDK, external SDK fixture, legacy frontend lint/build, and canonical Next.js build.
+- Focused docs and generator-cleanup suite passed: 3 files, 56 tests.
+- Canonical `npm run verify` passed: 157 test files and 2,147 tests, plus backend TypeScript, CLI, SDK, external SDK fixture, legacy frontend lint/build, and canonical Next.js build.
 - Root, CLI, legacy web, and `web-next` audit-allowlist gates passed at the moderate threshold.
 - Report-script compilation and both offline dry runs passed.
 - Regeneration matched the committed full/public artifacts, public/site byte comparison passed, and `git diff --check` passed.

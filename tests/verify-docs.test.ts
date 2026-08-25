@@ -165,11 +165,22 @@ describe('verify-docs helpers', () => {
     expect(hasExpectedHealthRevisionSchema(schema)).toBe(false);
   });
 
-  it('accepts the required nullable full-SHA health revision contract', () => {
+  it.each([
+    ['minimum', { minLength: 40 }],
+    ['maximum', { maxLength: 40 }],
+  ])('accepts the required nullable full-SHA health revision contract at the exact %s bound', (
+    _name,
+    lengthConstraint,
+  ) => {
     const schema = {
       type: 'object',
       properties: {
-        revision: { type: 'string', nullable: true, pattern: '^[0-9a-f]{40}$' },
+        revision: {
+          type: 'string',
+          nullable: true,
+          pattern: '^[0-9a-f]{40}$',
+          ...lengthConstraint,
+        },
       },
       required: ['revision'],
     };
