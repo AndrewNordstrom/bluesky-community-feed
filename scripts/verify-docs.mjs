@@ -419,9 +419,9 @@ export function collectSchemaEnumValues(schema, spec, visitedRefs) {
   if (!schema || typeof schema !== 'object') return [];
 
   if (typeof schema.$ref === 'string') {
-    if (visitedRefs.has(schema.$ref)) return [];
+    if (visitedRefs.has(schema.$ref)) return null;
     const resolved = resolveLocalJsonPointer(spec, schema.$ref);
-    if (!resolved) return [];
+    if (!resolved) return null;
     const nextVisitedRefs = new Set(visitedRefs);
     nextVisitedRefs.add(schema.$ref);
     return collectSchemaEnumValues(resolved, spec, nextVisitedRefs);
@@ -437,11 +437,13 @@ export function collectSchemaEnumValues(schema, spec, visitedRefs) {
     values.push(...statusValues);
   }
 
-  const constrainedAllOfValues = Array.isArray(schema.allOf)
-    ? schema.allOf
-      .map(variant => collectSchemaEnumValues(variant, spec, visitedRefs))
-      .filter(variantValues => Array.isArray(variantValues) && variantValues.length > 0)
+  const allOfValues = Array.isArray(schema.allOf)
+    ? schema.allOf.map(variant => collectSchemaEnumValues(variant, spec, visitedRefs))
     : [];
+  if (allOfValues.some(variantValues => variantValues === null)) return null;
+  const constrainedAllOfValues = allOfValues.filter(
+    variantValues => Array.isArray(variantValues) && variantValues.length > 0,
+  );
   if (constrainedAllOfValues.length > 0) {
     let intersection = [...constrainedAllOfValues[0]];
     for (const variantValues of constrainedAllOfValues.slice(1)) {
@@ -456,16 +458,17 @@ export function collectSchemaEnumValues(schema, spec, visitedRefs) {
     const variants = schema[keyword];
     if (!Array.isArray(variants)) continue;
     const unionValues = [];
-    let unionIsIndeterminate = false;
+    let unionHasUnconstrainedBranch = false;
     for (const variant of variants) {
       const variantValues = collectSchemaEnumValues(variant, spec, visitedRefs);
-      if (variantValues === null || variantValues.length === 0) {
-        unionIsIndeterminate = true;
+      if (variantValues === null) return null;
+      if (variantValues.length === 0) {
+        unionHasUnconstrainedBranch = true;
         continue;
       }
       unionValues.push(...variantValues);
     }
-    if (unionIsIndeterminate) {
+    if (unionHasUnconstrainedBranch) {
       if (values.length === 0) return null;
       continue;
     }
@@ -492,6 +495,19 @@ export function validateOpenApiOperations(fullSpec, publicSpec, problems) {
 
   for (const [routePath, fullPathItem] of Object.entries(fullSpec.paths ?? {})) {
     const forbiddenPath = FORBIDDEN_PUBLIC_OPENAPI_PATHS.some(pattern => pattern.test(routePath));
+    const publicPathItem = publicSpec.paths?.[routePath];
+    const hasEligibleOperation = Object.entries(fullPathItem ?? {}).some(([method, operation]) => {
+      if (!OPENAPI_HTTP_METHODS.has(method.toLowerCase())) return false;
+      const tags = Array.isArray(operation?.tags) ? operation.tags : [];
+      return !forbiddenPath && !tags.some(tag => RESTRICTED_OPENAPI_TAGS.has(tag));
+    });
+    if (
+      hasEligibleOperation
+      && publicPathItem !== undefined
+      && JSON.stringify(fullPathItem?.parameters ?? []) !== JSON.stringify(publicPathItem?.parameters ?? [])
+    ) {
+      problems.push(`OpenAPI drift: public path parameters for ${routePath} differ from full specification`);
+    }
     for (const [method, operation] of Object.entries(fullPathItem ?? {})) {
       if (!OPENAPI_HTTP_METHODS.has(method.toLowerCase())) continue;
 
@@ -530,6 +546,17 @@ export function validateOpenApiOperations(fullSpec, publicSpec, problems) {
   }
 }
 
+export function hasExpectedHealthRevisionSchema(responseSchema) {
+  if (!responseSchema || typeof responseSchema !== 'object') return false;
+  if (!Array.isArray(responseSchema.required) || !responseSchema.required.includes('revision')) {
+    return false;
+  }
+  const revisionSchema = responseSchema.properties?.revision;
+  return revisionSchema?.type === 'string'
+    && revisionSchema.nullable === true
+    && revisionSchema.pattern === '^[0-9a-f]{40}$';
+}
+
 function validateOpenApiArtifacts(problems) {
   const fullSpec = readJson(OPENAPI_FULL_PATH, problems);
   const publicSpec = readJson(OPENAPI_PUBLIC_PATH, problems);
@@ -562,6 +589,17 @@ function validateOpenApiArtifacts(problems) {
           );
         }
       }
+    }
+  }
+
+
+  for (const spec of [fullSpec, publicSpec, siteSpec]) {
+    const responseSchema = spec.paths?.['/health']?.get?.responses?.['200']
+      ?.content?.['application/json']?.schema;
+    if (!hasExpectedHealthRevisionSchema(responseSchema)) {
+      problems.push(
+        'OpenAPI health schema mismatch: GET /health response 200 expected required nullable revision matching ^[0-9a-f]{40}$',
+      );
     }
   }
 }

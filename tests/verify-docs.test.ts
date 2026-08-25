@@ -11,6 +11,7 @@ import {
   findHeadingLineIndex,
   findNextTopLevelHeadingIndex,
   hasExactSchemaEnumValues,
+  hasExpectedHealthRevisionSchema,
   isCanonicalApacheLicense,
   isMarkdownSeparatorRow,
   readJson,
@@ -61,12 +62,32 @@ describe('verify-docs helpers', () => {
     expect(collectSchemaEnumValues(schema, {}, new Set())).toEqual(['ok']);
   });
 
+  it('rejects an invalid reference inside allOf instead of discarding it', () => {
+    const schema = {
+      properties: { status: { enum: ['ok'] } },
+      allOf: [{ $ref: '#/components/schemas/Missing' }],
+    };
+
+    expect(collectSchemaEnumValues(schema, {}, new Set())).toBeNull();
+    expect(hasExactSchemaEnumValues(schema, {}, ['ok'])).toBe(false);
+  });
+
   it.each(['anyOf', 'oneOf'])('rejects an indeterminate %s status union', (keyword) => {
     const schema = {
       [keyword]: [
         { properties: { status: { enum: ['ok'] } } },
         { properties: { status: {} } },
       ],
+    };
+
+    expect(collectSchemaEnumValues(schema, {}, new Set())).toBeNull();
+    expect(hasExactSchemaEnumValues(schema, {}, ['ok'])).toBe(false);
+  });
+
+  it.each(['anyOf', 'oneOf'])('rejects an invalid reference inside %s', (keyword) => {
+    const schema = {
+      properties: { status: { enum: ['ok'] } },
+      [keyword]: [{ $ref: '#/components/schemas/Missing' }],
     };
 
     expect(collectSchemaEnumValues(schema, {}, new Set())).toBeNull();
@@ -89,6 +110,59 @@ describe('verify-docs helpers', () => {
     expect(problems).toContain('OpenAPI drift: public specification is missing GET /health');
   });
 
+  it('reports inherited path parameters missing from the public specification', () => {
+    const fullSpec = {
+      paths: {
+        '/health': {
+          parameters: [{ in: 'header', name: 'x-request-id', required: true, schema: { type: 'string' } }],
+          get: { tags: ['Health'], responses: {} },
+        },
+      },
+    };
+    const publicSpec = {
+      paths: {
+        '/health': {
+          get: { tags: ['Health'], responses: {} },
+        },
+      },
+    };
+    const problems: string[] = [];
+
+    validateOpenApiOperations(fullSpec, publicSpec, problems);
+
+    expect(problems).toContain(
+      'OpenAPI drift: public path parameters for /health differ from full specification',
+    );
+  });
+
+  it.each([
+    ['missing revision', { type: 'object', properties: {}, required: [] }],
+    ['non-nullable revision', {
+      type: 'object',
+      properties: { revision: { type: 'string', pattern: '^[0-9a-f]{40}$' } },
+      required: ['revision'],
+    }],
+    ['invalid revision constraint', {
+      type: 'object',
+      properties: { revision: { type: 'string', nullable: true, pattern: '^[0-9a-f]+$' } },
+      required: ['revision'],
+    }],
+  ])('rejects a health schema with %s', (_name, schema) => {
+    expect(hasExpectedHealthRevisionSchema(schema)).toBe(false);
+  });
+
+  it('accepts the required nullable full-SHA health revision contract', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        revision: { type: 'string', nullable: true, pattern: '^[0-9a-f]{40}$' },
+      },
+      required: ['revision'],
+    };
+
+    expect(hasExpectedHealthRevisionSchema(schema)).toBe(true);
+  });
+
   it('handles missing, unresolved, cyclic, and escaped local refs', () => {
     const spec = {
       components: {
@@ -103,10 +177,10 @@ describe('verify-docs helpers', () => {
     expect(collectSchemaEnumValues(null, spec, new Set())).toEqual([]);
     expect(
       collectSchemaEnumValues({ $ref: '#/components/schemas/Missing' }, spec, new Set()),
-    ).toEqual([]);
+    ).toBeNull();
     expect(
       collectSchemaEnumValues({ $ref: '#/components/schemas/A' }, spec, new Set()),
-    ).toEqual([]);
+    ).toBeNull();
     expect(
       collectSchemaEnumValues(
         { $ref: '#/components/schemas/Status~1With~0Token' },
