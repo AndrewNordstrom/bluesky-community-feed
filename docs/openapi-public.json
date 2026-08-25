@@ -4142,7 +4142,7 @@
         "tags": [
           "Health"
         ],
-        "description": "Returns a redacted health status (ok or degraded). Does not expose component details.",
+        "description": "Returns redacted health status and the running release revision. Does not expose component details.",
         "responses": {
           "200": {
             "description": "Default Response",
@@ -4158,10 +4158,17 @@
                         "degraded"
                       ],
                       "description": "Overall system health"
+                    },
+                    "revision": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{40}$",
+                      "nullable": true,
+                      "description": "Commit SHA captured by the running process at startup"
                     }
                   },
                   "required": [
-                    "status"
+                    "status",
+                    "revision"
                   ]
                 }
               }
@@ -4230,7 +4237,7 @@
         "tags": [
           "Health"
         ],
-        "description": "Returns 200 if database and Redis are healthy. Used by Kubernetes readiness probes.",
+        "description": "Returns 200 if database and Redis are healthy. Used by restart-oriented readiness probes; release promotion uses /health/promotion-ready.",
         "responses": {
           "200": {
             "description": "Default Response",

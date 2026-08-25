@@ -199,8 +199,6 @@ npm --prefix web-next run build
 npm run cli -- --help
 ```
 
-> **Known limitation (2026-07-21):** `npm run docs:verify` exits nonzero on a clean checkout because 12 tracked documents in `docs/freshness.json` exceed the 120-day review window. The command still checks links, commands, and repository references before reporting that repository-wide freshness debt.
-
 ## Interfaces
 
 <details>

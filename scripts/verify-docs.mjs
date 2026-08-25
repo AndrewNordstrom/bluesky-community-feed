@@ -37,6 +37,25 @@ const PACKAGE_SCAN_EXCLUDES = new Set([
   'dist',
   'node_modules',
 ]);
+const OPENAPI_FULL_PATH = path.join(repoRoot, 'docs', 'openapi.json');
+const OPENAPI_PUBLIC_PATH = path.join(repoRoot, 'docs', 'openapi-public.json');
+const OPENAPI_SITE_PATH = path.join(repoRoot, 'docs', 'docs-site', 'openapi.json');
+const FORBIDDEN_PUBLIC_OPENAPI_PATHS = [
+  /^\/api\/admin(?:\/|$)/,
+  /^\/api\/debug(?:\/|$)/,
+  /^\/health\/promotion-ready$/,
+];
+const OPENAPI_HTTP_METHODS = new Set([
+  'delete',
+  'get',
+  'head',
+  'options',
+  'patch',
+  'post',
+  'put',
+  'trace',
+]);
+const RESTRICTED_OPENAPI_TAGS = new Set(['Admin', 'Debug', 'Export']);
 const OLD_REPO_PATTERNS = [
   /github\.com\/AndrewNordstrom\/bluesky-community-feed/,
   /\bAndrewNordstrom\/bluesky-community-feed\b/,
@@ -385,6 +404,218 @@ function validateCiHasDocsVerify(ciPath, problems) {
   }
 }
 
+function resolveLocalJsonPointer(spec, ref) {
+  if (typeof ref !== 'string' || !ref.startsWith('#/')) return null;
+  let current = spec;
+  for (const rawPart of ref.slice(2).split('/')) {
+    const part = rawPart.replace(/~1/g, '/').replace(/~0/g, '~');
+    if (!current || typeof current !== 'object' || !(part in current)) return null;
+    current = current[part];
+  }
+  return current;
+}
+
+export function collectSchemaEnumValues(schema, spec, visitedRefs) {
+  if (!schema || typeof schema !== 'object') return [];
+
+  if (typeof schema.$ref === 'string') {
+    if (visitedRefs.has(schema.$ref)) return null;
+    const resolved = resolveLocalJsonPointer(spec, schema.$ref);
+    if (!resolved) return null;
+    const nextVisitedRefs = new Set(visitedRefs);
+    nextVisitedRefs.add(schema.$ref);
+    return collectSchemaEnumValues(resolved, spec, nextVisitedRefs);
+  }
+
+  let values = Array.isArray(schema.enum)
+    ? schema.enum.filter(value => typeof value === 'string')
+    : [];
+  const statusSchema = schema.properties?.status;
+  if (statusSchema) {
+    const statusValues = collectSchemaEnumValues(statusSchema, spec, visitedRefs);
+    if (statusValues === null) return null;
+    values.push(...statusValues);
+  }
+
+  const allOfValues = Array.isArray(schema.allOf)
+    ? schema.allOf.map(variant => collectSchemaEnumValues(variant, spec, visitedRefs))
+    : [];
+  if (allOfValues.some(variantValues => variantValues === null)) return null;
+  const constrainedAllOfValues = allOfValues.filter(
+    variantValues => Array.isArray(variantValues) && variantValues.length > 0,
+  );
+  if (constrainedAllOfValues.length > 0) {
+    let intersection = [...constrainedAllOfValues[0]];
+    for (const variantValues of constrainedAllOfValues.slice(1)) {
+      intersection = intersection.filter(value => variantValues.includes(value));
+    }
+    values = values.length > 0
+      ? values.filter(value => intersection.includes(value))
+      : intersection;
+  }
+
+  for (const keyword of ['anyOf', 'oneOf']) {
+    const variants = schema[keyword];
+    if (!Array.isArray(variants)) continue;
+    const unionValues = [];
+    let unionHasUnconstrainedBranch = false;
+    for (const variant of variants) {
+      const variantValues = collectSchemaEnumValues(variant, spec, visitedRefs);
+      if (variantValues === null) return null;
+      if (variantValues.length === 0) {
+        unionHasUnconstrainedBranch = true;
+        continue;
+      }
+      unionValues.push(...variantValues);
+    }
+    if (unionHasUnconstrainedBranch) {
+      if (values.length === 0) return null;
+      continue;
+    }
+    values.push(...unionValues);
+  }
+  return [...new Set(values)].sort();
+}
+
+export function hasExactSchemaEnumValues(schema, spec, expectedValues) {
+  const actualValues = collectSchemaEnumValues(schema, spec, new Set());
+  return actualValues !== null && JSON.stringify(actualValues) === JSON.stringify([...expectedValues].sort());
+}
+
+export function filesHaveIdenticalBytes(leftPath, rightPath) {
+  return readFileSync(leftPath).equals(readFileSync(rightPath));
+}
+
+export function validateOpenApiOperations(fullSpec, publicSpec, problems) {
+  for (const routePath of Object.keys(publicSpec.paths ?? {})) {
+    if (FORBIDDEN_PUBLIC_OPENAPI_PATHS.some(pattern => pattern.test(routePath))) {
+      problems.push(`OpenAPI exposure: public specification contains forbidden route "${routePath}"`);
+    }
+  }
+
+  for (const [routePath, fullPathItem] of Object.entries(fullSpec.paths ?? {})) {
+    const forbiddenPath = FORBIDDEN_PUBLIC_OPENAPI_PATHS.some(pattern => pattern.test(routePath));
+    const publicPathItem = publicSpec.paths?.[routePath];
+    const hasEligibleOperation = Object.entries(fullPathItem ?? {}).some(([method, operation]) => {
+      if (!OPENAPI_HTTP_METHODS.has(method.toLowerCase())) return false;
+      const tags = Array.isArray(operation?.tags) ? operation.tags : [];
+      return !forbiddenPath && !tags.some(tag => RESTRICTED_OPENAPI_TAGS.has(tag));
+    });
+    if (
+      hasEligibleOperation
+      && publicPathItem !== undefined
+      && JSON.stringify(fullPathItem?.parameters ?? []) !== JSON.stringify(publicPathItem?.parameters ?? [])
+    ) {
+      problems.push(`OpenAPI drift: public path parameters for ${routePath} differ from full specification`);
+    }
+    for (const [method, operation] of Object.entries(fullPathItem ?? {})) {
+      if (!OPENAPI_HTTP_METHODS.has(method.toLowerCase())) continue;
+
+      const tags = Array.isArray(operation?.tags) ? operation.tags : [];
+      const restrictedOperation = forbiddenPath || tags.some(tag => RESTRICTED_OPENAPI_TAGS.has(tag));
+      const publicOperation = publicSpec.paths?.[routePath]?.[method];
+
+      if (restrictedOperation) {
+        if (publicOperation !== undefined) {
+          problems.push(`OpenAPI exposure: public ${method.toUpperCase()} ${routePath} is restricted`);
+        }
+        continue;
+      }
+      if (publicOperation === undefined) {
+        problems.push(`OpenAPI drift: public specification is missing ${method.toUpperCase()} ${routePath}`);
+        continue;
+      }
+      if (JSON.stringify(publicOperation) !== JSON.stringify(operation)) {
+        problems.push(`OpenAPI drift: public ${method.toUpperCase()} ${routePath} differs from full specification`);
+      }
+    }
+  }
+
+  for (const [routePath, publicPathItem] of Object.entries(publicSpec.paths ?? {})) {
+    for (const [method, operation] of Object.entries(publicPathItem ?? {})) {
+      if (!OPENAPI_HTTP_METHODS.has(method.toLowerCase())) continue;
+      const fullOperation = fullSpec.paths?.[routePath]?.[method];
+      if (fullOperation === undefined) {
+        problems.push(`OpenAPI drift: public ${method.toUpperCase()} ${routePath} is missing from full specification`);
+      }
+      const tags = Array.isArray(operation?.tags) ? operation.tags : [];
+      if (tags.some(tag => RESTRICTED_OPENAPI_TAGS.has(tag))) {
+        problems.push(`OpenAPI exposure: public ${method.toUpperCase()} ${routePath} has a restricted tag`);
+      }
+    }
+  }
+}
+
+export function hasExpectedHealthRevisionSchema(responseSchema) {
+  if (!responseSchema || typeof responseSchema !== 'object') return false;
+  if (!Array.isArray(responseSchema.required) || !responseSchema.required.includes('revision')) {
+    return false;
+  }
+  const revisionSchema = responseSchema.properties?.revision;
+  if (
+    revisionSchema?.type !== 'string'
+    || revisionSchema.nullable !== true
+    || revisionSchema.pattern !== '^[0-9a-f]{40}$'
+  ) {
+    return false;
+  }
+  const { minLength, maxLength } = revisionSchema;
+  if (minLength !== undefined && (!Number.isInteger(minLength) || minLength < 0 || minLength > 40)) {
+    return false;
+  }
+  if (maxLength !== undefined && (!Number.isInteger(maxLength) || maxLength < 40)) {
+    return false;
+  }
+  return true;
+}
+
+function validateOpenApiArtifacts(problems) {
+  const fullSpec = readJson(OPENAPI_FULL_PATH, problems);
+  const publicSpec = readJson(OPENAPI_PUBLIC_PATH, problems);
+  const siteSpec = readJson(OPENAPI_SITE_PATH, problems);
+
+  if (!fullSpec || !publicSpec || !siteSpec) {
+    return;
+  }
+
+  if (!filesHaveIdenticalBytes(OPENAPI_PUBLIC_PATH, OPENAPI_SITE_PATH)) {
+    problems.push('OpenAPI drift: docs/openapi-public.json and docs/docs-site/openapi.json differ');
+  }
+
+  validateOpenApiOperations(fullSpec, publicSpec, problems);
+
+  const expectedHealthStatuses = new Map([
+    ['/health', new Map([['200', ['ok', 'degraded']]])],
+    ['/health/live', new Map([['200', ['live']], ['503', ['not live']]])],
+    ['/health/ready', new Map([['200', ['ready']], ['503', ['not ready']]])],
+  ]);
+
+  for (const [routePath, responses] of expectedHealthStatuses) {
+    for (const spec of [fullSpec, publicSpec, siteSpec]) {
+      const actualResponses = spec.paths?.[routePath]?.get?.responses;
+      for (const [statusCode, expectedStatuses] of responses) {
+        const responseSchema = actualResponses?.[statusCode]?.content?.['application/json']?.schema;
+        if (!hasExactSchemaEnumValues(responseSchema, spec, expectedStatuses)) {
+          problems.push(
+            `OpenAPI health schema mismatch: GET ${routePath} response ${statusCode} expected status enum ${JSON.stringify(expectedStatuses)}`
+          );
+        }
+      }
+    }
+  }
+
+
+  for (const spec of [fullSpec, publicSpec, siteSpec]) {
+    const responseSchema = spec.paths?.['/health']?.get?.responses?.['200']
+      ?.content?.['application/json']?.schema;
+    if (!hasExpectedHealthRevisionSchema(responseSchema)) {
+      problems.push(
+        'OpenAPI health schema mismatch: GET /health response 200 expected required nullable revision matching ^[0-9a-f]{40}$',
+      );
+    }
+  }
+}
+
 function validateLegacyRepoReferences(files, problems) {
   for (const file of files) {
     const rel = relative(file);
@@ -690,6 +921,7 @@ function main() {
   validateDeprecatedPatterns(markdownFiles, ignoreSet, problems);
   validateMcpToolCount(problems);
   validateCiHasDocsVerify(path.join(repoRoot, '.github', 'workflows', 'ci.yml'), problems);
+  validateOpenApiArtifacts(problems);
   validateLegacyRepoReferences(repoGuardFiles, problems);
   validateLicenseConsistency(problems);
   validateRepoContract(problems);

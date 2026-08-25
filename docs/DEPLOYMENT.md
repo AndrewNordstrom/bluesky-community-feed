@@ -2,6 +2,12 @@
 
 This guide is for deploying your own instance of the Community-Governed Bluesky Feed on a VPS.
 
+> **Production boundary:** this is a self-hosting guide, not authorization to
+> mutate Corgi production. Corgi's `Deploy to VPS` workflow is a manual,
+> exact-SHA promotion path protected by an enable flag and the `production`
+> environment. Do not dispatch or approve it without an explicit production
+> gate, and do not substitute these self-hosting commands for that workflow.
+
 ## Prerequisites
 
 - Ubuntu 22.04+ VPS with at least 2GB RAM
@@ -46,9 +52,9 @@ CREATE DATABASE community_feed OWNER feeduser;
 
 ```bash
 cd /opt
-sudo git clone https://github.com/andrewnordstrom-eng/bluesky-community-feed.git
-sudo chown -R "$USER":"$USER" /opt/bluesky-community-feed
-cd /opt/bluesky-community-feed
+sudo git clone https://github.com/andrewnordstrom-eng/corgi.git /opt/bluesky-feed
+sudo chown -R "$USER":"$USER" /opt/bluesky-feed
+cd /opt/bluesky-feed
 ```
 
 ## 5. Configure environment
@@ -86,9 +92,11 @@ Then copy the printed `FEEDGEN_SERVICE_DID` and `FEEDGEN_PUBLISHER_DID` into `.e
 
 ```bash
 npm install
-cd web && npm install && cd ..
+npm --prefix web-next install
+npm --prefix web install
 npm run build
-cd web && npm run build && cd ..
+npm --prefix web-next run build
+npm --prefix web run build
 ```
 
 ## 7. Run migrations
@@ -110,8 +118,8 @@ This creates/updates the `app.bsky.feed.generator/community-gov` record.
 Create a dedicated service account and grant app directory ownership:
 
 ```bash
-sudo useradd --system --home /opt/bluesky-community-feed --shell /usr/sbin/nologin bluesky-feed || true
-sudo chown -R bluesky-feed:bluesky-feed /opt/bluesky-community-feed
+sudo useradd --system --home /opt/bluesky-feed --shell /usr/sbin/nologin bluesky-feed || true
+sudo chown -R bluesky-feed:bluesky-feed /opt/bluesky-feed
 ```
 
 Create `/etc/systemd/system/bluesky-feed.service`:
@@ -125,9 +133,9 @@ After=network.target postgresql.service redis-server.service
 Type=simple
 User=bluesky-feed
 Group=bluesky-feed
-WorkingDirectory=/opt/bluesky-community-feed
+WorkingDirectory=/opt/bluesky-feed
 Environment=NODE_ENV=production
-EnvironmentFile=/opt/bluesky-community-feed/.env
+EnvironmentFile=/opt/bluesky-feed/.env
 ExecStart=/usr/bin/node dist/index.js
 Restart=on-failure
 RestartSec=10
@@ -227,7 +235,7 @@ Required GitHub Actions secrets:
 
 - Add these as repository-level secrets in the transferred org repo:
   `Settings -> Secrets and variables -> Actions` for
-  `andrewnordstrom-eng/bluesky-community-feed`.
+  `andrewnordstrom-eng/corgi`.
 - `VPS_HOST`
 - `VPS_USER`
 - `VPS_SSH_KEY`
@@ -236,7 +244,13 @@ Required GitHub Actions secrets:
 - `EXPORT_ANONYMIZATION_SALT` (required by `weekly-export.yml`)
 - `HEALTHCHECK_PING_URL` (optional, used by deploy and daily health monitor pings)
 
-On each `main` push that changes `docs/docs-site/**`, the workflow uploads the docs bundle to the VPS and verifies that live `https://docs.corgi.network/` and `/openapi.json` hashes match the repository artifacts.
+On each `main` push that changes `docs/docs-site/**`, the workflow currently
+uploads the docs bundle to the VPS and verifies that live
+`https://docs.corgi.network/` and `/openapi.json` hashes match the repository
+artifacts. The workflow does not yet enforce an approval or exact-SHA gate
+before its publish step. Do not rely on or trigger that production mutation
+until a separately tracked workflow fix adds the gate and receives explicit
+activation approval.
 
 ## Operations checklist
 
