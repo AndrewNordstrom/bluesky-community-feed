@@ -147,6 +147,20 @@ describe('verify-docs helpers', () => {
       properties: { revision: { type: 'string', nullable: true, pattern: '^[0-9a-f]+$' } },
       required: ['revision'],
     }],
+    ['minimum length excluding a full SHA', {
+      type: 'object',
+      properties: {
+        revision: { type: 'string', nullable: true, pattern: '^[0-9a-f]{40}$', minLength: 41 },
+      },
+      required: ['revision'],
+    }],
+    ['maximum length excluding a full SHA', {
+      type: 'object',
+      properties: {
+        revision: { type: 'string', nullable: true, pattern: '^[0-9a-f]{40}$', maxLength: 39 },
+      },
+      required: ['revision'],
+    }],
   ])('rejects a health schema with %s', (_name, schema) => {
     expect(hasExpectedHealthRevisionSchema(schema)).toBe(false);
   });

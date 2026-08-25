@@ -552,9 +552,21 @@ export function hasExpectedHealthRevisionSchema(responseSchema) {
     return false;
   }
   const revisionSchema = responseSchema.properties?.revision;
-  return revisionSchema?.type === 'string'
-    && revisionSchema.nullable === true
-    && revisionSchema.pattern === '^[0-9a-f]{40}$';
+  if (
+    revisionSchema?.type !== 'string'
+    || revisionSchema.nullable !== true
+    || revisionSchema.pattern !== '^[0-9a-f]{40}$'
+  ) {
+    return false;
+  }
+  const { minLength, maxLength } = revisionSchema;
+  if (minLength !== undefined && (!Number.isInteger(minLength) || minLength < 0 || minLength > 40)) {
+    return false;
+  }
+  if (maxLength !== undefined && (!Number.isInteger(maxLength) || maxLength < 40)) {
+    return false;
+  }
+  return true;
 }
 
 function validateOpenApiArtifacts(problems) {
