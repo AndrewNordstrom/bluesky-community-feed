@@ -111,6 +111,79 @@ assert_safe_existing_managed_path() {
     fail "managed path is group- or other-writable: ${path} (${mode})"
 }
 
+read_numeric_owner_mode() {
+  local path="$1"
+  local metadata=''
+
+  if metadata="$(/usr/bin/stat -c '%u:%a' "$path" 2>/dev/null)"; then
+    :
+  else
+    metadata="$(/usr/bin/stat -f '%u:%Lp' "$path")"
+  fi
+  printf '%s' "$metadata"
+}
+
+assert_application_directory_isolated() {
+  local path="$1"
+  local forbidden_owner_uid="$2"
+  local metadata=''
+  local owner=''
+  local mode=''
+
+  [[ -d "$path" && ! -L "$path" ]] ||
+    fail "production application path must be a non-symlink directory: ${path}"
+  metadata="$(read_numeric_owner_mode "$path")"
+  owner="${metadata%%:*}"
+  mode="${metadata#*:}"
+  (( (8#${mode} & 8#022) == 0 )) ||
+    fail "production application path is group- or other-writable: ${path} (${mode})"
+  if [[ -n "$forbidden_owner_uid" && "$owner" == "$forbidden_owner_uid" ]]; then
+    fail "operations account must not own the production application path: ${path}"
+  fi
+}
+
+assert_isolated_secret_file() {
+  local path="$1"
+  local expected_owner_uid="$2"
+  local purpose="$3"
+  local metadata=''
+  local owner=''
+  local mode=''
+
+  [[ -f "$path" && ! -L "$path" ]] ||
+    fail "${purpose} must be a non-symlink regular file"
+  metadata="$(read_numeric_owner_mode "$path")"
+  owner="${metadata%%:*}"
+  mode="${metadata#*:}"
+  [[ "$owner" == "$expected_owner_uid" ]] ||
+    fail "${purpose} must have owner uid ${expected_owner_uid} before provisioning (uid ${owner})"
+  (( (8#${mode} & 8#077) == 0 )) ||
+    fail "${purpose} must grant no group or other permissions before provisioning (${mode})"
+}
+
+assert_production_environment_isolated() {
+  local operations_uid=''
+
+  assert_safe_directory_chain /opt
+  if /usr/bin/getent passwd "$OPERATIONS_USER" >/dev/null; then
+    operations_uid="$(/usr/bin/id -u "$OPERATIONS_USER")"
+  fi
+  assert_application_directory_isolated /opt/bluesky-feed "$operations_uid"
+  assert_isolated_secret_file /opt/bluesky-feed/.env 0 'production environment file'
+}
+
+remove_new_account_after_failed_isolation() {
+  local isolation_error="$1"
+
+  /usr/sbin/userdel "$OPERATIONS_USER" ||
+    fail "failed to remove newly created ${OPERATIONS_USER} after isolation rejection: ${isolation_error}"
+  if /usr/bin/getent group "$OPERATIONS_GROUP" >/dev/null; then
+    /usr/sbin/groupdel "$OPERATIONS_GROUP" ||
+      fail "failed to remove newly created ${OPERATIONS_GROUP} after isolation rejection: ${isolation_error}"
+  fi
+  fail "post-account isolation rejected provisioning and the new account was removed: ${isolation_error}"
+}
+
 read_public_key() {
   local public_key_file="$1"
   local public_key=''
@@ -186,6 +259,7 @@ verify_host_policy() {
   local sudoers_content=''
 
   assert_source_files
+  assert_production_environment_isolated
   assert_account_shape
   assert_file_shape "$DISPATCHER_PATH" 'root:root:755'
   assert_file_shape "$REDIS_READER_PATH" 'root:root:755'
@@ -228,6 +302,8 @@ apply_policy() {
   local public_key=''
   local authorized_keys_tmp=''
   local sudoers_tmp=''
+  local isolation_error=''
+  local created_account='false'
 
   require_root
   for executable in \
@@ -235,13 +311,13 @@ apply_policy() {
     /usr/bin/dirname /usr/bin/docker /usr/bin/env /usr/bin/getent \
     /usr/bin/id /usr/bin/install /usr/bin/node /usr/bin/passwd /usr/bin/ssh-keygen \
     /usr/bin/stat /usr/bin/sudo /usr/bin/timeout /usr/bin/tr /usr/sbin/runuser /usr/sbin/useradd \
-    /usr/sbin/usermod /usr/sbin/visudo; do
+    /usr/sbin/userdel /usr/sbin/groupdel /usr/sbin/usermod /usr/sbin/visudo; do
     require_executable "$executable"
   done
   assert_source_files
   [[ -f /opt/bluesky-feed/cli/dist/index.js ]] || fail 'built epoch CLI is missing at /opt/bluesky-feed/cli/dist/index.js'
   [[ -d /opt/bluesky-feed ]] || fail 'production checkout is missing at /opt/bluesky-feed'
-  [[ -f /opt/bluesky-feed/.env ]] || fail 'root-protected production environment file is missing'
+  assert_production_environment_isolated
   public_key="$(read_public_key "$public_key_file")"
 
   for directory in "$OPERATIONS_HOME" "${OPERATIONS_HOME}/.ssh" \
@@ -256,7 +332,14 @@ apply_policy() {
     assert_account_shape
   else
     /usr/sbin/useradd --system --user-group --home-dir "$OPERATIONS_HOME" --shell /bin/sh --no-create-home "$OPERATIONS_USER"
-    /usr/sbin/usermod --lock "$OPERATIONS_USER"
+    created_account='true'
+    if ! /usr/sbin/usermod --lock "$OPERATIONS_USER"; then
+      remove_new_account_after_failed_isolation 'password lock failed'
+    fi
+  fi
+  if [[ "$created_account" == 'true' ]] &&
+    ! isolation_error="$(assert_production_environment_isolated 2>&1)"; then
+    remove_new_account_after_failed_isolation "$isolation_error"
   fi
 
   for directory in "$OPERATIONS_HOME" "${OPERATIONS_HOME}/.ssh" \
@@ -494,4 +577,6 @@ main() {
   esac
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

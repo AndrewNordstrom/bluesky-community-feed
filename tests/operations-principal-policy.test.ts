@@ -111,6 +111,17 @@ function runAcceptance(directory: string, databaseUrlPath: string): SpawnSyncRet
   );
 }
 
+function runProvisionerFunction(functionName: string, args: string[]): SpawnSyncReturns<string> {
+  return spawnSync(
+    '/bin/bash',
+    ['-c', 'source "$1"; shift; "$@"', 'bash', PROVISIONER_PATH, functionName, ...args],
+    {
+      encoding: 'utf8',
+      timeout: 5_000,
+    },
+  );
+}
+
 describe('PROJ-2258 operations principal policy', () => {
   it('keeps the dispatcher allowlist exact and argument-free', () => {
     const dispatcher = readFileSync(DISPATCHER_PATH, 'utf8');
@@ -229,6 +240,8 @@ describe('PROJ-2258 operations principal policy', () => {
     expect(provisioner).toContain('ensure_root_parent_directory "$directory"');
     expect(provisioner).toContain('required parent is group- or other-writable');
     expect(provisioner).toContain('assert_safe_existing_managed_path "$managed_path"');
+    expect(provisioner).toContain('assert_production_environment_isolated');
+    expect(provisioner).toContain("assert_isolated_secret_file /opt/bluesky-feed/.env 0 'production environment file'");
     expect(provisioner).toContain('unexpected entry blocks rollback before mutation');
     expect(provisioner).toContain('operations home is missing or unsafe; rollback made no changes');
     expect(provisioner).toContain('/usr/bin/curl');
@@ -281,6 +294,123 @@ describe('PROJ-2258 operations principal policy', () => {
       assertSpawnCompleted(result);
       expect(result.status).toBe(1);
       expect(result.stderr).toContain('database URL file must have no group or other permission bits');
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it.each([0o400, 0o600])('accepts an isolated secret file with mode %o', (mode) => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'corgi-operations-secret-'));
+    const secretPath = path.join(directory, 'secret');
+
+    try {
+      writeFileSync(secretPath, 'not-a-real-secret\n', { mode });
+      chmodSync(secretPath, mode);
+      const result = runProvisionerFunction('assert_isolated_secret_file', [
+        secretPath,
+        String(process.getuid()),
+        'test secret',
+      ]);
+
+      assertSpawnCompleted(result);
+      expect(result.status).toBe(0);
+      expect(result.stderr).toBe('');
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it.each([0o640, 0o644])('rejects a secret file with mode %o', (mode) => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'corgi-operations-secret-'));
+    const secretPath = path.join(directory, 'secret');
+
+    try {
+      writeFileSync(secretPath, 'not-a-real-secret\n', { mode });
+      chmodSync(secretPath, mode);
+      const result = runProvisionerFunction('assert_isolated_secret_file', [
+        secretPath,
+        String(process.getuid()),
+        'test secret',
+      ]);
+
+      assertSpawnCompleted(result);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('must grant no group or other permissions');
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects missing, symlinked, and incorrectly owned secret files', () => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'corgi-operations-secret-'));
+    const secretPath = path.join(directory, 'secret');
+    const secretLink = path.join(directory, 'secret-link');
+
+    try {
+      const missing = runProvisionerFunction('assert_isolated_secret_file', [
+        secretPath,
+        String(process.getuid()),
+        'test secret',
+      ]);
+      assertSpawnCompleted(missing);
+      expect(missing.status).toBe(1);
+      expect(missing.stderr).toContain('must be a non-symlink regular file');
+
+      writeFileSync(secretPath, 'not-a-real-secret\n', { mode: 0o600 });
+      symlinkSync(secretPath, secretLink);
+      const symlink = runProvisionerFunction('assert_isolated_secret_file', [
+        secretLink,
+        String(process.getuid()),
+        'test secret',
+      ]);
+      assertSpawnCompleted(symlink);
+      expect(symlink.status).toBe(1);
+      expect(symlink.stderr).toContain('must be a non-symlink regular file');
+
+      const wrongOwner = runProvisionerFunction('assert_isolated_secret_file', [
+        secretPath,
+        String(process.getuid() + 1),
+        'test secret',
+      ]);
+      assertSpawnCompleted(wrongOwner);
+      expect(wrongOwner.status).toBe(1);
+      expect(wrongOwner.stderr).toContain('must have owner uid');
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it.each([0o775, 0o757])('rejects an application directory with mode %o', (mode) => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'corgi-operations-app-'));
+
+    try {
+      chmodSync(directory, mode);
+      const result = runProvisionerFunction('assert_application_directory_isolated', [
+        directory,
+        '',
+      ]);
+
+      assertSpawnCompleted(result);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('is group- or other-writable');
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects an application directory owned by the operations account UID', () => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'corgi-operations-app-'));
+
+    try {
+      chmodSync(directory, 0o755);
+      const result = runProvisionerFunction('assert_application_directory_isolated', [
+        directory,
+        String(process.getuid()),
+      ]);
+
+      assertSpawnCompleted(result);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('operations account must not own the production application path');
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
