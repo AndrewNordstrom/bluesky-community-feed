@@ -8,6 +8,7 @@
     "dev": "next dev",
     "lint": "next lint",
     "smoke:production": "playwright test --config playwright.config.ts",
+    "test:feed": "npm run build && playwright test --config playwright.feed.config.ts",
     "start": "next start"
   },
   "dependencies": {

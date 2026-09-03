@@ -1,5 +1,12 @@
+import {
+  BLUESKY_APPVIEW_BASE_URL,
+  BlueskyPublicDataError,
+  bskyPostUrlFromAtUri as buildBlueskyPostUrl,
+  buildPostHydrationUrl as buildBlueskyHydrationUrl,
+  publicHiddenReason,
+} from "@/lib/bluesky-public"
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? ""
-const BLUESKY_APPVIEW_BASE_URL = "https://public.api.bsky.app"
 const LIVE_FEED_LIMIT = 12
 const REQUEST_TIMEOUT_MS = 12_000
 const RECEIPT_REQUEST_TIMEOUT_MS = 5_000
@@ -121,6 +128,35 @@ export class LiveDemoDataError extends Error {
   }
 }
 
+export function buildPostHydrationUrl(postUris: readonly string[]): string {
+  try {
+    return buildBlueskyHydrationUrl(postUris)
+  } catch (error) {
+    if (error instanceof BlueskyPublicDataError) {
+      throw new LiveDemoDataError(error.message)
+    }
+    throw error
+  }
+}
+
+export function bskyPostUrlFromAtUri(postUri: string): string {
+  try {
+    return buildBlueskyPostUrl(postUri)
+  } catch (error) {
+    if (error instanceof BlueskyPublicDataError) {
+      throw new LiveDemoDataError(error.message)
+    }
+    throw error
+  }
+}
+
+export function publicDemoHiddenReason(
+  labels: readonly string[],
+  hasPublicText: boolean
+): string | null {
+  return publicHiddenReason(labels, hasPublicText)
+}
+
 interface AppViewLabel {
   readonly val?: unknown
 }
@@ -232,17 +268,6 @@ const SCORE_COMPONENTS = [
   { key: "relevance", label: "Relevance" },
 ] as const
 
-const HIDDEN_LABELS = new Set(["!no-unauthenticated", "!hide", "!takedown"])
-const ADULT_ONLY_LABELS = new Set([
-  "porn",
-  "sexual",
-  "nudity",
-  "graphic-media",
-  "gore",
-  "self-harm",
-  "sexual-figurative",
-])
-
 function buildCorgiUrl(path: string): string {
   if (API_BASE_URL.length > 0) {
     return new URL(path, API_BASE_URL).toString()
@@ -256,33 +281,6 @@ export function buildAppViewFeedUrl(feedUri: string, limit: number): string {
   url.searchParams.set("feed", feedUri)
   url.searchParams.set("limit", String(limit))
   return url.toString()
-}
-
-export function buildPostHydrationUrl(postUris: readonly string[]): string {
-  const url = new URL("/xrpc/app.bsky.feed.getPosts", BLUESKY_APPVIEW_BASE_URL)
-
-  for (const postUri of postUris) {
-    url.searchParams.append("uris", postUri)
-  }
-
-  return url.toString()
-}
-
-export function bskyPostUrlFromAtUri(postUri: string): string {
-  const match = /^at:\/\/([^/]+)\/app\.bsky\.feed\.post\/([^/]+)$/.exec(postUri)
-
-  if (match === null) {
-    throw new LiveDemoDataError(`Unable to build Bluesky URL from post URI: ${postUri}`)
-  }
-
-  const repo = match[1]
-  const rkey = match[2]
-
-  if (repo === undefined || rkey === undefined) {
-    throw new LiveDemoDataError(`Unable to parse Bluesky post URI: ${postUri}`)
-  }
-
-  return `https://bsky.app/profile/${repo}/post/${rkey}`
 }
 
 function errorMessage(error: unknown): string {
@@ -416,22 +414,6 @@ function labelValuesForPost(post: AppViewPostApi | undefined): readonly string[]
   ]
 }
 
-export function publicDemoHiddenReason(labels: readonly string[], hasPublicText: boolean): string | null {
-  if (labels.some((label) => HIDDEN_LABELS.has(label))) {
-    return "Post hidden by Bluesky public-view policy"
-  }
-
-  if (labels.some((label) => ADULT_ONLY_LABELS.has(label))) {
-    return "Post hidden by Bluesky adult-content policy"
-  }
-
-  if (!hasPublicText) {
-    return "Post unavailable from Bluesky public view"
-  }
-
-  return null
-}
-
 function hiddenPost(rank: number, post: AppViewPostApi | undefined, labels: readonly string[], reason: string): HiddenLiveDemoFeedPost {
   return {
     visibility: "hidden",
@@ -456,7 +438,7 @@ function hiddenPost(rank: number, post: AppViewPostApi | undefined, labels: read
 function normalizeAppViewPost(post: AppViewPostApi | undefined, rank: number): LiveDemoFeedPost {
   const labels = labelValuesForPost(post)
   const text = asOptionalString(post?.record?.text)
-  const hiddenReason = publicDemoHiddenReason(labels, text !== null)
+  const hiddenReason = publicHiddenReason(labels, text !== null)
 
   if (post === undefined) {
     return hiddenPost(rank, post, labels, "Post unavailable from Bluesky public view")
