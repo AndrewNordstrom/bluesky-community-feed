@@ -34,6 +34,10 @@ service, container, GitHub environment, deploy control, or freeze was changed.
 ### Automation Summary
 
 - Packet: PROJ-2268
+- Canonical repository: `https://github.com/andrewnordstrom-eng/corgi`
+- Rename evidence (verified 2026-09-04): GitHub resolves both the canonical
+  slug and legacy `andrewnordstrom-eng/bluesky-community-feed` slug to
+  repository ID `1151738081` / node ID `R_kgDORKYg4Q`.
 - Repository phase: admitted with founder-approved WIP-cap overrides
 - Starting main: `c703244da266679a289109871920d0320f14ebf3`
 - Production contact: none
