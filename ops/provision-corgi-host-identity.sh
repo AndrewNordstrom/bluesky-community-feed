@@ -13,6 +13,7 @@ readonly WRAPPER_PATH='/usr/local/sbin/corgi-deploy-root'
 readonly SUDOERS_PATH='/etc/sudoers.d/corgi-deploy'
 readonly STATE_DIR='/var/lib/corgi-host-adoption'
 readonly STATE_FILE="${STATE_DIR}/state"
+readonly STATE_TMP="${STATE_DIR}/state.tmp"
 readonly UNIT_BACKUP="${STATE_DIR}/bluesky-feed.service.before"
 readonly SUDOERS_BACKUP="${STATE_DIR}/deployment-sudoers.before"
 readonly APPLY_CONFIRMATION='CONFIRM-CORGI-HOST-IDENTITY-ADOPTION'
@@ -303,25 +304,21 @@ write_state() {
   local deploy_user="$1"
   local broad_sudoers_path="$2"
   local env_shape="$3"
-  local service_user_created="$4"
-  local service_group_created="$5"
-  local state_tmp=''
-
-  state_tmp="$(/usr/bin/mktemp)"
-  trap '/usr/bin/rm -f -- "${state_tmp:-}"' RETURN
+  local service_user_phase="$4"
+  local service_group_phase="$5"
+  [[ ! -e "$STATE_TMP" && ! -L "$STATE_TMP" ]] || fail "adoption state temporary path already exists: ${STATE_TMP}"
+  /usr/bin/install -o root -g root -m 0600 /dev/null "$STATE_TMP"
   {
-    printf 'version=1\n'
+    printf 'version=2\n'
     printf 'deploy_user=%s\n' "$deploy_user"
     printf 'broad_sudoers_path=%s\n' "$broad_sudoers_path"
     printf 'environment_shape=%s\n' "$env_shape"
     printf 'unit_backup_sha256=%s\n' "$(file_sha256 "$UNIT_BACKUP")"
     printf 'sudoers_backup_sha256=%s\n' "$(file_sha256 "$SUDOERS_BACKUP")"
-    printf 'service_user_created=%s\n' "$service_user_created"
-    printf 'service_group_created=%s\n' "$service_group_created"
-  } >"$state_tmp"
-  /usr/bin/install -o root -g root -m 0600 "$state_tmp" "$STATE_FILE"
-  trap - RETURN
-  /usr/bin/rm -f -- "$state_tmp"
+    printf 'service_user_phase=%s\n' "$service_user_phase"
+    printf 'service_group_phase=%s\n' "$service_group_phase"
+  } >"$STATE_TMP"
+  /usr/bin/mv -f -- "$STATE_TMP" "$STATE_FILE"
 }
 
 read_state_value() {
@@ -337,7 +334,8 @@ assert_state_shape() {
   assert_root_regular_file "$STATE_FILE" 600 'adoption state file'
   assert_root_regular_file "$UNIT_BACKUP" 600 'service unit backup'
   assert_root_regular_file "$SUDOERS_BACKUP" 600 'deployment sudoers backup'
-  [[ "$(read_state_value version)" == '1' ]] || fail 'unsupported adoption state version'
+  [[ ! -e "$STATE_TMP" && ! -L "$STATE_TMP" ]] || fail 'adoption state has an incomplete journal write'
+  [[ "$(read_state_value version)" == '2' ]] || fail 'unsupported adoption state version'
   [[ "$(file_sha256 "$UNIT_BACKUP")" == "$(read_state_value unit_backup_sha256)" ]] ||
     fail 'service unit backup digest mismatch'
   [[ "$(file_sha256 "$SUDOERS_BACKUP")" == "$(read_state_value sudoers_backup_sha256)" ]] ||
@@ -380,8 +378,8 @@ rollback_internal() {
   local env_uid=''
   local env_gid=''
   local env_mode=''
-  local service_user_created=''
-  local service_group_created=''
+  local service_user_phase=''
+  local service_group_phase=''
   local current_unit_sha=''
   local current_env_shape=''
   local restore_service='false'
@@ -396,10 +394,12 @@ rollback_internal() {
   IFS=: read -r env_uid env_gid env_mode <<<"$env_shape"
   [[ "$env_uid" =~ ^[0-9]+$ && "$env_gid" =~ ^[0-9]+$ && "$env_mode" =~ ^[0-7]{3,4}$ ]] ||
     fail 'rollback environment metadata is malformed'
-  service_user_created="$(read_state_value service_user_created)"
-  service_group_created="$(read_state_value service_group_created)"
-  [[ "$service_user_created" == 'true' || "$service_user_created" == 'false' ]] || fail 'invalid service-user state'
-  [[ "$service_group_created" == 'true' || "$service_group_created" == 'false' ]] || fail 'invalid service-group state'
+  service_user_phase="$(read_state_value service_user_phase)"
+  service_group_phase="$(read_state_value service_group_phase)"
+  [[ "$service_user_phase" == 'unchanged' || "$service_user_phase" == 'create-pending' || "$service_user_phase" == 'created' ]] ||
+    fail 'invalid service-user phase'
+  [[ "$service_group_phase" == 'unchanged' || "$service_group_phase" == 'create-pending' || "$service_group_phase" == 'created' ]] ||
+    fail 'invalid service-group phase'
 
   if [[ -e "$broad_sudoers_path" || -L "$broad_sudoers_path" ]]; then
     assert_safe_sudoers_path "$broad_sudoers_path"
@@ -429,14 +429,14 @@ rollback_internal() {
   fi
   /usr/bin/rm -f -- "$WRAPPER_PATH"
 
-  if [[ "$service_user_created" == 'true' ]]; then
+  if [[ "$service_user_phase" != 'unchanged' ]] && /usr/bin/getent passwd "$SERVICE_USER" >/dev/null; then
     [[ -z "$(/usr/bin/ps -u "$SERVICE_USER" -o pid= 2>/dev/null)" ]] || fail 'service user still owns a process after rollback'
     /usr/sbin/userdel "$SERVICE_USER"
   fi
-  if [[ "$service_group_created" == 'true' ]] && /usr/bin/getent group "$SERVICE_GROUP" >/dev/null; then
+  if [[ "$service_group_phase" != 'unchanged' ]] && /usr/bin/getent group "$SERVICE_GROUP" >/dev/null; then
     /usr/sbin/groupdel "$SERVICE_GROUP"
   fi
-  /usr/bin/rm -f -- "$STATE_FILE" "$UNIT_BACKUP" "$SUDOERS_BACKUP"
+  /usr/bin/rm -f -- "$STATE_FILE" "$STATE_TMP" "$UNIT_BACKUP" "$SUDOERS_BACKUP"
   if ! /usr/bin/rmdir "$STATE_DIR" 2>/dev/null; then
     state_cleanup_complete='false'
     printf '%s\n' \
@@ -450,6 +450,22 @@ rollback_internal() {
   fi
 }
 
+rollback_partial_adoption() {
+  if [[ -f "$STATE_FILE" && ! -L "$STATE_FILE" && \
+        -f "$UNIT_BACKUP" && ! -L "$UNIT_BACKUP" && \
+        -f "$SUDOERS_BACKUP" && ! -L "$SUDOERS_BACKUP" ]]; then
+    /usr/bin/rm -f -- "$STATE_TMP"
+    rollback_internal "$1"
+    return
+  fi
+
+  /usr/bin/rm -f -- "$STATE_FILE" "$STATE_TMP" "$UNIT_BACKUP" "$SUDOERS_BACKUP"
+  if [[ -e "$STATE_DIR" || -L "$STATE_DIR" ]]; then
+    [[ -d "$STATE_DIR" && ! -L "$STATE_DIR" ]] || fail "partial adoption state is unsafe: ${STATE_DIR}"
+    /usr/bin/rmdir "$STATE_DIR" || fail "partial adoption state contains unowned entries: ${STATE_DIR}"
+  fi
+}
+
 apply_failure_rollback() {
   local status="$1"
   local deploy_user="$2"
@@ -458,7 +474,7 @@ apply_failure_rollback() {
   [[ "${applying:-false}" == 'true' && "$status" -ne 0 ]] || return 0
   applying='false'
   printf '%s\n' 'PROJ-2268 apply failed; attempting guarded rollback' >&2
-  if ! (rollback_internal "$deploy_user"); then
+  if ! (rollback_partial_adoption "$deploy_user"); then
     printf '%s\n' 'PROJ-2268 guarded rollback failed; manual root recovery required' >&2
   fi
 }
@@ -471,8 +487,8 @@ apply_policy() {
   local expected_repository_sha="$5"
   local confirmation="$6"
   local env_shape=''
-  local service_user_created='false'
-  local service_group_created='false'
+  local service_user_phase='unchanged'
+  local service_group_phase='unchanged'
   local sudoers_tmp=''
   local applying='false'
 
@@ -493,23 +509,27 @@ apply_policy() {
     fail 'installed service unit changed after review'
   env_shape="$(numeric_shape "$ENVIRONMENT_FILE")"
 
+  applying='true'
+  trap 'apply_failure_rollback "$?" "$deploy_user"' EXIT
   /usr/bin/install -d -o root -g root -m 0700 "$STATE_DIR"
   /usr/bin/install -o root -g root -m 0600 "$UNIT_PATH" "$UNIT_BACKUP"
   /usr/bin/install -o root -g root -m 0600 "$broad_sudoers_path" "$SUDOERS_BACKUP"
-  write_state "$deploy_user" "$broad_sudoers_path" "$env_shape" "$service_user_created" "$service_group_created"
-  applying='true'
-  trap 'apply_failure_rollback "$?" "$deploy_user"' EXIT
+  write_state "$deploy_user" "$broad_sudoers_path" "$env_shape" "$service_user_phase" "$service_group_phase"
 
   if ! /usr/bin/getent group "$SERVICE_GROUP" >/dev/null; then
+    service_group_phase='create-pending'
+    write_state "$deploy_user" "$broad_sudoers_path" "$env_shape" "$service_user_phase" "$service_group_phase"
     /usr/sbin/groupadd --system "$SERVICE_GROUP"
-    service_group_created='true'
-    write_state "$deploy_user" "$broad_sudoers_path" "$env_shape" "$service_user_created" "$service_group_created"
+    service_group_phase='created'
+    write_state "$deploy_user" "$broad_sudoers_path" "$env_shape" "$service_user_phase" "$service_group_phase"
   fi
   if ! /usr/bin/getent passwd "$SERVICE_USER" >/dev/null; then
+    service_user_phase='create-pending'
+    write_state "$deploy_user" "$broad_sudoers_path" "$env_shape" "$service_user_phase" "$service_group_phase"
     /usr/sbin/useradd --system --gid "$SERVICE_GROUP" --home-dir "$SERVICE_HOME" \
       --shell /usr/sbin/nologin --no-create-home "$SERVICE_USER"
-    service_user_created='true'
-    write_state "$deploy_user" "$broad_sudoers_path" "$env_shape" "$service_user_created" "$service_group_created"
+    service_user_phase='created'
+    write_state "$deploy_user" "$broad_sudoers_path" "$env_shape" "$service_user_phase" "$service_group_phase"
   fi
   assert_service_account_shape
   /usr/sbin/runuser -u "$SERVICE_USER" -- /usr/bin/test -r "${APPLICATION_DIR}/dist/index.js" ||

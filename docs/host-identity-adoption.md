@@ -71,7 +71,9 @@ five modes:
    it never reads or prints `.env` contents.
 3. `apply` requires the exact observed digests, the exact reviewed repository
    SHA, and the literal confirmation phrase. It backs up the unit, sudoers
-   policy, and numeric `.env` metadata before mutation.
+   policy, and numeric `.env` metadata before mutation. A versioned journal is
+   armed before state creation and records `create-pending` before each account
+   or group mutation so interrupted identity setup remains reversible.
 4. `verify DEPLOY_USER` proves the allow/deny matrix and active process
    identity without restarting anything.
 5. `rollback DEPLOY_USER CONFIRM-CORGI-HOST-IDENTITY-ROLLBACK` restores the

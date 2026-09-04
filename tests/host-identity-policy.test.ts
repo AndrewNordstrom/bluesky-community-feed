@@ -163,7 +163,7 @@ describe('PROJ-2268 host identity policy', () => {
       [
         '-c',
         `source "$1"
-rollback_internal() { printf 'rollback:%s\\n' "$1"; }
+rollback_partial_adoption() { printf 'rollback:%s\\n' "$1"; }
 applying=true
 deploy_user=deploy-user
 trap 'apply_failure_rollback "$?" "$deploy_user"' EXIT
@@ -190,6 +190,61 @@ esac`,
     expect(result.status).toBe(expectedStatus);
     expect(result.stdout.includes('rollback:deploy-user')).toBe(expectedRollback);
     expect(result.stderr.includes('attempting guarded rollback')).toBe(expectedRollback);
+  });
+
+  it('preserves apply failure and reports a failed guarded rollback', () => {
+    const result = spawnSync(
+      '/bin/bash',
+      [
+        '-c',
+        `source "$1"
+rollback_partial_adoption() { return 1; }
+applying=true
+deploy_user=deploy-user
+trap 'apply_failure_rollback "$?" "$deploy_user"' EXIT
+fail 'forced assertion failure'`,
+        'bash',
+        PROVISIONER_PATH,
+      ],
+      {
+        encoding: 'utf8',
+        env: {
+          PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
+          CORGI_HOST_IDENTITY_LIBRARY_ONLY: '1',
+        },
+        timeout: 5_000,
+      }
+    );
+
+    assertSpawnCompleted(result);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('attempting guarded rollback');
+    expect(result.stderr).toContain('guarded rollback failed; manual root recovery required');
+  });
+
+  it('journals identity creation intent before each account mutation', () => {
+    const provisioner = readFileSync(PROVISIONER_PATH, 'utf8');
+    const applyStart = provisioner.indexOf('apply_policy() {');
+    const apply = provisioner.slice(applyStart);
+    const trapIndex = apply.indexOf('trap \'apply_failure_rollback');
+    const stateDirectoryIndex = apply.indexOf('/usr/bin/install -d -o root -g root -m 0700 "$STATE_DIR"');
+    const groupPendingIndex = apply.indexOf("service_group_phase='create-pending'");
+    const groupPendingWriteIndex = apply.indexOf('write_state', groupPendingIndex);
+    const groupAddIndex = apply.indexOf('/usr/sbin/groupadd --system "$SERVICE_GROUP"');
+    const userPendingIndex = apply.indexOf("service_user_phase='create-pending'");
+    const userPendingWriteIndex = apply.indexOf('write_state', userPendingIndex);
+    const userAddIndex = apply.indexOf('/usr/sbin/useradd --system');
+
+    expect(trapIndex).toBeGreaterThanOrEqual(0);
+    expect(stateDirectoryIndex).toBeGreaterThan(trapIndex);
+    expect(groupPendingIndex).toBeGreaterThan(stateDirectoryIndex);
+    expect(groupPendingWriteIndex).toBeGreaterThan(groupPendingIndex);
+    expect(groupAddIndex).toBeGreaterThan(groupPendingWriteIndex);
+    expect(userPendingIndex).toBeGreaterThan(groupAddIndex);
+    expect(userPendingWriteIndex).toBeGreaterThan(userPendingIndex);
+    expect(userAddIndex).toBeGreaterThan(userPendingWriteIndex);
+    expect(provisioner).toContain("$service_group_phase\" != 'unchanged'");
+    expect(provisioner).toContain("$service_user_phase\" != 'unchanged'");
   });
 
   it('renders one exact sudo target for the named deployment user', () => {

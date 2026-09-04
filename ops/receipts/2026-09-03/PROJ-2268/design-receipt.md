@@ -16,8 +16,8 @@ Repository validation completed successfully on the issue branch:
 - `git diff --check`
 - `npm run docs:verify` (15 tracked docs; 38 Markdown files scanned)
 - `npm run build`
-- focused Vitest policy run (2 files; 384 tests)
-- `npm run verify` (158 test files; 2,175 tests; CLI, SDK, web lint/build,
+- focused Vitest policy run (2 files; 386 tests)
+- `npm run verify` (158 test files; 2,177 tests; CLI, SDK, web lint/build,
   and Next production build)
 
 Every command exited zero. The final Git commit is intentionally not
