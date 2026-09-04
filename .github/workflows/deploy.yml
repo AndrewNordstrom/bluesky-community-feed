@@ -1107,6 +1107,28 @@ jobs:
               done
             }
 
+            ensure_runtime_artifacts_service_readable() {
+              local artifact_path
+              local parent_path
+              for parent_path in . web web-next cli packages packages/feed-sdk; do
+                if [ -e "$parent_path" ] || [ -L "$parent_path" ]; then
+                  if [ ! -d "$parent_path" ] || [ -L "$parent_path" ]; then
+                    echo "Runtime artifact parent is missing or unsafe: path=$parent_path" >&2
+                    return 1
+                  fi
+                  chmod o+x "$parent_path" || return 1
+                fi
+              done
+              for artifact_path in "${RUNTIME_ARTIFACT_PATHS[@]}"; do
+                if [ ! -d "$artifact_path" ] || [ -L "$artifact_path" ]; then
+                  echo "Runtime artifact is missing or unsafe: path=$artifact_path" >&2
+                  return 1
+                fi
+                find "$artifact_path" -type d -exec chmod o+rx {} + || return 1
+                find "$artifact_path" -type f -exec chmod o+r {} + || return 1
+              done
+            }
+
             restore_previous_artifacts() {
               local artifact_failed
               local artifact_path
@@ -1212,7 +1234,9 @@ jobs:
                  [ "$(git rev-parse HEAD 2>/dev/null)" != "$PREV_COMMIT" ]; then
                 artifact_restore_failed=true
               fi
-              if ! restore_previous_artifacts; then
+              if ! restore_previous_artifacts || \
+                 ! ensure_runtime_artifacts_service_readable || \
+                 ! sudo -n -- /usr/local/sbin/corgi-deploy-root service-can-read-entrypoint; then
                 artifact_restore_failed=true
               fi
               if [ "$artifact_restore_failed" = "true" ]; then
@@ -1330,6 +1354,8 @@ jobs:
             test "$ACTUAL_SHA" = "$DEPLOY_SHA"
             backup_previous_artifacts
             install_candidate_artifacts
+            ensure_runtime_artifacts_service_readable
+            sudo -n -- /usr/local/sbin/corgi-deploy-root service-can-read-entrypoint
             test "$(cat dist/.release-sha 2>/dev/null)" = "$DEPLOY_SHA"
             for i in 1 2 3 4 5; do
               if sudo -n -- /usr/local/sbin/corgi-deploy-root demo-redis-ping | grep -q PONG; then

@@ -17,6 +17,7 @@ const ALLOWED_ROOT_COMMANDS = [
   'service-is-active',
   'service-state',
   'service-restart',
+  'service-can-read-entrypoint',
   'postgres-ingestion-signals',
   'demo-redis-ping',
   'demo-redis-exists',
@@ -67,6 +68,7 @@ describe('PROJ-2268 host identity policy', () => {
     expect(wrapper).not.toContain('bash -c');
     expect(wrapper).not.toContain('sh -c');
     expect(wrapper).toContain("readonly SERVICE_UNIT='bluesky-feed'");
+    expect(wrapper).toContain("readonly SERVICE_ENTRYPOINT='/opt/bluesky-feed/dist/index.js'");
     expect(wrapper).toContain("readonly POSTGRES_CONTAINER='bluesky-feed-postgres'");
     expect(wrapper).toContain("readonly DEMO_REDIS_CONTAINER='bluesky-feed-demo-redis'");
     expect(wrapper).toContain("readonly PRODUCTION_REDIS_CONTAINER='bluesky-feed-redis'");
@@ -141,6 +143,7 @@ describe('PROJ-2268 host identity policy', () => {
     expect(provisioner).toContain("readonly STATE_DIR='/var/lib/corgi-host-adoption'");
     expect(provisioner).toContain('repository has tracked changes after exact-head approval');
     expect(provisioner).toContain('attempting guarded rollback');
+    expect(provisioner).toContain('trap \'apply_failure_rollback "$?" "$deploy_user"\' EXIT');
     expect(provisioner).toContain('/usr/sbin/visudo -c');
     expect(provisioner).toContain('if ! /usr/bin/rmdir "$STATE_DIR"');
     expect(provisioner).toContain('rollback restored; evidence cleanup remains');
@@ -148,6 +151,45 @@ describe('PROJ-2268 host identity policy', () => {
     expect(provisioner).not.toContain('chown -R');
     expect(provisioner).not.toContain('chmod -R');
     expect(provisioner).not.toContain('source "$STATE_FILE"');
+  });
+
+  it.each([
+    { mode: 'fail', expectedStatus: 1, expectedRollback: true },
+    { mode: 'return', expectedStatus: 1, expectedRollback: true },
+    { mode: 'success', expectedStatus: 0, expectedRollback: false },
+  ] as const)('runs guarded rollback on apply $mode', ({ mode, expectedStatus, expectedRollback }) => {
+    const result = spawnSync(
+      '/bin/bash',
+      [
+        '-c',
+        `source "$1"
+rollback_internal() { printf 'rollback:%s\\n' "$1"; }
+applying=true
+deploy_user=deploy-user
+trap 'apply_failure_rollback "$?" "$deploy_user"' EXIT
+case "$2" in
+  fail) fail 'forced assertion failure' ;;
+  return) /usr/bin/false ;;
+  success) applying=false ;;
+esac`,
+        'bash',
+        PROVISIONER_PATH,
+        mode,
+      ],
+      {
+        encoding: 'utf8',
+        env: {
+          PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
+          CORGI_HOST_IDENTITY_LIBRARY_ONLY: '1',
+        },
+        timeout: 5_000,
+      }
+    );
+
+    assertSpawnCompleted(result);
+    expect(result.status).toBe(expectedStatus);
+    expect(result.stdout.includes('rollback:deploy-user')).toBe(expectedRollback);
+    expect(result.stderr.includes('attempting guarded rollback')).toBe(expectedRollback);
   });
 
   it('renders one exact sudo target for the named deployment user', () => {

@@ -42,6 +42,7 @@ dynamic value is a demo-session Redis key matching
 | `service-is-active` | Check that `bluesky-feed` is active without output |
 | `service-state` | Print the active state of `bluesky-feed` |
 | `service-restart` | Restart only `bluesky-feed` |
+| `service-can-read-entrypoint` | Prove the service user can traverse to and read the fixed production entry point |
 | `postgres-ingestion-signals` | Run one fixed, read-only cursor/newest-post query in `bluesky-feed-postgres` |
 | `demo-redis-ping` | Ping only `bluesky-feed-demo-redis` |
 | `demo-redis-exists KEY` | Read one validated demo-session key from demo Redis |
@@ -54,6 +55,9 @@ dynamic value is a demo-session Redis key matching
 The wrapper uses an empty environment with a fixed `PATH`, locale, and home.
 Every container call has a 15-second outer deadline. Arbitrary `systemctl`,
 `docker`, `docker exec`, shell, SQL, Redis, file, and service names are rejected.
+After each candidate install and rollback restore, the workflow grants only
+read/traverse bits on the fixed runtime-artifact paths and asks the wrapper to
+prove `bluesky-feed` can read `/opt/bluesky-feed/dist/index.js` before restart.
 
 ## Reviewable execution vehicle
 
@@ -77,7 +81,7 @@ five modes:
 Apply refuses a dirty or wrong-head checkout, changed unit/sudoers hashes,
 symlinks, foreign file owners, an inactive starting service, pre-existing
 managed paths, malformed state, or an unexpected account shape. If an error
-occurs after durable state is written, the error trap attempts the same guarded
+occurs after durable state is written, the guarded exit trap attempts the same
 rollback path. A repeated successful `apply` runs verification and reports that
 the contract is already applied.
 
@@ -146,4 +150,3 @@ while adoption or rollback is in progress.
 - [sudoers command matching](https://www.sudo.ws/docs/man/1.9.14/sudoers.man.pdf)
 - [NIST SP 800-53 Rev. 5 controls](https://csrc.nist.gov/Projects/risk-management/sp800-53-controls/downloads)
 - Saltzer and Schroeder, [The Protection of Information in Computer Systems](https://doi.org/10.1109/PROC.1975.9939)
-

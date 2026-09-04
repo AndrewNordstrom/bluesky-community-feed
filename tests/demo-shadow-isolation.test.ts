@@ -331,6 +331,8 @@ describe('fixed privileged dispatcher command matcher', () => {
     'VALUE="$(sudo docker exec bluesky-feed-demo-redis redis-cli ping)"',
     'VALUE="$(printf %s "$(sudo docker exec bluesky-feed-demo-redis redis-cli ping)")"',
     'VALUE="$(printf %s "$(/usr/local/sbin/corgi-deploy-root demo-redis-ping)")"',
+    'sudo -n -- /usr/local/sbin/corgi-deploy-root demo-redis-ping\nsudo -n -- /usr/bin/docker ps',
+    'sudo -n -- /usr/local/sbin/corgi-deploy-root demo-redis-ping\nsudo -n -- /usr/bin/systemctl status bluesky-feed',
     'docker \\\n      compose up -d',
   ])('rejects missing or non-privileged invocation: %j', (script) => {
     expect(usesOnlyFixedPrivilegeDispatcherCommands(script)).toBe(false);
@@ -651,6 +653,7 @@ git() {
   fi
 }
 curl() { printf '%s' '{"status":"ok","revision":"stub"}'; }
+ensure_runtime_artifacts_service_readable() { return 0; }
 sudo() {
   printf 'sudo:%s\\n' "$*" >> "$TEST_LOG"
   if [ "$1" = "-n" ] && [ "$4" = "service-restart" ] && [ "$TEST_FAILURE" = "restart" ]; then
@@ -991,6 +994,43 @@ on_deploy_error 1
 
     expect(diskGateIndex).toBeGreaterThanOrEqual(0);
     expect(extractionIndex).toBeGreaterThan(diskGateIndex);
+  });
+
+  it('makes runtime artifacts service-readable after restrictive extraction', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'corgi-artifact-modes-'));
+    const remoteScript = extractRemoteDeployScript(readFileSync(DEPLOY_FILE, 'utf8'));
+    const accessFunction = extractShellFunction(
+      remoteScript,
+      'ensure_runtime_artifacts_service_readable'
+    );
+    try {
+      const result = spawnSync(
+        'bash',
+        [
+          '-c',
+          `set -Eeuo pipefail
+umask 077
+mkdir -p node_modules/example dist
+printf '%s\n' module > node_modules/example/index.js
+printf '%s\n' service > dist/index.js
+RUNTIME_ARTIFACT_PATHS=(node_modules dist)
+${accessFunction}
+ensure_runtime_artifacts_service_readable`,
+        ],
+        { cwd: directory, encoding: 'utf8' }
+      );
+
+      expect(result.status, result.stderr).toBe(0);
+      expect(statSync(directory).mode & 0o001).toBe(0o001);
+      expect(statSync(join(directory, 'node_modules', 'example')).mode & 0o005).toBe(0o005);
+      expect(statSync(join(directory, 'dist')).mode & 0o005).toBe(0o005);
+      expect(statSync(join(directory, 'node_modules', 'example', 'index.js')).mode & 0o004).toBe(
+        0o004
+      );
+      expect(statSync(join(directory, 'dist', 'index.js')).mode & 0o004).toBe(0o004);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it.each(['partial_backup', 'partial_install', 'restore_failure'] as const)(
@@ -4036,7 +4076,9 @@ function usesOnlyFixedPrivilegeDispatcherCommands(script: string): boolean {
     token === '/usr/local/sbin/corgi-deploy-root' ? [index] : []
   );
   const directPrivilegeIndexes = tokens.flatMap((token, index) =>
-    token === 'docker' || token === 'systemctl' ? [index] : []
+    token.split('/').at(-1) === 'docker' || token.split('/').at(-1) === 'systemctl'
+      ? [index]
+      : []
   );
 
   return (

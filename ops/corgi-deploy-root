@@ -3,6 +3,8 @@
 set -Eeuo pipefail
 
 readonly SERVICE_UNIT='bluesky-feed'
+readonly SERVICE_USER='bluesky-feed'
+readonly SERVICE_ENTRYPOINT='/opt/bluesky-feed/dist/index.js'
 readonly POSTGRES_CONTAINER='bluesky-feed-postgres'
 readonly DEMO_REDIS_CONTAINER='bluesky-feed-demo-redis'
 readonly PRODUCTION_REDIS_CONTAINER='bluesky-feed-redis'
@@ -70,6 +72,10 @@ main() {
     service-restart)
       require_arg_count 0 "$#" "$command_name"
       run_clean /usr/bin/systemctl restart "$SERVICE_UNIT"
+      ;;
+    service-can-read-entrypoint)
+      require_arg_count 0 "$#" "$command_name"
+      run_clean /usr/sbin/runuser -u "$SERVICE_USER" -- /usr/bin/test -r "$SERVICE_ENTRYPOINT"
       ;;
     postgres-ingestion-signals)
       require_arg_count 0 "$#" "$command_name"

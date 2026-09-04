@@ -450,6 +450,19 @@ rollback_internal() {
   fi
 }
 
+apply_failure_rollback() {
+  local status="$1"
+  local deploy_user="$2"
+
+  trap - EXIT
+  [[ "${applying:-false}" == 'true' && "$status" -ne 0 ]] || return 0
+  applying='false'
+  printf '%s\n' 'PROJ-2268 apply failed; attempting guarded rollback' >&2
+  if ! (rollback_internal "$deploy_user"); then
+    printf '%s\n' 'PROJ-2268 guarded rollback failed; manual root recovery required' >&2
+  fi
+}
+
 apply_policy() {
   local deploy_user="$1"
   local broad_sudoers_path="$2"
@@ -485,7 +498,7 @@ apply_policy() {
   /usr/bin/install -o root -g root -m 0600 "$broad_sudoers_path" "$SUDOERS_BACKUP"
   write_state "$deploy_user" "$broad_sudoers_path" "$env_shape" "$service_user_created" "$service_group_created"
   applying='true'
-  trap 'if [[ "$applying" == "true" ]]; then applying=false; trap - ERR; printf "%s\n" "PROJ-2268 apply failed; attempting guarded rollback" >&2; rollback_internal "$deploy_user"; fi' ERR
+  trap 'apply_failure_rollback "$?" "$deploy_user"' EXIT
 
   if ! /usr/bin/getent group "$SERVICE_GROUP" >/dev/null; then
     /usr/sbin/groupadd --system "$SERVICE_GROUP"
@@ -521,7 +534,7 @@ apply_policy() {
   /usr/sbin/visudo -c >/dev/null
   verify_policy "$deploy_user"
   applying='false'
-  trap - ERR
+  trap - EXIT
   printf '%s\n' 'PROJ-2268 host identity adoption applied.'
 }
 
