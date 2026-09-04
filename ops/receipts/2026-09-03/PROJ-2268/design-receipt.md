@@ -38,6 +38,9 @@ service, container, GitHub environment, deploy control, or freeze was changed.
 - Rename evidence (verified 2026-09-04): GitHub resolves both the canonical
   slug and legacy `andrewnordstrom-eng/bluesky-community-feed` slug to
   repository ID `1151738081` / node ID `R_kgDORKYg4Q`.
+- Approval reference: the founder-authored 2026-09-04 `[APPROVED]` comment on
+  PROJ-2268 authorizes this repository-only implementation, and PROJ-2268
+  attaches PR #406 at the canonical `andrewnordstrom-eng/corgi` remote.
 - Repository phase: admitted with founder-approved WIP-cap overrides
 - Starting main: `c703244da266679a289109871920d0320f14ebf3`
 - Production contact: none
