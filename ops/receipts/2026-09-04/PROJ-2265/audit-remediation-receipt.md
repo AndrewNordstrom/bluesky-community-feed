@@ -11,9 +11,9 @@ No production endpoint, host, configuration, deployment, or freeze state was ins
 
 ## Deterministic Eval
 
-- Final `npm run verify`, after the environment example correction: PASS with public `.env.example` values supplied to the process, excluding `NODE_ENV` so Vitest and Next.js select their normal modes. This includes docs verification, backend build, 157 test files / 2,155 tests, CLI build, SDK build and fixture compilation, legacy frontend lint/build, and Next.js static export.
+- Final `npm run verify`, after the environment example correction and hosted-review CIDR coverage addition: PASS with public `.env.example` values supplied to the process, excluding `NODE_ENV` so Vitest and Next.js select their normal modes. This includes docs verification, backend build, 157 test files / 2,156 tests, CLI build, SDK build and fixture compilation, legacy frontend lint/build, and Next.js static export.
 - The existing `build:mcp-local` command reports that the optional `src/mcp-local` directory is absent and skips its build; no new skip was introduced.
-- Focused security defaults suite: 11 / 11 PASS, including six numeric forms and trusted/untrusted peer injection cases with the installed Fastify package.
+- Security defaults coverage includes six numeric forms and trusted/untrusted peer injection cases with the installed Fastify package. The final full suite also exercises `10.0.0.7` against the trusted `10.0.0.0/8` entry, retaining the original localhost and nonmatching-peer assertions.
 - All four shipped workspace moderate-threshold audit guards: PASS (root, CLI, web, web-next).
 - All four raw `npm audit --omit=dev --audit-level=moderate` checks: PASS, zero reported vulnerabilities.
 - Earlier candidate clean installs under Node.js 20.19.0 passed in all four workspaces; manifests and lockfiles were unchanged during this compatibility repair.
@@ -26,9 +26,9 @@ Two validation harness failures were resolved without product changes: the sandb
 
 ## Live Acceptance
 
-Local CodeRabbit review completed with no high or medium findings. Its single trivial suggestion was an additional trusted-CIDR test; existing tests already exercise the address-list configuration and the boundary review independently exercised address variants, so no implementation change was warranted. Independent candidate review reported no concrete bypass or regression.
+Local CodeRabbit review completed with no high or medium findings. Its single trivial suggestion was an additional trusted-CIDR test. Hosted review repeated that coverage request at comment 3940272617; the final candidate adds the matching CIDR peer case and passes full validation. Independent candidate review reported no concrete bypass or regression.
 
-Hosted CI and exact-head hosted review remain pending. This receipt does not establish merge, deployment, or production readiness.
+Hosted CI passed on the preceding `7fccb6c2b51d8a21fc8341388ed5550ef6bd100c` head, including backend/frontend verification and CodeQL. New-head hosted checks and exact-head review remain pending after the CIDR coverage addition. The active PROJ-2087 emergency-only main-freeze rule remains a separate normal-merge blocker. This receipt does not establish merge, deployment, or production readiness.
 
 ### Automation Summary
 

@@ -42,9 +42,13 @@ describe('security-oriented config defaults', () => {
     },
   );
 
-  it.each(['loopback', '127.0.0.1,10.0.0.0/8'])(
-    'honors forwarded headers only from a trusted peer with %j',
-    async (value) => {
+  it.each([
+    ['loopback', '127.0.0.1'],
+    ['127.0.0.1,10.0.0.0/8', '127.0.0.1'],
+    ['127.0.0.1,10.0.0.0/8', '10.0.0.7'],
+  ])(
+    'honors forwarded headers with %j from trusted peer %j',
+    async (value, trustedPeer) => {
       const app = Fastify({ trustProxy: parseTrustProxyConfig(value) });
       app.get('/', async (request) => ({
         ip: request.ip,
@@ -65,7 +69,7 @@ describe('security-oriented config defaults', () => {
           ip: '203.0.113.7', host: 'origin.example', protocol: 'http',
         });
 
-        const trusted = await app.inject({ url: '/', remoteAddress: '127.0.0.1', headers });
+        const trusted = await app.inject({ url: '/', remoteAddress: trustedPeer, headers });
         expect(trusted.statusCode).toBe(200);
         expect(trusted.json()).toEqual({
           ip: '198.51.100.9', host: 'proxy.example', protocol: 'https',
