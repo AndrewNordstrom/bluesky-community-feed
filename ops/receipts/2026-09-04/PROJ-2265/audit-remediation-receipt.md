@@ -11,7 +11,7 @@ No production endpoint, host, configuration, deployment, or freeze state was ins
 
 ## Deterministic Eval
 
-- `npm run verify`: PASS with public `.env.example` values supplied to the process, excluding `NODE_ENV` so Vitest and Next.js select their normal modes. This includes docs verification, backend build, 157 test files / 2,155 tests, CLI build, SDK build and fixture compilation, legacy frontend lint/build, and Next.js static export.
+- Final `npm run verify`, after the environment example correction: PASS with public `.env.example` values supplied to the process, excluding `NODE_ENV` so Vitest and Next.js select their normal modes. This includes docs verification, backend build, 157 test files / 2,155 tests, CLI build, SDK build and fixture compilation, legacy frontend lint/build, and Next.js static export.
 - The existing `build:mcp-local` command reports that the optional `src/mcp-local` directory is absent and skips its build; no new skip was introduced.
 - Focused security defaults suite: 11 / 11 PASS, including six numeric forms and trusted/untrusted peer injection cases with the installed Fastify package.
 - All four shipped workspace moderate-threshold audit guards: PASS (root, CLI, web, web-next).
@@ -34,4 +34,6 @@ Hosted CI and exact-head hosted review remain pending. This receipt does not est
 
 The candidate contains the targeted dependency upgrades/lockfile refreshes, numeric proxy compatibility repair, regression coverage, and changelog migration guidance. Audit exceptions remain unchanged.
 
-An authorized comment-only correction to `.env.example` remains unapplied: admission rejected the path as `proposed_claimed_paths:credential_path:.env.example`. The current example still lists the unsupported value `"1"`; its actual `loopback` default remains supported. This documentation blocker must be resolved through the admission policy before release; it was not bypassed.
+The authorized comment-only correction to `.env.example` removes the unsupported `"1"` example and directs numeric hop-count users to a trusted proxy IP or CIDR. The actual `loopback` default is unchanged.
+
+The initial environment-example admission block was resolved by PROJ-2269, merged through org-infra PR #761 at `a37d8f62dc6e2a544e299801536aee39159668a3`. The actual shared control-plane checkout was refreshed to that revision through `control-plane-sync`. PROJ-2265 then renewed lease `atl-f5ae4ea288af34a2` at fencing token 247 with the explicit `.env.example` path and normal WIP gates enforced. The PROJ-2269-only WIP exception was not carried into this renewal. Final workspace audit guards passed again after the correction.
