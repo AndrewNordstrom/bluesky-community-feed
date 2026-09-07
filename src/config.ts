@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
 
-dotenv.config();
+// Production receives its environment from the service manager, never the writable checkout.
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config();
+}
 
 const INSECURE_EXPORT_SALT_DEFAULT = 'dev-salt-not-for-prod';
 const INSECURE_DEMO_RATE_LIMIT_HASH_SECRET_DEFAULT = 'dev-demo-rate-limit-secret-not-for-prod';

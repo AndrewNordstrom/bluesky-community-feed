@@ -3,7 +3,9 @@
 set -Eeuo pipefail
 
 readonly APPLICATION_DIR='/opt/bluesky-feed'
-readonly ENVIRONMENT_FILE='/opt/bluesky-feed/.env'
+readonly LEGACY_ENVIRONMENT_FILE='/opt/bluesky-feed/.env'
+readonly CONFIGURATION_DIR='/etc/corgi'
+readonly ENVIRONMENT_FILE='/etc/corgi/production.env'
 readonly SERVICE_UNIT='bluesky-feed'
 readonly SERVICE_USER='bluesky-feed'
 readonly SERVICE_GROUP='bluesky-feed'
@@ -16,6 +18,8 @@ readonly STATE_FILE="${STATE_DIR}/state"
 readonly STATE_TMP="${STATE_DIR}/state.tmp"
 readonly UNIT_BACKUP="${STATE_DIR}/bluesky-feed.service.before"
 readonly SUDOERS_BACKUP="${STATE_DIR}/deployment-sudoers.before"
+readonly ENVIRONMENT_BACKUP="${STATE_DIR}/environment.before"
+readonly WRAPPER_BACKUP="${STATE_DIR}/dispatcher.installed"
 readonly APPLY_CONFIRMATION='CONFIRM-CORGI-HOST-IDENTITY-ADOPTION'
 readonly ROLLBACK_CONFIRMATION='CONFIRM-CORGI-HOST-IDENTITY-ROLLBACK'
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -158,14 +162,31 @@ assert_application_baseline() {
   /usr/sbin/runuser -u "$deploy_user" -- /usr/bin/test -w "$APPLICATION_DIR" ||
     fail "deployment user must be able to write the application directory: ${deploy_user}"
 
-  [[ -f "$ENVIRONMENT_FILE" && ! -L "$ENVIRONMENT_FILE" ]] ||
-    fail "production environment must be a non-symlink regular file: ${ENVIRONMENT_FILE}"
-  env_shape="$(numeric_shape "$ENVIRONMENT_FILE")"
+  [[ -f "$LEGACY_ENVIRONMENT_FILE" && ! -L "$LEGACY_ENVIRONMENT_FILE" ]] ||
+    fail "production environment must be a non-symlink regular file: ${LEGACY_ENVIRONMENT_FILE}"
+  env_shape="$(numeric_shape "$LEGACY_ENVIRONMENT_FILE")"
   env_uid="${env_shape%%:*}"
   env_mode="${env_shape##*:}"
   [[ "$env_uid" == "$deploy_uid" || "$env_uid" == '0' ]] ||
     fail "production environment owner must be root or deployment user before adoption: ${env_shape}"
   [[ "$env_mode" == '600' ]] || fail "production environment must be mode 600 before adoption: ${env_shape}"
+}
+
+assert_configuration_ancestors() {
+  local directory=''
+
+  for directory in / /etc "$CONFIGURATION_DIR"; do
+    [[ -d "$directory" && ! -L "$directory" ]] || fail "configuration ancestor is not a real directory: ${directory}"
+    [[ "$(numeric_shape "$directory")" == '0:0:755' ]] ||
+      fail "configuration ancestor must be root:root mode 755: ${directory}"
+  done
+}
+
+assert_configuration_integrity() {
+  assert_configuration_ancestors
+  assert_root_regular_file "$ENVIRONMENT_FILE" 600 'production environment'
+  [[ ! -e "$LEGACY_ENVIRONMENT_FILE" && ! -L "$LEGACY_ENVIRONMENT_FILE" ]] ||
+    fail 'legacy application-directory environment must be absent after migration'
 }
 
 assert_service_account_shape() {
@@ -265,17 +286,26 @@ preflight() {
   local broad_sudoers_path="$2"
   local broad_sha=''
   local unit_sha=''
+  local directory=''
 
   require_root
   assert_source_files
   assert_deploy_user "$deploy_user"
   assert_application_baseline "$deploy_user"
+  [[ ! -e "$CONFIGURATION_DIR" && ! -L "$CONFIGURATION_DIR" ]] ||
+    fail "configuration destination already exists: ${CONFIGURATION_DIR}"
+  for directory in / /etc; do
+    [[ -d "$directory" && ! -L "$directory" && "$(numeric_shape "$directory")" == '0:0:755' ]] ||
+      fail "configuration ancestor must be a root-owned real directory mode 755: ${directory}"
+  done
   if /usr/bin/getent passwd "$SERVICE_USER" >/dev/null; then
     assert_service_account_shape
   elif /usr/bin/getent group "$SERVICE_GROUP" >/dev/null; then
     fail "service group exists without its service user: ${SERVICE_GROUP}"
   fi
   assert_root_regular_file "$UNIT_PATH" 644 'installed service unit'
+  [[ "$(/usr/bin/grep -Fxc 'EnvironmentFile=/opt/bluesky-feed/.env' "$UNIT_PATH")" == '1' ]] ||
+    fail 'installed unit must use the expected legacy environment path before migration'
   assert_safe_sudoers_path "$broad_sudoers_path"
   /usr/sbin/visudo -cf "$broad_sudoers_path" >/dev/null
   [[ "$(/usr/bin/awk -v user="$deploy_user" 'NF && $1 !~ /^#/ { active += 1; if ($1 == user) named += 1 } END { print active + 0 ":" named + 0 }' "$broad_sudoers_path")" == '1:1' ]] ||
@@ -297,7 +327,7 @@ preflight() {
   printf 'broad_sudoers_sha256=%s\n' "$broad_sha"
   printf 'unit_sha256=%s\n' "$unit_sha"
   printf 'repository_sha=%s\n' "$(/usr/bin/git -C "${SOURCE_DIR}/.." rev-parse HEAD)"
-  printf 'environment_shape=%s\n' "$(numeric_shape "$ENVIRONMENT_FILE")"
+  printf 'environment_shape=%s\n' "$(numeric_shape "$LEGACY_ENVIRONMENT_FILE")"
 }
 
 write_state() {
@@ -309,16 +339,19 @@ write_state() {
   [[ ! -e "$STATE_TMP" && ! -L "$STATE_TMP" ]] || fail "adoption state temporary path already exists: ${STATE_TMP}"
   /usr/bin/install -o root -g root -m 0600 /dev/null "$STATE_TMP"
   {
-    printf 'version=2\n'
+    printf 'version=3\n'
     printf 'deploy_user=%s\n' "$deploy_user"
     printf 'broad_sudoers_path=%s\n' "$broad_sudoers_path"
     printf 'environment_shape=%s\n' "$env_shape"
+    printf 'environment_backup_sha256=%s\n' "$(file_sha256 "$ENVIRONMENT_BACKUP")"
+    printf 'installed_wrapper_sha256=%s\n' "$(file_sha256 "$WRAPPER_BACKUP")"
     printf 'unit_backup_sha256=%s\n' "$(file_sha256 "$UNIT_BACKUP")"
     printf 'sudoers_backup_sha256=%s\n' "$(file_sha256 "$SUDOERS_BACKUP")"
     printf 'service_user_phase=%s\n' "$service_user_phase"
     printf 'service_group_phase=%s\n' "$service_group_phase"
   } >"$STATE_TMP"
   /usr/bin/mv -f -- "$STATE_TMP" "$STATE_FILE"
+  /usr/bin/sync -f "$STATE_DIR"
 }
 
 read_state_value() {
@@ -331,11 +364,18 @@ read_state_value() {
 }
 
 assert_state_shape() {
+  [[ -d "$STATE_DIR" && ! -L "$STATE_DIR" && "$(numeric_shape "$STATE_DIR")" == '0:0:700' ]] || fail 'adoption state directory is unsafe'
+  assert_root_regular_file "$WRAPPER_BACKUP" 600 'installed dispatcher snapshot'
+  assert_root_regular_file "$ENVIRONMENT_BACKUP" 600 'environment recovery copy'
   assert_root_regular_file "$STATE_FILE" 600 'adoption state file'
   assert_root_regular_file "$UNIT_BACKUP" 600 'service unit backup'
   assert_root_regular_file "$SUDOERS_BACKUP" 600 'deployment sudoers backup'
   [[ ! -e "$STATE_TMP" && ! -L "$STATE_TMP" ]] || fail 'adoption state has an incomplete journal write'
-  [[ "$(read_state_value version)" == '2' ]] || fail 'unsupported adoption state version'
+  [[ "$(read_state_value version)" == '3' ]] || fail 'unsupported adoption state version'
+  [[ "$(file_sha256 "$WRAPPER_BACKUP")" == "$(read_state_value installed_wrapper_sha256)" ]] ||
+    fail 'installed dispatcher snapshot digest mismatch'
+  [[ "$(file_sha256 "$ENVIRONMENT_BACKUP")" == "$(read_state_value environment_backup_sha256)" ]] ||
+    fail 'environment recovery copy digest mismatch'
   [[ "$(file_sha256 "$UNIT_BACKUP")" == "$(read_state_value unit_backup_sha256)" ]] ||
     fail 'service unit backup digest mismatch'
   [[ "$(file_sha256 "$SUDOERS_BACKUP")" == "$(read_state_value sudoers_backup_sha256)" ]] ||
@@ -356,7 +396,7 @@ verify_policy() {
   [[ ! -e "$broad_sudoers_path" && ! -L "$broad_sudoers_path" ]] ||
     fail "superseded broad sudoers policy still exists: ${broad_sudoers_path}"
   assert_service_account_shape
-  assert_root_regular_file "$ENVIRONMENT_FILE" 600 'production environment'
+  assert_configuration_integrity
   assert_root_regular_file "$UNIT_PATH" 644 'installed service unit'
   [[ "$(file_sha256 "$UNIT_PATH")" == "$(file_sha256 "$UNIT_SOURCE")" ]] ||
     fail 'installed service unit differs from reviewed source'
@@ -368,6 +408,14 @@ verify_policy() {
   assert_runtime_identity
   assert_negative_permissions "$deploy_user"
   printf '%s\n' 'PROJ-2268 host identity verification passed.'
+}
+
+assert_owned_dispatcher_if_present() {
+  if [[ -e "$WRAPPER_PATH" || -L "$WRAPPER_PATH" ]]; then
+    assert_root_regular_file "$WRAPPER_PATH" 755 'managed dispatcher rollback target'
+    [[ "$(file_sha256 "$WRAPPER_PATH")" == "$(read_state_value installed_wrapper_sha256)" ]] ||
+      fail 'dispatcher changed after adoption; preserve it for explicit root recovery'
+  fi
 }
 
 rollback_internal() {
@@ -386,6 +434,7 @@ rollback_internal() {
   local state_cleanup_complete='true'
 
   assert_state_shape
+  assert_owned_dispatcher_if_present
   deploy_user="$(read_state_value deploy_user)"
   [[ "$deploy_user" == "$expected_deploy_user" ]] || fail 'rollback deployment user differs from adoption state'
   broad_sudoers_path="$(read_state_value broad_sudoers_path)"
@@ -412,14 +461,22 @@ rollback_internal() {
   /usr/bin/rm -f -- "$SUDOERS_PATH"
   /usr/sbin/visudo -c >/dev/null
   current_unit_sha="$(file_sha256 "$UNIT_PATH")"
-  current_env_shape="$(numeric_shape "$ENVIRONMENT_FILE")"
+  if [[ -e "$LEGACY_ENVIRONMENT_FILE" || -L "$LEGACY_ENVIRONMENT_FILE" ]]; then
+    [[ -f "$LEGACY_ENVIRONMENT_FILE" && ! -L "$LEGACY_ENVIRONMENT_FILE" ]] || fail 'legacy rollback environment path is unsafe'
+    [[ "$(file_sha256 "$LEGACY_ENVIRONMENT_FILE")" == "$(file_sha256 "$ENVIRONMENT_BACKUP")" ]] ||
+      fail 'legacy environment changed; preserve recovery evidence for manual recovery'
+  else
+    /usr/bin/install -o "$env_uid" -g "$env_gid" -m "$env_mode" "$ENVIRONMENT_BACKUP" "$LEGACY_ENVIRONMENT_FILE"
+    restore_service='true'
+  fi
+  current_env_shape="$(numeric_shape "$LEGACY_ENVIRONMENT_FILE")"
   if [[ "$current_unit_sha" != "$(file_sha256 "$UNIT_BACKUP")" ]]; then
     /usr/bin/install -o root -g root -m 0644 "$UNIT_BACKUP" "$UNIT_PATH"
     restore_service='true'
   fi
   if [[ "$current_env_shape" != "$env_shape" ]]; then
-    /usr/bin/chown "${env_uid}:${env_gid}" "$ENVIRONMENT_FILE"
-    /bin/chmod "$env_mode" "$ENVIRONMENT_FILE"
+    /usr/bin/chown "${env_uid}:${env_gid}" "$LEGACY_ENVIRONMENT_FILE"
+    /bin/chmod "$env_mode" "$LEGACY_ENVIRONMENT_FILE"
     restore_service='true'
   fi
   if [[ "$restore_service" == 'true' ]]; then
@@ -427,6 +484,17 @@ rollback_internal() {
     /usr/bin/systemctl restart "$SERVICE_UNIT"
     /usr/bin/systemctl is-active --quiet "$SERVICE_UNIT" || fail 'rollback did not restore an active service'
   fi
+  if [[ -e "$CONFIGURATION_DIR" || -L "$CONFIGURATION_DIR" ]]; then
+    assert_configuration_ancestors
+    if [[ -e "$ENVIRONMENT_FILE" || -L "$ENVIRONMENT_FILE" ]]; then
+      assert_root_regular_file "$ENVIRONMENT_FILE" 600 'managed environment rollback target'
+      [[ "$(file_sha256 "$ENVIRONMENT_FILE")" == "$(file_sha256 "$ENVIRONMENT_BACKUP")" ]] ||
+        fail 'managed environment changed; preserve recovery evidence for manual recovery'
+      /usr/bin/rm -- "$ENVIRONMENT_FILE"
+    fi
+    /usr/bin/rmdir "$CONFIGURATION_DIR" || fail 'configuration directory has foreign entries; preserve recovery evidence'
+  fi
+  assert_owned_dispatcher_if_present
   /usr/bin/rm -f -- "$WRAPPER_PATH"
 
   if [[ "$service_user_phase" != 'unchanged' ]] && /usr/bin/getent passwd "$SERVICE_USER" >/dev/null; then
@@ -436,7 +504,7 @@ rollback_internal() {
   if [[ "$service_group_phase" != 'unchanged' ]] && /usr/bin/getent group "$SERVICE_GROUP" >/dev/null; then
     /usr/sbin/groupdel "$SERVICE_GROUP"
   fi
-  /usr/bin/rm -f -- "$STATE_FILE" "$STATE_TMP" "$UNIT_BACKUP" "$SUDOERS_BACKUP"
+  /usr/bin/rm -f -- "$STATE_FILE" "$STATE_TMP" "$UNIT_BACKUP" "$SUDOERS_BACKUP" "$ENVIRONMENT_BACKUP" "$WRAPPER_BACKUP"
   if ! /usr/bin/rmdir "$STATE_DIR" 2>/dev/null; then
     state_cleanup_complete='false'
     printf '%s\n' \
@@ -451,15 +519,37 @@ rollback_internal() {
 }
 
 rollback_partial_adoption() {
+  if [[ -e "$STATE_DIR" || -L "$STATE_DIR" ]]; then
+    [[ -d "$STATE_DIR" && ! -L "$STATE_DIR" && "$(numeric_shape "$STATE_DIR")" == '0:0:700' ]] ||
+      fail 'partial adoption state directory is unsafe'
+  fi
+  if [[ -e "$STATE_TMP" || -L "$STATE_TMP" ]]; then
+    assert_root_regular_file "$STATE_TMP" 600 'incomplete journal write'
+  fi
   if [[ -f "$STATE_FILE" && ! -L "$STATE_FILE" && \
         -f "$UNIT_BACKUP" && ! -L "$UNIT_BACKUP" && \
-        -f "$SUDOERS_BACKUP" && ! -L "$SUDOERS_BACKUP" ]]; then
+        -f "$SUDOERS_BACKUP" && ! -L "$SUDOERS_BACKUP" && \
+        -f "$ENVIRONMENT_BACKUP" && ! -L "$ENVIRONMENT_BACKUP" && \
+        -f "$WRAPPER_BACKUP" && ! -L "$WRAPPER_BACKUP" ]]; then
     /usr/bin/rm -f -- "$STATE_TMP"
     rollback_internal "$1"
     return
   fi
 
-  /usr/bin/rm -f -- "$STATE_FILE" "$STATE_TMP" "$UNIT_BACKUP" "$SUDOERS_BACKUP"
+  [[ ! -e "$CONFIGURATION_DIR" && ! -L "$CONFIGURATION_DIR" ]] ||
+    fail 'configuration migration exists without a complete journal; preserve recovery evidence'
+  if [[ -e "$ENVIRONMENT_BACKUP" || -L "$ENVIRONMENT_BACKUP" ]]; then
+    assert_root_regular_file "$ENVIRONMENT_BACKUP" 600 'partial environment recovery copy'
+    [[ -f "$LEGACY_ENVIRONMENT_FILE" && ! -L "$LEGACY_ENVIRONMENT_FILE" &&
+       "$(file_sha256 "$LEGACY_ENVIRONMENT_FILE")" == "$(file_sha256 "$ENVIRONMENT_BACKUP")" ]] ||
+      fail 'incomplete journal with changed legacy configuration; preserve recovery evidence'
+  fi
+  if [[ -e "$UNIT_BACKUP" || -L "$UNIT_BACKUP" ]]; then
+    assert_root_regular_file "$UNIT_BACKUP" 600 'partial unit recovery copy'
+    [[ "$(file_sha256 "$UNIT_PATH")" == "$(file_sha256 "$UNIT_BACKUP")" ]] ||
+      fail 'incomplete journal with changed unit; preserve recovery evidence'
+  fi
+  /usr/bin/rm -f -- "$STATE_FILE" "$STATE_TMP" "$UNIT_BACKUP" "$SUDOERS_BACKUP" "$ENVIRONMENT_BACKUP" "$WRAPPER_BACKUP"
   if [[ -e "$STATE_DIR" || -L "$STATE_DIR" ]]; then
     [[ -d "$STATE_DIR" && ! -L "$STATE_DIR" ]] || fail "partial adoption state is unsafe: ${STATE_DIR}"
     /usr/bin/rmdir "$STATE_DIR" || fail "partial adoption state contains unowned entries: ${STATE_DIR}"
@@ -471,8 +561,7 @@ apply_failure_rollback() {
   local deploy_user="$2"
 
   trap - EXIT
-  [[ "${applying:-false}" == 'true' && "$status" -ne 0 ]] || return 0
-  applying='false'
+  [[ "$status" -ne 0 ]] || return 0
   printf '%s\n' 'PROJ-2268 apply failed; attempting guarded rollback' >&2
   if ! (rollback_partial_adoption "$deploy_user"); then
     printf '%s\n' 'PROJ-2268 guarded rollback failed; manual root recovery required' >&2
@@ -490,7 +579,7 @@ apply_policy() {
   local service_user_phase='unchanged'
   local service_group_phase='unchanged'
   local sudoers_tmp=''
-  local applying='false'
+  local rollback_trap=''
 
   require_root
   [[ "$confirmation" == "$APPLY_CONFIRMATION" ]] || fail 'apply confirmation phrase does not match'
@@ -507,13 +596,18 @@ apply_policy() {
     fail 'existing broad sudoers policy changed after review'
   [[ "$(file_sha256 "$UNIT_PATH")" == "$expected_unit_sha" ]] ||
     fail 'installed service unit changed after review'
-  env_shape="$(numeric_shape "$ENVIRONMENT_FILE")"
+  env_shape="$(numeric_shape "$LEGACY_ENVIRONMENT_FILE")"
 
-  applying='true'
-  trap 'apply_failure_rollback "$?" "$deploy_user"' EXIT
+  # Capture the validated account now: function locals are gone when EXIT runs.
+  printf -v rollback_trap 'apply_failure_rollback "$?" %q' "$deploy_user"
+  # Capture the account now; printf retained literal $? for exit-time evaluation.
+  # shellcheck disable=SC2064
+  trap "$rollback_trap" EXIT
   /usr/bin/install -d -o root -g root -m 0700 "$STATE_DIR"
   /usr/bin/install -o root -g root -m 0600 "$UNIT_PATH" "$UNIT_BACKUP"
   /usr/bin/install -o root -g root -m 0600 "$broad_sudoers_path" "$SUDOERS_BACKUP"
+  /usr/bin/install -o root -g root -m 0600 "$LEGACY_ENVIRONMENT_FILE" "$ENVIRONMENT_BACKUP"
+  /usr/bin/install -o root -g root -m 0600 "$WRAPPER_SOURCE" "$WRAPPER_BACKUP"
   write_state "$deploy_user" "$broad_sudoers_path" "$env_shape" "$service_user_phase" "$service_group_phase"
 
   if ! /usr/bin/getent group "$SERVICE_GROUP" >/dev/null; then
@@ -537,15 +631,21 @@ apply_policy() {
   /usr/sbin/runuser -u "$SERVICE_USER" -- /usr/bin/test -x /usr/bin/node ||
     fail 'service user cannot execute the Node runtime'
 
-  /usr/bin/install -o root -g root -m 0755 "$WRAPPER_SOURCE" "$WRAPPER_PATH"
+  /usr/bin/install -o root -g root -m 0755 "$WRAPPER_BACKUP" "$WRAPPER_PATH"
   sudoers_tmp="$(/usr/bin/mktemp)"
   render_sudoers "$deploy_user" >"$sudoers_tmp"
   /bin/chmod 0440 "$sudoers_tmp"
   /usr/sbin/visudo -cf "$sudoers_tmp" >/dev/null
   /usr/bin/install -o root -g root -m 0440 "$sudoers_tmp" "$SUDOERS_PATH"
   /usr/bin/rm -f -- "$sudoers_tmp"
-  /usr/bin/chown root:root "$ENVIRONMENT_FILE"
-  /bin/chmod 0600 "$ENVIRONMENT_FILE"
+  /usr/bin/install -d -o root -g root -m 0755 "$CONFIGURATION_DIR"
+  /usr/bin/install -o root -g root -m 0600 "$ENVIRONMENT_BACKUP" "$ENVIRONMENT_FILE"
+  /usr/bin/sync -f "$CONFIGURATION_DIR"
+  assert_configuration_ancestors
+  [[ "$(file_sha256 "$LEGACY_ENVIRONMENT_FILE")" == "$(file_sha256 "$ENVIRONMENT_BACKUP")" ]] ||
+    fail 'legacy environment changed during adoption; preserve recovery evidence'
+  /usr/bin/rm -- "$LEGACY_ENVIRONMENT_FILE"
+  /usr/bin/sync -f "$APPLICATION_DIR"
   /usr/bin/install -o root -g root -m 0644 "$UNIT_SOURCE" "$UNIT_PATH"
   /usr/bin/systemctl daemon-reload
   /usr/bin/systemctl restart "$SERVICE_UNIT"
@@ -553,7 +653,6 @@ apply_policy() {
   /usr/bin/rm -f -- "$broad_sudoers_path"
   /usr/sbin/visudo -c >/dev/null
   verify_policy "$deploy_user"
-  applying='false'
   trap - EXIT
   printf '%s\n' 'PROJ-2268 host identity adoption applied.'
 }
@@ -564,7 +663,8 @@ rollback_policy() {
 
   require_root
   [[ "$confirmation" == "$ROLLBACK_CONFIRMATION" ]] || fail 'rollback confirmation phrase does not match'
-  rollback_internal "$deploy_user"
+  [[ -d "$STATE_DIR" && ! -L "$STATE_DIR" ]] || fail 'no managed adoption state exists for rollback'
+  rollback_partial_adoption "$deploy_user"
 }
 
 print_plan() {
@@ -573,10 +673,11 @@ print_plan() {
     '- preflight prints only current unit/sudoers SHA-256 digests and file metadata' \
     '- apply requires those exact digests plus CONFIRM-CORGI-HOST-IDENTITY-ADOPTION' \
     '- service identity: bluesky-feed:bluesky-feed with /usr/sbin/nologin' \
-    '- production .env target: root:root mode 600; contents are never read or printed' \
+    '- production environment target: /etc/corgi/production.env under root-owned ancestry' \
+    '- migration retains a root-only recovery copy; secret contents are never printed' \
     '- deployment privilege: one root-owned dispatcher with a closed command allowlist' \
     '- service transition: daemon-reload and one restart, requiring separate exact-head production approval' \
-    '- rollback restores the pinned unit, sudoers policy, and .env metadata before removing created identities' \
+    '- rollback restores the pinned unit, sudoers policy, original environment and metadata before removing created identities' \
     '- no deploy, migration, candidate transfer, GitHub environment change, or key operation is included'
 }
 

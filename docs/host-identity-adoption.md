@@ -10,14 +10,26 @@ The application keeps `/opt/bluesky-feed` owned and writable by the deployment
 user so the immutable-artifact workflow can swap reviewed releases. The
 `bluesky-feed` process runs as a separate `bluesky-feed:bluesky-feed` system
 identity with `/usr/sbin/nologin`, no supplementary groups, and no Docker
-access. The systemd manager reads the root-only environment before starting the
-unprivileged process; neither non-root identity receives direct `.env` access.
+access. The systemd manager reads `/etc/corgi/production.env` before starting the
+unprivileged process. Its directory and ancestry are root-owned and protected
+from replacement. Neither non-root identity receives direct configuration-file
+access. Production skips working-directory dotenv loading, so a newly created
+application-directory `.env` cannot supply missing settings. The unit uses
+`NotifyAccess=all` because readiness and watchdog messages come from the fixed
+`systemd-notify` helper in the service cgroup.
 
 The production environment target is:
 
 ```text
-/opt/bluesky-feed/.env  root:root  0600  regular file, never a symlink
+/etc/corgi                 root:root  0755  directory, never a symlink
+/etc/corgi/production.env  root:root  0600  regular file, never a symlink
 ```
+
+The deployment identity remains a trusted application publisher: permission
+to replace application code is authority over code that receives runtime
+secrets. These controls protect direct configuration-file integrity and limit
+root privileges; they do not claim to hide runtime secrets from an arbitrary
+code publisher.
 
 The deployment user loses its existing unrestricted passwordless-sudo rule. It
 receives one replacement target:
@@ -71,18 +83,25 @@ five modes:
    it never reads or prints `.env` contents.
 3. `apply` requires the exact observed digests, the exact reviewed repository
    SHA, and the literal confirmation phrase. It backs up the unit, sudoers
-   policy, and numeric `.env` metadata before mutation. A versioned journal is
+   policy, original configuration, and numeric ownership/mode before mutation.
+   The recovery copy is root-only, and its digest stays in the root-only journal.
+   Secret values are never printed or sent to a runner. A versioned journal is
    armed before state creation and records `create-pending` before each account
    or group mutation so interrupted identity setup remains reversible.
 4. `verify DEPLOY_USER` proves the allow/deny matrix and active process
    identity without restarting anything.
 5. `rollback DEPLOY_USER CONFIRM-CORGI-HOST-IDENTITY-ROLLBACK` restores the
-   pinned prior unit, sudoers file, and `.env` ownership/mode, restarts the
-   restored service, and removes only identities created by the script.
+   pinned prior unit, sudoers file, original configuration path and ownership/mode,
+   restarts the restored service, and removes only identities and configuration
+   paths created by the script. Recovery intentionally restores the prior weaker
+   boundary; it does not count as successful adoption.
 
 Apply refuses a dirty or wrong-head checkout, changed unit/sudoers hashes,
 symlinks, foreign file owners, an inactive starting service, pre-existing
-managed paths, malformed state, or an unexpected account shape. If an error
+managed paths, malformed state, or an unexpected account shape. It refuses an existing `/etc/corgi` destination
+and requires the installed unit to reference the expected legacy `.env`. The
+migration retains a protected recovery copy and removes the legacy file before
+starting the new unit. If an error
 occurs after durable state is written, the guarded exit trap attempts the same
 rollback path. A repeated successful `apply` runs verification and reports that
 the contract is already applied.
@@ -112,7 +131,8 @@ weakening the script.
 
 ## Positive and negative acceptance
 
-Positive verification requires the installed unit and wrapper to match the
+Positive verification requires the protected configuration ancestry and absence
+of the legacy `.env`, and requires the installed unit and wrapper to match the
 reviewed sources, the service to be active, systemd `User`/`Group` to equal the
 dedicated identity, the active `MainPID` UID/GID to match, the narrow sudoers
 file to validate, and the deployment user to execute the fixed identity probe.
@@ -121,8 +141,8 @@ and the one service restart during a separately approved promotion.
 
 Negative verification proves:
 
-- deployment user cannot read or write `.env`;
-- service user cannot read `.env` or write `/opt/bluesky-feed`;
+- deployment user cannot read, write, unlink, replace or rename the canonical configuration;
+- service user cannot read the canonical configuration file or write `/opt/bluesky-feed`;
 - neither user is in the Docker group;
 - deployment user cannot run `sudo -n /usr/bin/true`;
 - an unknown dispatcher token fails;
@@ -134,11 +154,16 @@ root-owned allowlist and sudoers shape establish that boundary statically.
 ## Rollback and dependencies
 
 Rollback restores privilege and service state in this order: restore the prior
-sudoers policy, remove the narrow rule, restore the prior unit and `.env`
-metadata, reload systemd, restart the restored unit, remove the dispatcher, and
+sudoers policy, remove the narrow rule, restore the original configuration and prior
+unit with their recorded metadata, reload systemd, restart the restored unit,
+remove only the matching managed configuration and dispatcher, and
 delete the service account/group only if the state proves this script created
 them and no process remains. Backups are SHA-256 verified before use. The state
-directory is mode 0700 and its files are root-owned mode 0600.
+directory is mode 0700 and its files are root-owned mode 0600. The environment
+recovery copy is retained until rollback completes. Changed or foreign
+configuration files stop recovery for explicit root review rather than being
+overwritten. Power interruption and failed service start must be rehearsed on
+isolated Linux with dummy values before host execution.
 
 Before execution, confirm that the deployment SSH session remains usable and
 that a separate root recovery path exists. After rollback, PROJ-2258 remains
@@ -152,3 +177,40 @@ while adoption or rollback is in progress.
 - [sudoers command matching](https://www.sudo.ws/docs/man/1.9.14/sudoers.man.pdf)
 - [NIST SP 800-53 Rev. 5 controls](https://csrc.nist.gov/Projects/risk-management/sp800-53-controls/downloads)
 - Saltzer and Schroeder, [The Protection of Information in Computer Systems](https://doi.org/10.1109/PROC.1975.9939)
+
+## Dependent consumers
+
+Both production workflow admission blocks validate the canonical path and its
+ancestry. Runner-only `.env.example` validation stays unchanged. The legacy
+weekly export still depends on reading application configuration and remains
+blocked under PROJ-2261; this packet does not grant it configuration access or
+claim to repair it. PROJ-2258's future operations principal must be reviewed
+against this adopted boundary before execution.
+
+The deployment identity and sudoers path remain explicit preflight inputs.
+Record verified host account names in private operational evidence. Root file
+ownership does not require logging in over SSH as root.
+
+## Isolated rehearsal
+
+`tests/host-identity-linux.sh` runs only inside an explicitly confirmed disposable
+Linux container with real systemd. Supply the three reviewed `ops` files under
+`/fixture/source`. It creates only dummy identities, configuration and an
+application fixture, then exercises successful adoption, denial of configuration
+replacement, rollback, a failed service transition and eleven abrupt-interruption
+boundaries. The Docker service dependency is a fixture; no Docker socket is
+exposed. This is migration acceptance evidence, not a production application
+health receipt. Do not run the rehearsal against a real application host.
+
+## Application revision boundary
+
+Host adoption changes configuration ownership/location, sudo policy and the
+service unit; it does not build or replace the running application's artifacts.
+The production dotenv-loading correction takes effect when the corresponding
+reviewed application revision is separately promoted. Record that revision
+before claiming the loader correction is live. The deployment identity remains
+a trusted code publisher throughout this sequence.
+
+Rollback pins the installed dispatcher snapshot and refuses to remove a
+dispatcher that was subsequently replaced, preserving it and the recovery
+evidence for explicit root review.

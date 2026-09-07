@@ -128,8 +128,9 @@ describe('PROJ-2268 host identity policy', () => {
 
     expect(unit).toMatch(/^User=bluesky-feed$/m);
     expect(unit).toMatch(/^Group=bluesky-feed$/m);
-    expect(unit).toMatch(/^EnvironmentFile=\/opt\/bluesky-feed\/\.env$/m);
+    expect(unit).toMatch(/^EnvironmentFile=\/etc\/corgi\/production\.env$/m);
     expect(unit).not.toMatch(/^User=root$/m);
+    expect(unit).toMatch(/^NotifyAccess=all$/m);
   });
 
   it('keeps adoption digest-pinned, reversible, and non-recursive', () => {
@@ -143,7 +144,7 @@ describe('PROJ-2268 host identity policy', () => {
     expect(provisioner).toContain("readonly STATE_DIR='/var/lib/corgi-host-adoption'");
     expect(provisioner).toContain('repository has tracked changes after exact-head approval');
     expect(provisioner).toContain('attempting guarded rollback');
-    expect(provisioner).toContain('trap \'apply_failure_rollback "$?" "$deploy_user"\' EXIT');
+    expect(provisioner).toContain("printf -v rollback_trap 'apply_failure_rollback \"$?\" %q'");
     expect(provisioner).toContain('/usr/sbin/visudo -c');
     expect(provisioner).toContain('if ! /usr/bin/rmdir "$STATE_DIR"');
     expect(provisioner).toContain('rollback restored; evidence cleanup remains');
@@ -226,7 +227,7 @@ fail 'forced assertion failure'`,
     const provisioner = readFileSync(PROVISIONER_PATH, 'utf8');
     const applyStart = provisioner.indexOf('apply_policy() {');
     const apply = provisioner.slice(applyStart);
-    const trapIndex = apply.indexOf('trap \'apply_failure_rollback');
+    const trapIndex = apply.indexOf('trap "$rollback_trap" EXIT');
     const stateDirectoryIndex = apply.indexOf('/usr/bin/install -d -o root -g root -m 0700 "$STATE_DIR"');
     const groupPendingIndex = apply.indexOf("service_group_phase='create-pending'");
     const groupPendingWriteIndex = apply.indexOf('write_state', groupPendingIndex);
@@ -319,7 +320,7 @@ fail 'forced assertion failure'`,
     expect(plan.status).toBe(0);
     expect(plan.stderr).toBe('');
     expect(plan.stdout).toContain('repository-only host-adoption plan');
-    expect(plan.stdout).toContain('contents are never read or printed');
+    expect(plan.stdout).toContain('secret contents are never printed');
     expect(plan.stdout).toContain('requiring separate exact-head production approval');
   });
 });

@@ -392,9 +392,21 @@ jobs:
                 require_transfer_path_access "$DEPLOY_PATH" "$DEPLOY_USER"
               fi
             done
-            if [ ! -f .env ] || [ -L .env ] || [ -w .env ] || [ -r .env ] || \
-               [ "$(stat -c '%U' .env)" != "root" ]; then
-              echo "Production environment file must be root-owned, non-symlinked, and unreadable and unwritable by the deployment user" >&2
+            for CONFIG_PARENT in / /etc /etc/corgi; do
+              if [ ! -d "$CONFIG_PARENT" ] || [ -L "$CONFIG_PARENT" ] || [ -w "$CONFIG_PARENT" ] || \
+                 [ "$(stat -c '%u:%g:%a' "$CONFIG_PARENT")" != '0:0:755' ]; then
+                echo "Production configuration ancestry must be root-owned and protected from replacement" >&2
+                exit 1
+              fi
+            done
+            if [ -e /opt/bluesky-feed/.env ] || [ -L /opt/bluesky-feed/.env ]; then
+              echo "Legacy application-directory environment must be absent" >&2
+              exit 1
+            fi
+            if [ ! -f /etc/corgi/production.env ] || [ -L /etc/corgi/production.env ] || \
+               [ -r /etc/corgi/production.env ] || [ -w /etc/corgi/production.env ] || \
+               [ "$(stat -c '%u:%g:%a' /etc/corgi/production.env)" != '0:0:600' ]; then
+              echo "Production environment must be protected, root-owned mode 600, and unreadable and unwritable by deployment" >&2
               exit 1
             fi
             if sudo -n /usr/bin/true 2>/dev/null; then
@@ -600,17 +612,21 @@ jobs:
                 require_deploy_path_access "$DEPLOY_PATH" "$DEPLOY_USER"
               fi
             done
-            if [ ! -f /opt/bluesky-feed/.env ] || [ -L /opt/bluesky-feed/.env ]; then
-              echo "Production environment file must exist and must not be a symlink" >&2
+            for CONFIG_PARENT in / /etc /etc/corgi; do
+              if [ ! -d "$CONFIG_PARENT" ] || [ -L "$CONFIG_PARENT" ] || [ -w "$CONFIG_PARENT" ] || \
+                 [ "$(stat -c '%u:%g:%a' "$CONFIG_PARENT")" != '0:0:755' ]; then
+                echo "Production configuration ancestry must be root-owned and protected from replacement" >&2
+                exit 1
+              fi
+            done
+            if [ -e /opt/bluesky-feed/.env ] || [ -L /opt/bluesky-feed/.env ]; then
+              echo "Legacy application-directory environment must be absent" >&2
               exit 1
             fi
-            if [ -w /opt/bluesky-feed/.env ]; then
-              echo "Production environment file must not be writable by the deployment user" >&2
-              exit 1
-            fi
-            if [ -r /opt/bluesky-feed/.env ] || \
-               [ "$(stat -c '%U' /opt/bluesky-feed/.env)" != "root" ]; then
-              echo "Production environment file must be root-owned and unreadable by the deployment user" >&2
+            if [ ! -f /etc/corgi/production.env ] || [ -L /etc/corgi/production.env ] || \
+               [ -r /etc/corgi/production.env ] || [ -w /etc/corgi/production.env ] || \
+               [ "$(stat -c '%u:%g:%a' /etc/corgi/production.env)" != '0:0:600' ]; then
+              echo "Production environment must be protected, root-owned mode 600, and unreadable and unwritable by deployment" >&2
               exit 1
             fi
             if sudo -n /usr/bin/true 2>/dev/null; then

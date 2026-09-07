@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import Fastify from 'fastify';
 import { parseTrustProxyConfig } from '../src/feed/server.js';
 
@@ -8,6 +11,47 @@ vi.mock('../src/db/redis.js', () => ({
 }));
 
 describe('security-oriented config defaults', () => {
+  it.each(['production', 'development'])('loads working-directory dotenv only outside production (%s)', (mode) => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'corgi-config-integrity-'));
+    const source = new URL('../src/config.ts', import.meta.url).href;
+    writeFileSync(path.join(directory, '.env'), 'PROJ2268_DOTENV_PROBE=from-writable-checkout\n');
+    try {
+      const result = spawnSync(process.execPath, [
+        '--import', import.meta.resolve('tsx'), '--input-type=module', '-e',
+        'await import(process.argv[1]); console.log(JSON.stringify({ probe: process.env.PROJ2268_DOTENV_PROBE ?? null }));',
+        source,
+      ], {
+        cwd: directory,
+        encoding: 'utf8',
+        timeout: 10_000,
+        env: {
+          NODE_ENV: mode,
+          FEEDGEN_SERVICE_DID: 'did:web:fixture.example',
+          FEEDGEN_PUBLISHER_DID: 'did:plc:fixture',
+          FEEDGEN_HOSTNAME: 'fixture.example',
+          JETSTREAM_URL: 'wss://fixture.example/subscribe',
+          JETSTREAM_FALLBACK_URL: 'wss://fallback.example/subscribe',
+          JETSTREAM_COLLECTIONS: 'app.bsky.feed.post',
+          DATABASE_URL: 'postgresql://fixture:fixture@127.0.0.1:5432/fixture',
+          REDIS_URL: 'redis://127.0.0.1:6379',
+          DEMO_REDIS_URL: 'redis://127.0.0.1:6381',
+          BSKY_IDENTIFIER: 'fixture.example',
+          BSKY_APP_PASSWORD: 'dummy-password',
+          EXPORT_ANONYMIZATION_SALT: 'fixture-export-salt-at-least-32-characters',
+          DEMO_RATE_LIMIT_HASH_SECRET: 'fixture-demo-secret-at-least-32-characters',
+        },
+      });
+      expect(result.error).toBeUndefined();
+      expect(result.status, result.stderr).toBe(0);
+      const lines = result.stdout.trim().split('\n');
+      expect(JSON.parse(lines[lines.length - 1])).toEqual({
+        probe: mode === 'production' ? null : 'from-writable-checkout',
+      });
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('uses did:plc-only default issuer prefixes in config schema', () => {
     const source = readFileSync(new URL('../src/config.ts', import.meta.url), 'utf8');
     expect(source).toContain("FEED_JWT_ALLOWED_ISSUER_PREFIXES: z.string().default('did:plc:')");

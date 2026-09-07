@@ -4,7 +4,7 @@ Status: canonical repo contract
 Owner: bluesky-feed
 Service class: production_service
 Contract version: 2
-Last updated: 2026-08-02
+Last updated: 2026-09-06
 Last verified: not yet rehearsed for the 2026-08-02 workflow revision
 
 > Canonical reference for any human or tooling operating in this repo.
@@ -247,8 +247,11 @@ npm run cli -- --help
    the checkout by an approved recovery procedure before the first dispatch;
    `web-next/` `.env*.bak` files are ignored by that workspace. Any unrelated
    non-ignored artifact also blocks promotion.
-   The production `.env` must be root-owned and unreadable by the deployment
-   user, which must not have unrestricted passwordless sudo. Its sudo policy
+   Production configuration must live at `/etc/corgi/production.env`, root-owned
+   mode 0600 under root-owned mode 0755 directory ancestry. The deployment user
+   must not be able to read, write or replace it. The legacy application-directory
+   `.env` must be absent, and production does not load working-directory dotenv
+   files. The deployment user must not have unrestricted passwordless sudo. Its sudo policy
    must be reviewed and limited to the exact systemd calls and fixed-container,
    fixed-command `docker exec` probes used by this workflow before enablement;
    `docker compose`, container creation, and free-form `docker exec` are not

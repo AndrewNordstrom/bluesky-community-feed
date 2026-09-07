@@ -492,10 +492,10 @@ describe('production deploy ordering guards', () => {
     expect(runnerScript).toContain('sha256sum "$RELEASE_ARCHIVE"');
     expect(remoteScript).not.toContain('cp .env.example .env');
     expect(remoteScript).toContain(
-      'Production environment file must not be writable by the deployment user'
+      'Production configuration ancestry must be root-owned and protected from replacement'
     );
     expect(remoteScript).toContain(
-      'Production environment file must be root-owned and unreadable by the deployment user'
+      'Production environment must be protected, root-owned mode 600, and unreadable and unwritable by deployment'
     );
     expect(remoteScript).not.toMatch(/\bnpm\s+(?:ci|install|run)\b/);
     expect(remoteScript).not.toContain('ENV_BACKUP');
@@ -1500,7 +1500,7 @@ describe('production exact-SHA promotion guards', () => {
     }
     expect(deploy).not.toContain('secrets.VPS_SSH_HOST_KEY');
     expect(deploy).toContain(
-      'Production environment file must be root-owned and unreadable by the deployment user'
+      'Production environment must be protected, root-owned mode 600, and unreadable and unwritable by deployment'
     );
     expect(deploy).toContain(
       'Deployment user must not have unrestricted passwordless sudo'

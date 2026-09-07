@@ -48,3 +48,29 @@ service, container, GitHub environment, deploy control, or freeze was changed.
 - Deployment: none
 - Admin bypass: none
 - Exact-head execution approval: required and not yet granted
+
+## Configuration-integrity correction (2026-09-06)
+
+Repository-only follow-up to the founder-approved host-adoption correction.
+The configuration now lives under protected root-owned directory ancestry, and
+production ignores working-directory dotenv files. Migration retains a root-only
+recovery copy and syncs journal state before later mutations. The service unit
+accepts notifications from its fixed helper children. The EXIT handler captures
+the deployment identity before local function scope unwinds.
+
+A disposable local Ubuntu 24.04 / systemd 255 container exercised the actual
+provisioner, wrapper and service unit using distinct Linux UIDs and dummy
+configuration. It passed apply, verification, repeat apply, six denied file/path
+operations, rollback, failed-service-start automatic recovery, and eleven SIGKILL
+recovery boundaries, including an incomplete initial journal.
+
+Rehearsal scope: real systemd, sudo, Unix permissions, accounts, file migration
+and rollback. The Node application and Docker dependency were explicit fixtures;
+this does not establish production application health or live deployment readiness.
+The container had no network or host filesystem mounts. The test uses
+`CORGI_DUMMY_REHEARSAL=CONFIRM-DISPOSABLE-CONTAINER` and refuses a non-container
+host. Test source: `tests/host-identity-linux.sh`.
+
+The full validation and current-head hosted review must be refreshed before
+publication. No production connection, service change, merge, deployment,
+credential mutation or freeze change is part of this repository correction.
