@@ -24,8 +24,11 @@ applied and the feed is rescored.
 **API docs:** `https://docs.corgi.network`
 **Repo:** `andrewnordstrom-eng/corgi` (GitHub repository ID `1151738081`)
 The former `andrewnordstrom-eng/bluesky-community-feed` URL redirects to this
-same repository ID. This is a repository rename, not a different deployment
-principal; the existing `feed.corgi.network` service mapping is retained.
+same repository ID. This establishes the GitHub repository rename only.
+The live mapping of `feed.corgi.network` to that repository ID is unverified
+in PROJ-2268; host adoption is blocked. Before approving adoption, record
+authoritative service-to-repository evidence and its approval reference in the
+execution receipt. A missing or mismatched mapping must stop adoption.
 Production access and promotion still require their separate approval gates.
 **Linear project:** tracked on the maintainers' private project board
 **Product doc:** maintained in the maintainers' private product-doc tool

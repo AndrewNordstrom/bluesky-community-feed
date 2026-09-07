@@ -109,7 +109,17 @@ the contract is already applied.
 ## Future execution sequence
 
 The following sequence is intentionally blocked until Andrew separately names
-and approves the reviewed exact head for production execution.
+and approves the reviewed exact head for production execution. The live mapping
+of `feed.corgi.network` to GitHub repository ID `1151738081` is unverified in
+this repository-only packet. Separately authorized read-only preflight must
+establish authoritative service-to-repository evidence; the adoption approval
+must reference that evidence and the exact candidate. Missing or mismatched
+mapping evidence blocks adoption. A GitHub slug redirect alone is insufficient.
+
+This is an operator approval prerequisite, not an automated provisioner check.
+The provisioner validates the approved bootstrap revision and artifacts, but
+does not discover the deployed repository identity or authenticate a hostname.
+The local dummy-host rehearsal does not establish that production mapping.
 
 First materialize the three artifacts with `git show APPROVED_REPOSITORY_SHA:ops/FILE`
 on the trusted review workstation, never by copying its working tree. Produce a

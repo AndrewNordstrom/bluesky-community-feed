@@ -124,3 +124,19 @@ Reference: [systemctl reset-failed](https://man7.org/linux/man-pages/man1/system
 resets the unit's start counter. The rehearsal also inspects process-start
 timestamps because systemd 255 can preserve the previous process result while
 refusing a rate-limited start.
+
+### Production mapping evidence boundary, 2026-09-07
+
+The GitHub rename evidence identifies repository ID `1151738081`; it does not
+establish the live mapping of `feed.corgi.network` to that repository. That
+mapping remains unverified, and host adoption is blocked. There is no production
+mapping approval reference in this packet. Separately authorized read-only
+preflight must establish authoritative service-to-repository evidence before
+adoption approval names that evidence and the exact candidate. Missing or
+mismatched mapping evidence must stop adoption.
+
+The repository-only approval above does not authorize this host mapping or
+production execution. The provisioner checks bootstrap identity, not deployed
+repository identity; the mapping prerequisite belongs to the separate operator
+approval. No automated mapping admission or corresponding pass/fail tests are
+claimed. The isolated rehearsal cannot supply production identity evidence.
