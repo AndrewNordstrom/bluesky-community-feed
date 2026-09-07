@@ -140,3 +140,25 @@ production execution. The provisioner checks bootstrap identity, not deployed
 repository identity; the mapping prerequisite belongs to the separate operator
 approval. No automated mapping admission or corresponding pass/fail tests are
 claimed. The isolated rehearsal cannot supply production identity evidence.
+
+### Validation supersession and final review follow-up, 2026-09-07
+
+The initial 2,177-test result above was superseded by the bootstrap correction's
+2,188 tests, then by the 2,214-test full verification of the recovery and mapping
+corrections. Earlier eleven-boundary statements in the configuration-integrity
+and bootstrap sections are historical; the full-review follow-up supersedes
+them with twelve boundaries, matching the twelve entries in the Linux fault
+list. Dated results are retained as history rather than current totals.
+
+The final review follow-up rejects production mode introduced by a local .env
+after module startup. Child-process cases cover the missing startup NODE_ENV
+and explicitly supplied production/development values. Direct isolated Linux
+cases also exercise the intact provisioner's own artifact, manifest-shape and
+ancestry rejection paths. Production bootstrap authentication remains required;
+the direct test calls are disposable-fixture fault injection only.
+
+Current validation supersedes all earlier totals: 158 test files / 2,217 tests,
+full builds and lint passed. The fresh isolated Linux rehearsal passed all
+twelve SIGKILL boundaries and the three direct internal-admission rejection
+cases, with unchanged target files and running service. Bash syntax, ShellCheck
+and diff checks passed. Production was not contacted.

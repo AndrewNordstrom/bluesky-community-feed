@@ -12,10 +12,17 @@ vi.mock('../src/db/redis.js', () => ({
 }));
 
 describe('security-oriented config defaults', () => {
-  it.each(['production', 'development', 'Production', 'PRODUCTION', 'staging', '', undefined])('loads working-directory dotenv only outside production (%s)', (mode) => {
+  it.each([
+    ...['production', 'development', 'Production', 'PRODUCTION', 'staging', '', undefined]
+      .map((mode) => ({ mode, dotenvProduction: false })),
+    { mode: undefined, dotenvProduction: true },
+    { mode: 'production', dotenvProduction: true },
+    { mode: 'development', dotenvProduction: true },
+  ])('enforces startup environment provenance ($mode, dotenv production=$dotenvProduction)', ({ mode, dotenvProduction }) => {
     const directory = mkdtempSync(path.join(tmpdir(), 'corgi-config-integrity-'));
     const source = new URL('../src/config.ts', import.meta.url).href;
-    writeFileSync(path.join(directory, '.env'), 'PROJ2268_DOTENV_PROBE=from-writable-checkout\n');
+    writeFileSync(path.join(directory, '.env'),
+      (dotenvProduction ? 'NODE_ENV=production\n' : '') + 'PROJ2268_DOTENV_PROBE=from-writable-checkout\n');
     try {
       const result = spawnSync(process.execPath, [
         '--import', import.meta.resolve('tsx'), '--input-type=module', '-e',
@@ -44,9 +51,12 @@ describe('security-oriented config defaults', () => {
       });
       expect(result.error).toBeUndefined();
       expect(result.status, result.stderr).toBe(
-        mode === undefined || mode === 'production' || mode === 'development' ? 0 : 1
+        (mode === undefined && !dotenvProduction) || mode === 'production' || mode === 'development' ? 0 : 1
       );
       if (result.status !== 0) expect(result.stderr).toContain('NODE_ENV');
+      if (mode === undefined && dotenvProduction) {
+        expect(result.stderr).toContain('must be set before startup by the service manager');
+      }
       const lines = result.stdout.trim().split('\n');
       expect(JSON.parse(lines[lines.length - 1])).toEqual({
         probe: mode === 'production' ? null : 'from-writable-checkout',

@@ -95,6 +95,46 @@ runuser -u deploy-fixture -- git -C "$repo" show "$revision:ops/provision-corgi-
 verify_bootstrap
 printf 'PASS changed checkout bootstrap rejected before interpretation or host-policy mutation\n'
 
+# Exercise the intact provisioner's internal admission checks in isolation.
+# Production must still use verify_bootstrap before interpretation. These cases
+# deliberately corrupt only data artifacts inside this disposable fixture;
+# independently pin the script bytes before every direct invocation.
+intact_provisioner_sha="$(sha256sum "$provisioner" | cut -d' ' -f1)"
+original_main_pid="$(systemctl show bluesky-feed --property=MainPID --value)"
+for mutation in wrapper manifest ancestry; do
+  verify_bootstrap
+  case "$mutation" in
+    wrapper)
+      printf '\n# corrupted fixture artifact\n' >> "$stage/corgi-deploy-root"
+      expected_error='bootstrap artifact differs from approved manifest: corgi-deploy-root' ;;
+    manifest)
+      printf '%s  extra-artifact\n' "$intact_provisioner_sha" >> "$stage/SHA256SUMS"
+      expected_error='bootstrap manifest must contain exactly three artifacts' ;;
+    ancestry)
+      chmod 0770 "$stage"
+      expected_error='bootstrap ancestry must be root-owned and not group/other writable' ;;
+  esac
+  [[ "$(sha256sum "$provisioner" | cut -d' ' -f1)" == "$intact_provisioner_sha" ]]
+  if output="$(bash "$provisioner" apply deploy-fixture /etc/sudoers.d/fixture-deployment "$sudoers_sha" "$unit_sha" "$revision" CONFIRM-CORGI-HOST-IDENTITY-ADOPTION 2>&1)"; then
+    echo "FAIL internal admission accepted $mutation" >&2; exit 1
+  fi
+  [[ "$output" == *"$expected_error"* ]]
+  [[ ! -e /etc/corgi && ! -e /etc/sudoers.d/corgi-deploy && ! -e /var/lib/corgi-host-adoption ]]
+  [[ ! -e /usr/local/sbin/corgi-deploy-root ]]
+  [[ "$(sha256sum /etc/systemd/system/bluesky-feed.service | cut -d' ' -f1)" == "$unit_sha" ]]
+  [[ "$(sha256sum /etc/sudoers.d/fixture-deployment | cut -d' ' -f1)" == "$sudoers_sha" ]]
+  [[ "$(sha256sum /opt/bluesky-feed/.env | cut -d' ' -f1)" == "$legacy_sha" ]]
+  [[ "$(systemctl show bluesky-feed --property=MainPID --value)" == "$original_main_pid" ]]
+  systemctl is-active --quiet bluesky-feed
+  case "$mutation" in
+    wrapper) runuser -u deploy-fixture -- git -C "$repo" show "$revision:ops/corgi-deploy-root" > "$stage/corgi-deploy-root" ;;
+    manifest) sed -i '$d' "$stage/SHA256SUMS" ;;
+    ancestry) chmod 0700 "$stage" ;;
+  esac
+  verify_bootstrap
+  printf 'PASS intact provisioner rejects %s mutation without target changes\n' "$mutation"
+done
+
 # Independently validate post-validation mutations using a root-only DEBUG harness.
 # It edits the deployment checkout at the first state-directory write, after all admission checks.
 install -d -o root -g root -m 0700 /root/corgi-rehearsal-harness

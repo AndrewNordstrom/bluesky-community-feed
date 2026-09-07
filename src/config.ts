@@ -2,8 +2,14 @@ import { z } from 'zod';
 import dotenv from 'dotenv';
 
 // Production receives its environment from the service manager, never the writable checkout.
-if (process.env.NODE_ENV !== 'production') {
+const startupNodeEnv = process.env.NODE_ENV;
+if (startupNodeEnv !== 'production') {
   dotenv.config();
+  if (process.env.NODE_ENV === 'production') {
+    throw new TypeError(
+      'NODE_ENV=production must be set before startup by the service manager, not a working-directory .env file.',
+    );
+  }
 }
 
 const INSECURE_EXPORT_SALT_DEFAULT = 'dev-salt-not-for-prod';
