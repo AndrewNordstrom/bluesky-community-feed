@@ -7,7 +7,7 @@
 
 [Unit]
 Description=Community Feed Generator (Bluesky)
-Documentation=https://github.com/corgi-network/bluesky-feed
+Documentation=https://github.com/andrewnordstrom-eng/corgi
 After=network-online.target docker.service
 Wants=network-online.target
 Requires=docker.service
@@ -64,7 +64,6 @@ KillMode=mixed
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/bluesky-feed
 PrivateTmp=true
 
 # Logging

@@ -496,7 +496,8 @@ rollback_internal() {
   fi
   if [[ "$restore_service" == 'true' ]]; then
     /usr/bin/systemctl daemon-reload
-    /usr/bin/systemctl restart "$SERVICE_UNIT"
+    /usr/bin/systemctl reset-failed "$SERVICE_UNIT" || fail 'rollback could not clear the service start limit'
+    /usr/bin/systemctl restart "$SERVICE_UNIT" || fail 'rollback could not restart the restored service'
     /usr/bin/systemctl is-active --quiet "$SERVICE_UNIT" || fail 'rollback did not restore an active service'
   fi
   if [[ -e "$CONFIGURATION_DIR" || -L "$CONFIGURATION_DIR" ]]; then
@@ -659,10 +660,10 @@ apply_policy() {
   assert_configuration_ancestors
   [[ "$(file_sha256 "$LEGACY_ENVIRONMENT_FILE")" == "$(file_sha256 "$ENVIRONMENT_BACKUP")" ]] ||
     fail 'legacy environment changed during adoption; preserve recovery evidence'
-  /usr/bin/rm -- "$LEGACY_ENVIRONMENT_FILE"
-  /usr/bin/sync -f "$APPLICATION_DIR"
   /usr/bin/install -o root -g root -m 0644 "$UNIT_SOURCE" "$UNIT_PATH"
   /usr/bin/systemctl daemon-reload
+  /usr/bin/rm -- "$LEGACY_ENVIRONMENT_FILE"
+  /usr/bin/sync -f "$APPLICATION_DIR"
   /usr/bin/systemctl restart "$SERVICE_UNIT"
   assert_runtime_identity
   /usr/bin/rm -f -- "$broad_sudoers_path"

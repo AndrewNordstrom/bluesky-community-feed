@@ -92,3 +92,35 @@ PROJ-2268 is In Review and linked to [PR #406](https://github.com/andrewnordstro
 The canonical repository is [andrewnordstrom-eng/corgi](https://github.com/andrewnordstrom-eng/corgi),
 GitHub repository ID `1151738081`. The existing project record already names this
 repository; no project-record mutation was needed.
+
+### Full-review follow-up, 2026-09-07
+
+The full review's valid recovery findings are batched into the existing packet:
+reload the protected-path unit before legacy removal; reset this unit's start
+limit before rollback restart; report restart failures explicitly. Bootstrap
+authentication now precedes every rehearsal entry, and its fault harness is
+root-private. Tests exercise corrupt recovery artifacts, the real start limiter,
+and twelve interruption boundaries.
+
+The dispatcher rejects root library-only execution. Configuration rejects
+privileged, fractional and out-of-range ports. The unit no longer grants a
+writable application mount exception. Command-policy tests cover absolute paths,
+sudo terminators and both substitution syntaxes, and artifact tests reject
+group/other writes. The redundant regex-only privilege assertions were removed
+in favor of the existing semantic parser and its expanded cases.
+
+The requested `applying=false` test described a guard removed earlier. The EXIT
+trap is armed only inside apply; new tests exercise failed preflight and verify
+with no rollback, and obsolete fixture variables were removed. Invalid NODE_ENV
+spellings are rejected by the existing enum; tests now record that actual behavior.
+
+GitHub's former repository endpoint redirects to `andrewnordstrom-eng/corgi`,
+with the same repository ID `1151738081`. The contract records that rename and
+the dispatcher-only sudo boundary; no host authority or production permission
+was added. The optional embedding model cache remains a host-readiness input,
+not a claim of qualified cold-start behavior.
+
+Reference: [systemctl reset-failed](https://man7.org/linux/man-pages/man1/systemctl.1.html)
+resets the unit's start counter. The rehearsal also inspects process-start
+timestamps because systemd 255 can preserve the previous process result while
+refusing a rate-limited start.

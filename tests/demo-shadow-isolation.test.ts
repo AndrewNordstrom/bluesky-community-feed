@@ -339,6 +339,48 @@ describe('fixed privileged dispatcher command matcher', () => {
   });
 });
 
+describe('command spelling and substitution boundaries', () => {
+  const forms = (command: string): string[] => [
+    command, `/usr/local/bin/${command}`, `sudo -n -- /usr/bin/${command}`,
+    `VALUE="$(sudo -n -- /usr/bin/${command})"`,
+    'VALUE="`sudo -n -- /usr/bin/' + command + '`"',
+  ];
+
+  it.each(['docker', 'systemctl'])('rejects every direct %s spelling alongside an allowed dispatcher', (command) => {
+    for (const script of forms(command)) {
+      expect(usesOnlyFixedPrivilegeDispatcherCommands(
+        'sudo -n -- /usr/local/sbin/corgi-deploy-root service-restart\n' + script
+      ), script).toBe(false);
+    }
+  });
+
+  it.each(['pull', 'checkout', 'reset'])('recognizes path-qualified and substituted git %s', (subcommand) => {
+    for (const script of forms(`git ${subcommand}`)) {
+      expect(gitSubcommandsInLine(script), script).toContain(subcommand);
+    }
+  });
+
+  it.each([
+    [String.raw`g\it pull`, 'pull'],
+    [String.raw`sudo -n -- /usr/bin/g\it checkout main`, 'checkout'],
+    [String.raw`sh -c 'g\it pull'`, 'pull'],
+  ])('recognizes shell-escaped git command %s', (script, subcommand) => {
+    expect(gitSubcommandsInLine(script)).toContain(subcommand);
+  });
+
+  it('rejects a shell-escaped direct container command', () => {
+    expect(usesOnlyFixedPrivilegeDispatcherCommands(
+      'sudo -n -- /usr/local/sbin/corgi-deploy-root service-restart\n' + String.raw`sudo -n -- /usr/bin/dock\er ps`
+    )).toBe(false);
+  });
+
+  it('accepts the fixed dispatcher inside a backtick substitution', () => {
+    expect(usesOnlyFixedPrivilegeDispatcherCommands(
+      'VALUE="`sudo -n -- /usr/local/sbin/corgi-deploy-root service-restart`"'
+    )).toBe(true);
+  });
+});
+
 describe('production deploy ordering guards', () => {
   it('blocks changed migrations before rollback is armed', () => {
     const deploy = readFileSync(DEPLOY_FILE, 'utf8');
@@ -1028,6 +1070,11 @@ ensure_runtime_artifacts_service_readable`,
         0o004
       );
       expect(statSync(join(directory, 'dist', 'index.js')).mode & 0o004).toBe(0o004);
+      for (const relativePath of ['', 'node_modules/example', 'dist', 'node_modules/example/index.js', 'dist/index.js']) {
+        const metadata = statSync(join(directory, relativePath));
+        expect(metadata.mode & 0o022).toBe(0);
+        if (metadata.isFile()) expect(metadata.mode & 0o001).toBe(0);
+      }
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
@@ -3736,79 +3783,38 @@ function countExecutableCommand(script: string, command: string): number {
 type GitMutationSubcommand = 'checkout' | 'fetch' | 'pull' | 'reset' | 'switch' | 'unknown';
 
 function gitSubcommandsInLine(line: string): GitMutationSubcommand[] {
-  const directSubcommands = line
-    .replace(/\$\(/g, ';')
-    .replace(/\)/g, ';')
-    .replace(/`/g, ';')
-    .split(/&&|\|\||[;|]/)
-    .map((segment) => gitSubcommand(segment))
-    .filter((subcommand): subcommand is GitMutationSubcommand => subcommand !== null);
-  const indirectSubcommands = Array.from(
-    line.matchAll(/\bgit\b[^;&|`\n]*?\b(checkout|fetch|pull|reset|switch)\b/g),
-    (match) => match[1] as GitMutationSubcommand
+  // Retain conservative detection inside quoted shell fragments as well as
+  // normal command words, using the same escape handling for both.
+  const tokens = tokenizeShellCommands(line).flatMap((token) =>
+    /\s/.test(token) ? tokenizeShellCommands(token) : [token]
   );
-  return Array.from(new Set([...directSubcommands, ...indirectSubcommands]));
+  const subcommands = tokens.flatMap((token, index) => {
+    if (commandBasename(token) !== 'git') return [];
+    const subcommand = gitSubcommand(tokens.slice(index + 1));
+    return subcommand === null ? [] : [subcommand];
+  });
+  return Array.from(new Set(subcommands));
 }
 
-function gitSubcommand(line: string): GitMutationSubcommand | null {
-  let remainder = line.trim();
-  while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(remainder)) {
-    const assignmentMatch = remainder.match(
-      /^[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S+)\s*/
-    );
-    if (!assignmentMatch) {
-      return null;
-    }
-    remainder = remainder.slice(assignmentMatch[0].length);
-  }
-  if (/^sudo(?:\s+|$)/.test(remainder)) {
-    remainder = remainder.replace(/^sudo\s*/, '');
-    while (remainder.startsWith('-')) {
-      if (/^--(?:\s+|$)/.test(remainder)) {
-        remainder = remainder.replace(/^--\s*/, '');
-        break;
-      }
-      const sudoOptionWithValue = remainder.match(
-        /^(?:(?:-[uUgChp]|--(?:user|group|host|chdir|prompt))\s+(?:"[^"]*"|'[^']*'|\S+))\s*/
-      );
-      if (sudoOptionWithValue) {
-        remainder = remainder.slice(sudoOptionWithValue[0].length);
-        continue;
-      }
-      const sudoFlag = remainder.match(/^--?[A-Za-z][A-Za-z0-9-]*(?:=\S+)?\s*/);
-      if (!sudoFlag) {
+function gitSubcommand(tokens: string[]): GitMutationSubcommand | null {
+  let index = 0;
+  while (tokens[index]?.startsWith('-')) {
+    const option = tokens[index];
+    if (['-C', '-c', '--git-dir', '--work-tree'].includes(option)) {
+      if (tokens[index + 1] === undefined || [';', '&', '|', '(', ')', '\n'].includes(tokens[index + 1])) {
         return 'unknown';
       }
-      remainder = remainder.slice(sudoFlag[0].length);
-    }
-  }
-  if (!/^git(?:\s+|$)/.test(remainder)) {
-    return null;
-  }
-  remainder = remainder.replace(/^git\s*/, '');
-
-  while (remainder.startsWith('-')) {
-    const optionWithValueMatch = remainder.match(
-      /^(?:(?:-C|-c)\s+(?:"[^"]*"|'[^']*'|\S+)|--(?:git-dir|work-tree)(?:=(?:"[^"]*"|'[^']*'|\S+)|\s+(?:"[^"]*"|'[^']*'|\S+)))\s*/
-    );
-    if (optionWithValueMatch) {
-      remainder = remainder.slice(optionWithValueMatch[0].length);
-      continue;
-    }
-    const flagMatch = remainder.match(/^--?[A-Za-z][A-Za-z0-9-]*(?:=\S+)?\s*/);
-    if (!flagMatch) {
+      index += 2;
+    } else if (/^--?[A-Za-z][A-Za-z0-9-]*(?:=.*)?$/.test(option)) {
+      index += 1;
+    } else {
       return 'unknown';
     }
-    remainder = remainder.slice(flagMatch[0].length);
   }
-
-  const subcommand = remainder.match(/^([a-z][a-z-]*)/)?.[1];
+  const subcommand = tokens[index];
   if (
-    subcommand === 'checkout' ||
-    subcommand === 'fetch' ||
-    subcommand === 'pull' ||
-    subcommand === 'reset' ||
-    subcommand === 'switch'
+    subcommand === 'checkout' || subcommand === 'fetch' || subcommand === 'pull' ||
+    subcommand === 'reset' || subcommand === 'switch'
   ) {
     return subcommand;
   }
@@ -4070,13 +4076,17 @@ function assertDeployMigrationOrdering(script: string): void {
   }
 }
 
+function commandBasename(word: string): string {
+  return word.split('/').at(-1) ?? word;
+}
+
 function usesOnlyFixedPrivilegeDispatcherCommands(script: string): boolean {
   const tokens = tokenizeShellCommands(script);
   const dispatcherIndexes = tokens.flatMap((token, index) =>
     token === '/usr/local/sbin/corgi-deploy-root' ? [index] : []
   );
   const directPrivilegeIndexes = tokens.flatMap((token, index) =>
-    token.split('/').at(-1) === 'docker' || token.split('/').at(-1) === 'systemctl'
+    commandBasename(token) === 'docker' || commandBasename(token) === 'systemctl'
       ? [index]
       : []
   );
@@ -4122,6 +4132,8 @@ function tokenizeShellCommands(script: string): string[] {
   let word = '';
   let quote: "'" | '"' | null = null;
   let doubleQuotedCommandDepth = 0;
+  let backtickReturnQuote: '"' | null = null;
+  let inBackticks = false;
   let index = 0;
 
   const pushWord = (): void => {
@@ -4134,6 +4146,21 @@ function tokenizeShellCommands(script: string): string[] {
   while (index < script.length) {
     const char = script[index];
     const next = script[index + 1];
+
+    if (char === '`' && quote !== "'") {
+      pushWord();
+      tokens.push(inBackticks ? ')' : '(');
+      if (inBackticks) {
+        quote = backtickReturnQuote;
+        backtickReturnQuote = null;
+      } else {
+        backtickReturnQuote = quote;
+        quote = null;
+      }
+      inBackticks = !inBackticks;
+      index += 1;
+      continue;
+    }
 
     if (quote !== null) {
       if (quote === '"' && char === '$' && next === '(') {
@@ -4163,6 +4190,13 @@ function tokenizeShellCommands(script: string): string[] {
     }
 
     if (char === '\\' && next === '\n') {
+      index += 2;
+      continue;
+    }
+
+    // Outside quotes, a backslash quotes the next character of the same word.
+    if (char === '\\' && next !== undefined) {
+      word += next;
       index += 2;
       continue;
     }

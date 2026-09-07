@@ -5,27 +5,28 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import Fastify from 'fastify';
 import { parseTrustProxyConfig } from '../src/feed/server.js';
+import { config, ConfigSchema } from '../src/config.js';
 
 vi.mock('../src/db/redis.js', () => ({
   redis: {},
 }));
 
 describe('security-oriented config defaults', () => {
-  it.each(['production', 'development'])('loads working-directory dotenv only outside production (%s)', (mode) => {
+  it.each(['production', 'development', 'Production', 'PRODUCTION', 'staging', '', undefined])('loads working-directory dotenv only outside production (%s)', (mode) => {
     const directory = mkdtempSync(path.join(tmpdir(), 'corgi-config-integrity-'));
     const source = new URL('../src/config.ts', import.meta.url).href;
     writeFileSync(path.join(directory, '.env'), 'PROJ2268_DOTENV_PROBE=from-writable-checkout\n');
     try {
       const result = spawnSync(process.execPath, [
         '--import', import.meta.resolve('tsx'), '--input-type=module', '-e',
-        'await import(process.argv[1]); console.log(JSON.stringify({ probe: process.env.PROJ2268_DOTENV_PROBE ?? null }));',
+        'try { await import(process.argv[1]); } catch (error) { console.error(error); process.exitCode = 1; } console.log(JSON.stringify({ probe: process.env.PROJ2268_DOTENV_PROBE ?? null }));',
         source,
       ], {
         cwd: directory,
         encoding: 'utf8',
         timeout: 10_000,
         env: {
-          NODE_ENV: mode,
+          ...(mode === undefined ? {} : { NODE_ENV: mode }),
           FEEDGEN_SERVICE_DID: 'did:web:fixture.example',
           FEEDGEN_PUBLISHER_DID: 'did:plc:fixture',
           FEEDGEN_HOSTNAME: 'fixture.example',
@@ -42,7 +43,10 @@ describe('security-oriented config defaults', () => {
         },
       });
       expect(result.error).toBeUndefined();
-      expect(result.status, result.stderr).toBe(0);
+      expect(result.status, result.stderr).toBe(
+        mode === undefined || mode === 'production' || mode === 'development' ? 0 : 1
+      );
+      if (result.status !== 0) expect(result.stderr).toContain('NODE_ENV');
       const lines = result.stdout.trim().split('\n');
       expect(JSON.parse(lines[lines.length - 1])).toEqual({
         probe: mode === 'production' ? null : 'from-writable-checkout',
@@ -50,6 +54,14 @@ describe('security-oriented config defaults', () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
+  });
+
+  it.each([0, 1, 443, 1023, 65536, 3000.5])('rejects unsupported FEEDGEN_PORT %s before application startup', (port) => {
+    expect(ConfigSchema.safeParse({ ...config, FEEDGEN_PORT: String(port) }).success).toBe(false);
+  });
+
+  it.each([1024, 3000, 65535])('accepts unprivileged FEEDGEN_PORT %s', (port) => {
+    expect(ConfigSchema.parse({ ...config, FEEDGEN_PORT: String(port) }).FEEDGEN_PORT).toBe(port);
   });
 
   it('uses did:plc-only default issuer prefixes in config schema', () => {

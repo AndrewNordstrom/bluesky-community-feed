@@ -235,7 +235,7 @@ ownership does not require logging in over SSH as root.
 Linux container with real systemd. Supply the three reviewed `ops` files under
 `/fixture/source`. It creates only dummy identities, configuration and an
 application fixture, then exercises successful adoption, denial of configuration
-replacement, rollback, a failed service transition and eleven abrupt-interruption
+replacement, rollback, a failed service transition and twelve abrupt-interruption
 boundaries. It also rejects a modified bootstrap before interpretation and
 changes both checkout sources after admission to prove only the protected
 approved artifacts reach the installed unit and dispatcher. The Docker service dependency is a fixture; no Docker socket is
@@ -254,3 +254,23 @@ a trusted code publisher throughout this sequence.
 Rollback pins the installed dispatcher snapshot and refuses to remove a
 dispatcher that was subsequently replaced, preserving it and the recovery
 evidence for explicit root review.
+
+## Additional recovery acceptance
+
+Before removing the legacy configuration, adoption installs and reloads the
+protected-path unit so a restart after an interruption can use the canonical
+configuration. Rollback resets only this unit's failed/start-limit state before
+restarting the restored unit, and reports restart failure explicitly. The Linux
+rehearsal exhausts the real start limit and interrupts immediately after legacy
+removal; every root bootstrap entry, including recovery, is authenticated first.
+
+The application schema accepts only integer `FEEDGEN_PORT` values from 1024
+through 65535. Before host adoption, independently confirm the effective port
+is in that range; the schema guard becomes live with the separately promoted
+application revision. No network-bind capability is granted.
+
+The application directory has no writable systemd mount exception. The optional
+embedding model is disabled by default and uses a library cache when enabled.
+Confirm its required artifacts and readiness during the separately authorized
+application preflight; this packet does not grant the service write access to
+application artifacts or claim a cold model download was qualified.

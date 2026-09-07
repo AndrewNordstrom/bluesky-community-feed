@@ -129,6 +129,8 @@ main() {
   esac
 }
 
-if [[ "${CORGI_DEPLOY_ROOT_LIBRARY_ONLY:-0}" != '1' ]]; then
+if [[ "${CORGI_DEPLOY_ROOT_LIBRARY_ONLY:-0}" == '1' ]]; then
+  [[ "$EUID" -ne 0 ]] || fail 'library-only mode is prohibited for root execution'
+else
   main "$@"
 fi

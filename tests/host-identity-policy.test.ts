@@ -117,8 +117,7 @@ describe('PROJ-2268 host identity policy', () => {
       (match) => match[1],
     );
 
-    expect(workflow).not.toMatch(/sudo(?: -n)? (?:\/usr\/bin\/)?systemctl/);
-    expect(workflow).not.toMatch(/sudo(?: -n)? (?:\/usr\/bin\/)?docker/);
+    // The shared command parser and substitution cases live in demo-shadow-isolation.test.ts.
     expect(new Set(invokedCommands)).toEqual(new Set(ALLOWED_ROOT_COMMANDS));
     expect(workflow).toContain('sudo -n /usr/bin/true');
   });
@@ -166,13 +165,12 @@ describe('PROJ-2268 host identity policy', () => {
         '-c',
         `source "$1"
 rollback_partial_adoption() { printf 'rollback:%s\\n' "$1"; }
-applying=true
 deploy_user=deploy-user
 trap 'apply_failure_rollback "$?" "$deploy_user"' EXIT
 case "$2" in
   fail) fail 'forced assertion failure' ;;
   return) /usr/bin/false ;;
-  success) applying=false ;;
+  success) /usr/bin/true ;;
 esac`,
         'bash',
         PROVISIONER_PATH,
@@ -194,6 +192,21 @@ esac`,
     expect(result.stderr.includes('attempting guarded rollback')).toBe(expectedRollback);
   });
 
+  it.each(['preflight', 'verify'])('does not arm rollback when %s fails outside apply', (operation) => {
+    const result = spawnSync('/bin/bash', ['-c', `source "$1"
+rollback_partial_adoption() { printf 'unexpected rollback\\n'; }
+require_root() { fail 'fixture preflight failure'; }
+"$2" fixture-user /etc/sudoers.d/fixture`, 'bash', PROVISIONER_PATH, operation === 'verify' ? 'verify_policy' : 'preflight'], {
+      encoding: 'utf8',
+      env: { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', CORGI_HOST_IDENTITY_LIBRARY_ONLY: '1' },
+      timeout: 5_000,
+    });
+    assertSpawnCompleted(result);
+    expect(result.status).toBe(1);
+    expect(result.stdout).not.toContain('unexpected rollback');
+    expect(result.stderr).not.toContain('attempting guarded rollback');
+  });
+
   it('preserves apply failure and reports a failed guarded rollback', () => {
     const result = spawnSync(
       '/bin/bash',
@@ -201,7 +214,6 @@ esac`,
         '-c',
         `source "$1"
 rollback_partial_adoption() { return 1; }
-applying=true
 deploy_user=deploy-user
 trap 'apply_failure_rollback "$?" "$deploy_user"' EXIT
 fail 'forced assertion failure'`,

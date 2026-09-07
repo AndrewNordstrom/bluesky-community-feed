@@ -34,7 +34,7 @@ export const ConfigSchema = z.object({
   FEEDGEN_HOSTNAME: z.string().min(1),
 
   // Server
-  FEEDGEN_PORT: z.coerce.number().default(3000),
+  FEEDGEN_PORT: z.coerce.number().int().min(1024).max(65535).default(3000),
   FEEDGEN_LISTENHOST: z.string().default('0.0.0.0'),
 
   // Jetstream

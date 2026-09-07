@@ -65,12 +65,19 @@ printf 'PASS original fixture service active with actual systemd\n'
 unit_sha="$(sha256sum /etc/systemd/system/bluesky-feed.service | cut -d' ' -f1)"
 sudoers_sha="$(sha256sum /etc/sudoers.d/fixture-deployment | cut -d' ' -f1)"
 provisioner="$stage/provision-corgi-host-identity.sh"
-apply() {
+run_provisioner() {
   verify_bootstrap || return 1
-  bash "$provisioner" apply deploy-fixture /etc/sudoers.d/fixture-deployment "$sudoers_sha" "$unit_sha" "$revision" CONFIRM-CORGI-HOST-IDENTITY-ADOPTION
+  bash "$provisioner" "$@"
+}
+run_harness() {
+  verify_bootstrap || return 1
+  CORGI_HOST_IDENTITY_LIBRARY_ONLY=1 bash "$@"
+}
+apply() {
+  run_provisioner apply deploy-fixture /etc/sudoers.d/fixture-deployment "$sudoers_sha" "$unit_sha" "$revision" CONFIRM-CORGI-HOST-IDENTITY-ADOPTION
 }
 rollback() {
-  bash "$provisioner" rollback deploy-fixture CONFIRM-CORGI-HOST-IDENTITY-ROLLBACK
+  run_provisioner rollback deploy-fixture CONFIRM-CORGI-HOST-IDENTITY-ROLLBACK || return 1
   [[ "$(sha256sum /opt/bluesky-feed/.env | cut -d' ' -f1)" == "$legacy_sha" ]]
   [[ "$(stat -c '%U:%G:%a' /opt/bluesky-feed/.env)" == 'deploy-fixture:deploy-fixture:600' ]]
   [[ "$(sha256sum /etc/systemd/system/bluesky-feed.service | cut -d' ' -f1)" == "$unit_sha" ]]
@@ -90,7 +97,8 @@ printf 'PASS changed checkout bootstrap rejected before interpretation or host-p
 
 # Independently validate post-validation mutations using a root-only DEBUG harness.
 # It edits the deployment checkout at the first state-directory write, after all admission checks.
-cat > /root/bootstrap-race.sh <<'RACE'
+install -d -o root -g root -m 0700 /root/corgi-rehearsal-harness
+cat > /root/corgi-rehearsal-harness/bootstrap-race.sh <<'RACE'
 set -Eeuo pipefail
 source "$1"
 shift
@@ -107,16 +115,15 @@ trap 'mutate_checkout "${FUNCNAME[0]:-}" "$BASH_COMMAND"' DEBUG
 apply_policy "$@"
 [[ "$race_done" == true ]]
 RACE
-chmod 0600 /root/bootstrap-race.sh
-bash "$provisioner" preflight deploy-fixture /etc/sudoers.d/fixture-deployment
-verify_bootstrap
-CORGI_HOST_IDENTITY_LIBRARY_ONLY=1 bash /root/bootstrap-race.sh "$provisioner" deploy-fixture /etc/sudoers.d/fixture-deployment "$sudoers_sha" "$unit_sha" "$revision" CONFIRM-CORGI-HOST-IDENTITY-ADOPTION
+chmod 0600 /root/corgi-rehearsal-harness/bootstrap-race.sh
+run_provisioner preflight deploy-fixture /etc/sudoers.d/fixture-deployment
+run_harness /root/corgi-rehearsal-harness/bootstrap-race.sh "$provisioner" deploy-fixture /etc/sudoers.d/fixture-deployment "$sudoers_sha" "$unit_sha" "$revision" CONFIRM-CORGI-HOST-IDENTITY-ADOPTION
 [[ ! -e /etc/corgi-untrusted-wrapper-ran ]]
 [[ "$(sha256sum /usr/local/sbin/corgi-deploy-root | cut -d' ' -f1)" == "$(sha256sum "$stage/corgi-deploy-root" | cut -d' ' -f1)" ]]
 [[ "$(sha256sum /etc/systemd/system/bluesky-feed.service | cut -d' ' -f1)" == "$(sha256sum "$stage/bluesky-feed.service" | cut -d' ' -f1)" ]]
 printf 'PASS checkout source replacement after admission cannot change installed privileged artifacts\n'
 
-bash "$provisioner" verify deploy-fixture
+run_provisioner verify deploy-fixture
 apply
 for operation in read write unlink rename symlink ancestor; do
   case "$operation" in
@@ -134,10 +141,18 @@ for operation in read write unlink rename symlink ancestor; do
   fi
   printf 'PASS actual deployment user denied %s\n' "$operation"
 done
+# A root caller cannot turn privileged probes into successful no-ops via a library hook.
+if CORGI_DEPLOY_ROOT_LIBRARY_ONLY=1 /usr/local/sbin/corgi-deploy-root service-is-active; then
+  echo 'FAIL root dispatcher accepted library-only mode' >&2; exit 1
+fi
+[[ "$(runuser -u deploy-fixture -- sudo -n -- /usr/local/sbin/corgi-deploy-root service-user)" == bluesky-feed ]]
+runuser -u deploy-fixture -- env CORGI_DEPLOY_ROOT_LIBRARY_ONLY=1 bash -c 'source /usr/local/sbin/corgi-deploy-root; require_demo_session_key demo:session:demo-fixture'
+printf 'PASS root dispatcher rejects library hook; normal sudo and non-root helpers work\n'
+
 # A later root-managed dispatcher replacement must survive a rejected rollback.
 printf '\n# independently replaced fixture dispatcher\n' >> /usr/local/sbin/corgi-deploy-root
 changed_wrapper_sha="$(sha256sum /usr/local/sbin/corgi-deploy-root | cut -d' ' -f1)"
-if bash "$provisioner" rollback deploy-fixture CONFIRM-CORGI-HOST-IDENTITY-ROLLBACK; then
+if run_provisioner rollback deploy-fixture CONFIRM-CORGI-HOST-IDENTITY-ROLLBACK; then
   echo 'FAIL rollback accepted a replaced dispatcher' >&2; exit 1
 fi
 [[ "$(sha256sum /usr/local/sbin/corgi-deploy-root | cut -d' ' -f1)" == "$changed_wrapper_sha" ]]
@@ -155,7 +170,27 @@ systemctl is-active --quiet bluesky-feed
 [[ ! -e /var/lib/corgi-host-adoption && ! -e /etc/corgi ]]
 printf 'PASS failed service transition automatically restored original service and configuration\n'
 
-cat > /fixture/fault.sh <<'FAULT'
+# Exhaust the real systemd start limiter before explicit recovery.
+systemctl reset-failed bluesky-feed
+apply
+touch /opt/bluesky-feed/fail-new-identity
+for attempt in 1 2 3 4 5 6; do
+  previous_start="$(systemctl show bluesky-feed --property=ExecMainStartTimestampMonotonic --value)"
+  if systemctl restart bluesky-feed; then
+    echo "FAIL expected new-identity failure at attempt $attempt" >&2; exit 1
+  fi
+done
+# systemd 255 may retain Result=exit-code from the last process even when the
+# limiter refuses later requests. Prove the final refusal launched no new process.
+[[ "$previous_start" != 0 ]]
+[[ "$(systemctl show bluesky-feed --property=ExecMainStartTimestampMonotonic --value)" == "$previous_start" ]]
+[[ "$(systemctl show bluesky-feed --property=ActiveState --value)" == failed ]]
+rollback
+rm /opt/bluesky-feed/fail-new-identity
+printf 'PASS rollback recovered from the exhausted real systemd start limit\n'
+
+
+cat > /root/corgi-rehearsal-harness/fault.sh <<'FAULT'
 set -Eeuo pipefail
 source "$1"
 fault="$2"
@@ -164,6 +199,7 @@ set -T
 trap 'if [[ "${FUNCNAME[0]:-}" == "apply_policy" || "${FUNCNAME[0]:-}" == "write_state" ]] && [[ "$BASH_COMMAND" == "$fault"* ]]; then kill -KILL "$BASHPID"; fi' DEBUG
 apply_policy "$@"
 FAULT
+chmod 0600 /root/corgi-rehearsal-harness/fault.sh
 
 # SIGKILL cannot run the EXIT trap. Exercise explicit recovery at migration boundaries.
 # Match literal source commands; expanding these test patterns would invalidate fault injection.
@@ -177,15 +213,34 @@ for fault in \
   'assert_configuration_ancestors' \
   '/usr/bin/install -o root -g root -m 0644 "$UNIT_SOURCE" "$UNIT_PATH"' \
   '/usr/bin/systemctl daemon-reload' \
+  '/usr/bin/sync -f "$APPLICATION_DIR"' \
   'assert_runtime_identity' \
   '/usr/sbin/visudo -c ' \
   'verify_policy "$deploy_user"'; do
   systemctl reset-failed bluesky-feed
-  if CORGI_HOST_IDENTITY_LIBRARY_ONLY=1 bash /fixture/fault.sh "$provisioner" "$fault" deploy-fixture /etc/sudoers.d/fixture-deployment "$sudoers_sha" "$unit_sha" "$revision" CONFIRM-CORGI-HOST-IDENTITY-ADOPTION; then
+  if run_harness /root/corgi-rehearsal-harness/fault.sh "$provisioner" "$fault" deploy-fixture /etc/sudoers.d/fixture-deployment "$sudoers_sha" "$unit_sha" "$revision" CONFIRM-CORGI-HOST-IDENTITY-ADOPTION; then
     echo "FAIL fault injection did not interrupt: $fault" >&2; exit 1
   else
     status="$?"
     [[ "$status" == 137 ]] || { echo "Unexpected interruption status: $status" >&2; exit 1; }
+  fi
+  # This command is the first instruction after legacy removal.
+  # shellcheck disable=SC2016
+  if [[ "$fault" == '/usr/bin/sync -f "$APPLICATION_DIR"' ]]; then
+    systemctl restart bluesky-feed
+    systemctl is-active --quiet bluesky-feed
+    [[ "$(systemctl show bluesky-feed --property=User --value)" == bluesky-feed ]]
+    configuration_sha="$(sha256sum /etc/corgi/production.env | cut -d' ' -f1)"
+    managed_sudoers_sha="$(sha256sum /etc/sudoers.d/corgi-deploy | cut -d' ' -f1)"
+    managed_unit_sha="$(sha256sum /etc/systemd/system/bluesky-feed.service | cut -d' ' -f1)"
+    printf 'touch /etc/corgi-untrusted-rollback-ran\n' > "$provisioner"
+    if rollback; then echo 'FAIL accepted corrupt rollback bootstrap' >&2; exit 1; fi
+    [[ ! -e /etc/corgi-untrusted-rollback-ran && -d /var/lib/corgi-host-adoption ]]
+    [[ "$(sha256sum /etc/corgi/production.env | cut -d' ' -f1)" == "$configuration_sha" ]]
+    [[ "$(sha256sum /etc/sudoers.d/corgi-deploy | cut -d' ' -f1)" == "$managed_sudoers_sha" ]]
+    [[ "$(sha256sum /etc/systemd/system/bluesky-feed.service | cut -d' ' -f1)" == "$managed_unit_sha" ]]
+    runuser -u deploy-fixture -- git -C "$repo" show "$revision:ops/provision-corgi-host-identity.sh" > "$provisioner"
+    printf 'PASS loaded unit starts after legacy removal; corrupt rollback bootstrap is rejected without policy mutation\n'
   fi
   rollback
   printf 'PASS SIGKILL recovery before %s\n' "$fault"
