@@ -96,7 +96,7 @@ five modes:
    paths created by the script. Recovery intentionally restores the prior weaker
    boundary; it does not count as successful adoption.
 
-Apply refuses a dirty or wrong-head checkout, changed unit/sudoers hashes,
+Apply refuses a wrong-revision or changed bootstrap bundle, changed unit/sudoers hashes,
 symlinks, foreign file owners, an inactive starting service, pre-existing
 managed paths, malformed state, or an unexpected account shape. It refuses an existing `/etc/corgi` destination
 and requires the installed unit to reference the expected legacy `.env`. The
@@ -111,10 +111,48 @@ the contract is already applied.
 The following sequence is intentionally blocked until Andrew separately names
 and approves the reviewed exact head for production execution.
 
-```sh
-sudo ops/provision-corgi-host-identity.sh preflight DEPLOY_USER /etc/sudoers.d/EXISTING_POLICY
+First materialize the three artifacts with `git show APPROVED_REPOSITORY_SHA:ops/FILE`
+on the trusted review workstation, never by copying its working tree. Produce a
+`REVISION` file containing that exact commit and a `SHA256SUMS` manifest containing
+only the three artifacts. Record the manifest's SHA-256 digest in the separately
+approved execution receipt. The digest must come from that trusted receipt, not
+from the upload or the deployment account.
 
-sudo ops/provision-corgi-host-identity.sh apply \
+Transfer these five data files through the separately authorized channel. In a
+trusted root recovery session, stage and authenticate them **before Bash reads any
+uploaded script**. For example, with the reviewed incoming directory and receipt
+values substituted explicitly:
+
+```sh
+set -eu
+bundle=/root/corgi-reviewed-bootstrap
+incoming=/var/tmp/corgi-adoption-upload
+approved_revision=APPROVED_REPOSITORY_SHA
+approved_manifest_sha=APPROVED_MANIFEST_SHA256
+# Refuse reuse, including symlinks; retain the bundle for verify and recovery.
+mkdir -m 0700 "$bundle"
+for name in REVISION SHA256SUMS provision-corgi-host-identity.sh corgi-deploy-root bluesky-feed.service; do
+  install -o root -g root -m 0600 "$incoming/$name" "$bundle/$name"
+done
+printf '%s  %s\n' "$approved_manifest_sha" "$bundle/SHA256SUMS" | sha256sum --check --strict
+test "$(cat "$bundle/REVISION")" = "$approved_revision"
+(cd "$bundle" && sha256sum --check --strict SHA256SUMS)
+```
+
+Any staging or digest failure stops execution. Do not run an upload or a
+checkout script as root to validate itself. Keep the staged directory and its
+ancestry root-owned and non-writable by other users. The provisioner checks
+those properties and every artifact digest again before admission. Installation
+and verification use only these protected sources; subsequent deployment-checkout
+edits cannot change the installed wrapper or unit. Root must remain trusted.
+
+After successful independent authentication, use this retained bundle in the
+same trusted root session with a clean environment:
+
+```sh
+env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin /bin/bash "$bundle/provision-corgi-host-identity.sh" preflight DEPLOY_USER /etc/sudoers.d/EXISTING_POLICY
+
+env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin /bin/bash "$bundle/provision-corgi-host-identity.sh" apply \
   DEPLOY_USER \
   /etc/sudoers.d/EXISTING_POLICY \
   OBSERVED_SUDOERS_SHA256 \
@@ -122,7 +160,7 @@ sudo ops/provision-corgi-host-identity.sh apply \
   APPROVED_REPOSITORY_SHA \
   CONFIRM-CORGI-HOST-IDENTITY-ADOPTION
 
-sudo ops/provision-corgi-host-identity.sh verify DEPLOY_USER
+env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin /bin/bash "$bundle/provision-corgi-host-identity.sh" verify DEPLOY_USER
 ```
 
 Preflight output must be reviewed before apply. A digest or path change requires
@@ -198,7 +236,9 @@ Linux container with real systemd. Supply the three reviewed `ops` files under
 `/fixture/source`. It creates only dummy identities, configuration and an
 application fixture, then exercises successful adoption, denial of configuration
 replacement, rollback, a failed service transition and eleven abrupt-interruption
-boundaries. The Docker service dependency is a fixture; no Docker socket is
+boundaries. It also rejects a modified bootstrap before interpretation and
+changes both checkout sources after admission to prove only the protected
+approved artifacts reach the installed unit and dispatcher. The Docker service dependency is a fixture; no Docker socket is
 exposed. This is migration acceptance evidence, not a production application
 health receipt. Do not run the rehearsal against a real application host.
 

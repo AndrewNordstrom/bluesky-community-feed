@@ -13,8 +13,26 @@ runuser -u deploy-fixture -- git -C "$repo" init -q
 runuser -u deploy-fixture -- git -C "$repo" -c user.name=Fixture -c user.email=fixture@example.invalid add ops
 runuser -u deploy-fixture -- git -C "$repo" -c user.name=Fixture -c user.email=fixture@example.invalid commit -qm 'Synthetic rehearsal snapshot'
 revision="$(runuser -u deploy-fixture -- git -C "$repo" rev-parse HEAD)"
-# Only this synthetic repository is trusted by root inside the disposable container.
-git config --global --add safe.directory "$repo"
+# Capture approval from immutable synthetic Git blobs, before any checkout mutation.
+# Real approval must supply these digests independently from the trusted reviewed revision.
+stage=/root/corgi-reviewed-bootstrap
+install -d -o root -g root -m 0700 "$stage"
+printf '%s\n' "$revision" > "$stage/REVISION"
+for name in provision-corgi-host-identity.sh corgi-deploy-root bluesky-feed.service; do
+  runuser -u deploy-fixture -- git -C "$repo" show "$revision:ops/$name" > "$stage/$name"
+  chmod 0600 "$stage/$name"
+  printf '%s  %s\n' "$(sha256sum "$stage/$name" | cut -d' ' -f1)" "$name" >> "$stage/SHA256SUMS"
+done
+chmod 0600 "$stage/REVISION" "$stage/SHA256SUMS"
+approved_manifest_sha="$(sha256sum "$stage/SHA256SUMS" | cut -d' ' -f1)"
+
+# This is the external trust check: it runs before Bash reads the provisioner.
+verify_bootstrap() {
+  [[ "$(stat -c '%U:%G:%a' "$stage")" == root:root:700 ]] || return 1
+  [[ "$(sha256sum "$stage/SHA256SUMS" | cut -d' ' -f1)" == "$approved_manifest_sha" ]] || return 1
+  [[ "$(cat "$stage/REVISION")" == "$revision" ]] || return 1
+  (cd "$stage" && sha256sum --check --strict SHA256SUMS) || return 1
+}
 printf 'deploy-fixture ALL=(ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/fixture-deployment
 chmod 0440 /etc/sudoers.d/fixture-deployment
 printf 'DUMMY_CONFIGURATION=fixture-only\n' > /opt/bluesky-feed/.env
@@ -46,8 +64,9 @@ systemctl is-active --quiet bluesky-feed
 printf 'PASS original fixture service active with actual systemd\n'
 unit_sha="$(sha256sum /etc/systemd/system/bluesky-feed.service | cut -d' ' -f1)"
 sudoers_sha="$(sha256sum /etc/sudoers.d/fixture-deployment | cut -d' ' -f1)"
-provisioner="$repo/ops/provision-corgi-host-identity.sh"
+provisioner="$stage/provision-corgi-host-identity.sh"
 apply() {
+  verify_bootstrap || return 1
   bash "$provisioner" apply deploy-fixture /etc/sudoers.d/fixture-deployment "$sudoers_sha" "$unit_sha" "$revision" CONFIRM-CORGI-HOST-IDENTITY-ADOPTION
 }
 rollback() {
@@ -58,8 +77,45 @@ rollback() {
   [[ ! -e /etc/corgi && ! -e /var/lib/corgi-host-adoption ]]
   systemctl is-active --quiet bluesky-feed
 }
+# Replacing a checkout script after approval must fail BEFORE it can execute as root.
+printf 'touch /etc/corgi-untrusted-bootstrap-ran\n' | runuser -u deploy-fixture -- tee "$repo/ops/provision-corgi-host-identity.sh" >/dev/null
+install -o root -g root -m 0600 "$repo/ops/provision-corgi-host-identity.sh" "$provisioner"
+if apply; then echo 'FAIL accepted a modified bootstrap' >&2; exit 1; fi
+[[ ! -e /etc/corgi-untrusted-bootstrap-ran && ! -e /etc/corgi && ! -e /etc/sudoers.d/corgi-deploy && ! -e /var/lib/corgi-host-adoption ]]
+[[ "$(sha256sum /etc/systemd/system/bluesky-feed.service | cut -d' ' -f1)" == "$unit_sha" ]]
+[[ "$(sha256sum /etc/sudoers.d/fixture-deployment | cut -d' ' -f1)" == "$sudoers_sha" ]]
+runuser -u deploy-fixture -- git -C "$repo" show "$revision:ops/provision-corgi-host-identity.sh" > "$provisioner"
+verify_bootstrap
+printf 'PASS changed checkout bootstrap rejected before interpretation or host-policy mutation\n'
+
+# Independently validate post-validation mutations using a root-only DEBUG harness.
+# It edits the deployment checkout at the first state-directory write, after all admission checks.
+cat > /root/bootstrap-race.sh <<'RACE'
+set -Eeuo pipefail
+source "$1"
+shift
+race_done=false
+mutate_checkout() {
+  if [[ "$race_done" == false && "$1" == apply_policy && "$2" == */usr/bin/install*STATE_DIR* ]]; then
+    race_done=true
+    printf 'touch /etc/corgi-untrusted-wrapper-ran\n' | runuser -u deploy-fixture -- tee /fixture/repo/ops/corgi-deploy-root >/dev/null
+    printf '[Service]\nExecStart=/usr/bin/false\n' | runuser -u deploy-fixture -- tee /fixture/repo/ops/bluesky-feed.service >/dev/null
+  fi
+}
+set -T
+trap 'mutate_checkout "${FUNCNAME[0]:-}" "$BASH_COMMAND"' DEBUG
+apply_policy "$@"
+[[ "$race_done" == true ]]
+RACE
+chmod 0600 /root/bootstrap-race.sh
 bash "$provisioner" preflight deploy-fixture /etc/sudoers.d/fixture-deployment
-apply
+verify_bootstrap
+CORGI_HOST_IDENTITY_LIBRARY_ONLY=1 bash /root/bootstrap-race.sh "$provisioner" deploy-fixture /etc/sudoers.d/fixture-deployment "$sudoers_sha" "$unit_sha" "$revision" CONFIRM-CORGI-HOST-IDENTITY-ADOPTION
+[[ ! -e /etc/corgi-untrusted-wrapper-ran ]]
+[[ "$(sha256sum /usr/local/sbin/corgi-deploy-root | cut -d' ' -f1)" == "$(sha256sum "$stage/corgi-deploy-root" | cut -d' ' -f1)" ]]
+[[ "$(sha256sum /etc/systemd/system/bluesky-feed.service | cut -d' ' -f1)" == "$(sha256sum "$stage/bluesky-feed.service" | cut -d' ' -f1)" ]]
+printf 'PASS checkout source replacement after admission cannot change installed privileged artifacts\n'
+
 bash "$provisioner" verify deploy-fixture
 apply
 for operation in read write unlink rename symlink ancestor; do

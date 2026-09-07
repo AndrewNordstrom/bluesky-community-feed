@@ -74,3 +74,21 @@ host. Test source: `tests/host-identity-linux.sh`.
 The full validation and current-head hosted review must be refreshed before
 publication. No production connection, service change, merge, deployment,
 credential mutation or freeze change is part of this repository correction.
+
+### Bootstrap trust correction
+
+Hosted review identified writable-checkout execution and source-install races.
+The execution contract now requires immutable Git blobs exported on the trusted
+review workstation, an independently approved manifest digest, and root-protected
+staging authenticated before script interpretation. The provisioner validates
+bundle ancestry, revision and artifact hashes and never reads the deployment
+checkout. The Linux rehearsal passed pre-interpretation rejection, post-admission
+checkout replacement, failed-start recovery and all eleven interruption boundaries.
+Full validation passed 2,188 tests, builds and lint; ShellCheck passed. Local review
+found no blocking code issues.
+
+Project linkage verified 2026-09-07 UTC: Bluesky Corgi is In Progress;
+PROJ-2268 is In Review and linked to [PR #406](https://github.com/andrewnordstrom-eng/corgi/pull/406).
+The canonical repository is [andrewnordstrom-eng/corgi](https://github.com/andrewnordstrom-eng/corgi),
+GitHub repository ID `1151738081`. The existing project record already names this
+repository; no project-record mutation was needed.

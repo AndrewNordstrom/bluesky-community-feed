@@ -142,7 +142,8 @@ describe('PROJ-2268 host identity policy', () => {
     expect(provisioner).toContain('CONFIRM-CORGI-HOST-IDENTITY-ADOPTION');
     expect(provisioner).toContain('CONFIRM-CORGI-HOST-IDENTITY-ROLLBACK');
     expect(provisioner).toContain("readonly STATE_DIR='/var/lib/corgi-host-adoption'");
-    expect(provisioner).toContain('repository has tracked changes after exact-head approval');
+    expect(provisioner).toContain('bootstrap artifact differs from approved manifest');
+    expect(provisioner).toContain('bootstrap ancestry must be root-owned and not group/other writable');
     expect(provisioner).toContain('attempting guarded rollback');
     expect(provisioner).toContain("printf -v rollback_trap 'apply_failure_rollback \"$?\" %q'");
     expect(provisioner).toContain('/usr/sbin/visudo -c');

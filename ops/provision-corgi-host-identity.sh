@@ -107,31 +107,46 @@ assert_safe_sudoers_path() {
 }
 
 assert_source_files() {
-  [[ -f "$UNIT_SOURCE" && ! -L "$UNIT_SOURCE" ]] ||
-    fail "reviewed service unit must be a non-symlink regular file: ${UNIT_SOURCE}"
-  [[ -f "$WRAPPER_SOURCE" && ! -L "$WRAPPER_SOURCE" ]] ||
-    fail "reviewed privileged wrapper must be a non-symlink regular file: ${WRAPPER_SOURCE}"
+  local directory="$SOURCE_DIR"
+  local shape=''
+  local mode=''
+  local name=''
+  local expected_digest=''
+
+  # This validates an already authenticated bootstrap, never a writable checkout.
+  while :; do
+    [[ -d "$directory" && ! -L "$directory" ]] || fail "bootstrap ancestor is not a real directory: ${directory}"
+    shape="$(numeric_shape "$directory")"
+    mode="${shape##*:}"
+    [[ "$shape" == 0:0:* && $((8#$mode & 0022)) -eq 0 ]] ||
+      fail "bootstrap ancestry must be root-owned and not group/other writable: ${directory}"
+    [[ "$directory" != '/' ]] || break
+    directory="$(/usr/bin/dirname "$directory")"
+  done
+  assert_root_regular_file "${SOURCE_DIR}/REVISION" 600 'bootstrap revision'
+  assert_root_regular_file "${SOURCE_DIR}/SHA256SUMS" 600 'bootstrap manifest'
+  [[ "$(/usr/bin/wc -l <"${SOURCE_DIR}/SHA256SUMS")" -eq 3 ]] || fail 'bootstrap manifest must contain exactly three artifacts'
+  for name in provision-corgi-host-identity.sh corgi-deploy-root bluesky-feed.service; do
+    assert_root_regular_file "${SOURCE_DIR}/${name}" 600 'bootstrap artifact'
+    expected_digest="$(/usr/bin/awk -v name="$name" '$2 == name { print $1; found += 1 } END { if (found != 1) exit 1 }' "${SOURCE_DIR}/SHA256SUMS")" ||
+      fail "bootstrap manifest must contain one digest for ${name}"
+    require_sha256 "$expected_digest" "bootstrap ${name} digest"
+    [[ "$(file_sha256 "${SOURCE_DIR}/${name}")" == "$expected_digest" ]] ||
+      fail "bootstrap artifact differs from approved manifest: ${name}"
+  done
   /bin/bash -n "$WRAPPER_SOURCE"
-  /bin/bash -n "${BASH_SOURCE[0]}"
 }
 
-assert_reviewed_checkout() {
-  local deploy_user="$1"
-  local expected_repository_sha="$2"
-  local repository_root=''
+assert_reviewed_bundle() {
+  local expected_repository_sha="$1"
   local actual_repository_sha=''
-  local tracked_status=''
 
   [[ "$expected_repository_sha" =~ ^[0-9a-f]{40}$ ]] ||
     fail 'expected repository revision must be a lowercase full SHA'
-  repository_root="$(cd "${SOURCE_DIR}/.." && pwd -P)"
-  actual_repository_sha="$(/usr/bin/git -C "$repository_root" rev-parse HEAD)"
+  assert_source_files
+  actual_repository_sha="$(<"${SOURCE_DIR}/REVISION")"
   [[ "$actual_repository_sha" == "$expected_repository_sha" ]] ||
-    fail "repository revision differs from exact-head approval: ${actual_repository_sha}"
-  tracked_status="$(/usr/bin/git -C "$repository_root" status --short --untracked-files=no)"
-  [[ -z "$tracked_status" ]] || fail 'repository has tracked changes after exact-head approval'
-  [[ "$(/usr/bin/stat -c '%U' "$repository_root")" == "$deploy_user" ]] ||
-    fail "repository root must be owned by deployment user: ${repository_root}"
+    fail "bootstrap revision differs from exact-head approval: ${actual_repository_sha}"
 }
 
 assert_deploy_user() {
@@ -326,7 +341,7 @@ preflight() {
   printf 'broad_sudoers_path=%s\n' "$broad_sudoers_path"
   printf 'broad_sudoers_sha256=%s\n' "$broad_sha"
   printf 'unit_sha256=%s\n' "$unit_sha"
-  printf 'repository_sha=%s\n' "$(/usr/bin/git -C "${SOURCE_DIR}/.." rev-parse HEAD)"
+  printf 'repository_sha=%s\n' "$(<"${SOURCE_DIR}/REVISION")"
   printf 'environment_shape=%s\n' "$(numeric_shape "$LEGACY_ENVIRONMENT_FILE")"
 }
 
@@ -585,7 +600,7 @@ apply_policy() {
   [[ "$confirmation" == "$APPLY_CONFIRMATION" ]] || fail 'apply confirmation phrase does not match'
   require_sha256 "$expected_sudoers_sha" 'expected sudoers digest'
   require_sha256 "$expected_unit_sha" 'expected unit digest'
-  assert_reviewed_checkout "$deploy_user" "$expected_repository_sha"
+  assert_reviewed_bundle "$expected_repository_sha"
   if [[ -f "$STATE_FILE" && ! -L "$STATE_FILE" ]]; then
     verify_policy "$deploy_user"
     printf '%s\n' 'PROJ-2268 adoption is already applied.'
