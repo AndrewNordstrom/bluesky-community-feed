@@ -2,6 +2,24 @@
 set -Eeuo pipefail
 [[ -f /.dockerenv && "${CORGI_DUMMY_REHEARSAL:-}" == 'CONFIRM-DISPOSABLE-CONTAINER' ]] || { echo 'Disposable container confirmation required' >&2; exit 1; }
 [[ "$(id -u)" == 0 && -d /run/systemd/system ]] || { echo 'Isolated root and real systemd required' >&2; exit 1; }
+assert_absent() {
+  local target=''
+  for target in "$@"; do
+    [[ ! -e "$target" && ! -L "$target" ]] || {
+      printf 'FAIL unexpected residue: %s\n' "$target" >&2
+      return 1
+    }
+  done
+}
+absence_fixture="$(mktemp -d /root/corgi-absence.XXXXXX)"
+ln -s "$absence_fixture/missing" "$absence_fixture/dangling"
+if assert_absent "$absence_fixture/dangling"; then
+  echo 'FAIL absence assertion accepted a dangling symlink' >&2; exit 1
+fi
+rm -- "$absence_fixture/dangling"
+assert_absent "$absence_fixture/dangling"
+rmdir -- "$absence_fixture"
+printf 'PASS absence assertion rejects dangling symlinks\n'
 source_dir=/fixture/source
 repo=/fixture/repo
 useradd -m -s /bin/bash deploy-fixture
@@ -81,14 +99,14 @@ rollback() {
   [[ "$(sha256sum /opt/bluesky-feed/.env | cut -d' ' -f1)" == "$legacy_sha" ]]
   [[ "$(stat -c '%U:%G:%a' /opt/bluesky-feed/.env)" == 'deploy-fixture:deploy-fixture:600' ]]
   [[ "$(sha256sum /etc/systemd/system/bluesky-feed.service | cut -d' ' -f1)" == "$unit_sha" ]]
-  [[ ! -e /etc/corgi && ! -e /var/lib/corgi-host-adoption ]]
+  assert_absent /etc/corgi /var/lib/corgi-host-adoption
   systemctl is-active --quiet bluesky-feed
 }
 # Replacing a checkout script after approval must fail BEFORE it can execute as root.
 printf 'touch /etc/corgi-untrusted-bootstrap-ran\n' | runuser -u deploy-fixture -- tee "$repo/ops/provision-corgi-host-identity.sh" >/dev/null
 install -o root -g root -m 0600 "$repo/ops/provision-corgi-host-identity.sh" "$provisioner"
 if apply; then echo 'FAIL accepted a modified bootstrap' >&2; exit 1; fi
-[[ ! -e /etc/corgi-untrusted-bootstrap-ran && ! -e /etc/corgi && ! -e /etc/sudoers.d/corgi-deploy && ! -e /var/lib/corgi-host-adoption ]]
+assert_absent /etc/corgi-untrusted-bootstrap-ran /etc/corgi /etc/sudoers.d/corgi-deploy /var/lib/corgi-host-adoption
 [[ "$(sha256sum /etc/systemd/system/bluesky-feed.service | cut -d' ' -f1)" == "$unit_sha" ]]
 [[ "$(sha256sum /etc/sudoers.d/fixture-deployment | cut -d' ' -f1)" == "$sudoers_sha" ]]
 runuser -u deploy-fixture -- git -C "$repo" show "$revision:ops/provision-corgi-host-identity.sh" > "$provisioner"
@@ -119,8 +137,8 @@ for mutation in wrapper manifest ancestry; do
     echo "FAIL internal admission accepted $mutation" >&2; exit 1
   fi
   [[ "$output" == *"$expected_error"* ]]
-  [[ ! -e /etc/corgi && ! -e /etc/sudoers.d/corgi-deploy && ! -e /var/lib/corgi-host-adoption ]]
-  [[ ! -e /usr/local/sbin/corgi-deploy-root ]]
+  assert_absent /etc/corgi /etc/sudoers.d/corgi-deploy /var/lib/corgi-host-adoption
+  assert_absent /usr/local/sbin/corgi-deploy-root
   [[ "$(sha256sum /etc/systemd/system/bluesky-feed.service | cut -d' ' -f1)" == "$unit_sha" ]]
   [[ "$(sha256sum /etc/sudoers.d/fixture-deployment | cut -d' ' -f1)" == "$sudoers_sha" ]]
   [[ "$(sha256sum /opt/bluesky-feed/.env | cut -d' ' -f1)" == "$legacy_sha" ]]
@@ -158,7 +176,7 @@ RACE
 chmod 0600 /root/corgi-rehearsal-harness/bootstrap-race.sh
 run_provisioner preflight deploy-fixture /etc/sudoers.d/fixture-deployment
 run_harness /root/corgi-rehearsal-harness/bootstrap-race.sh "$provisioner" deploy-fixture /etc/sudoers.d/fixture-deployment "$sudoers_sha" "$unit_sha" "$revision" CONFIRM-CORGI-HOST-IDENTITY-ADOPTION
-[[ ! -e /etc/corgi-untrusted-wrapper-ran ]]
+assert_absent /etc/corgi-untrusted-wrapper-ran
 [[ "$(sha256sum /usr/local/sbin/corgi-deploy-root | cut -d' ' -f1)" == "$(sha256sum "$stage/corgi-deploy-root" | cut -d' ' -f1)" ]]
 [[ "$(sha256sum /etc/systemd/system/bluesky-feed.service | cut -d' ' -f1)" == "$(sha256sum "$stage/bluesky-feed.service" | cut -d' ' -f1)" ]]
 printf 'PASS checkout source replacement after admission cannot change installed privileged artifacts\n'
@@ -207,7 +225,7 @@ if apply; then echo 'FAIL expected service-transition failure' >&2; exit 1; fi
 rm /opt/bluesky-feed/fail-new-identity
 systemctl is-active --quiet bluesky-feed
 [[ "$(sha256sum /opt/bluesky-feed/.env | cut -d' ' -f1)" == "$legacy_sha" ]]
-[[ ! -e /var/lib/corgi-host-adoption && ! -e /etc/corgi ]]
+assert_absent /var/lib/corgi-host-adoption /etc/corgi
 printf 'PASS failed service transition automatically restored original service and configuration\n'
 
 # Exhaust the real systemd start limiter before explicit recovery.
@@ -275,7 +293,8 @@ for fault in \
     managed_unit_sha="$(sha256sum /etc/systemd/system/bluesky-feed.service | cut -d' ' -f1)"
     printf 'touch /etc/corgi-untrusted-rollback-ran\n' > "$provisioner"
     if rollback; then echo 'FAIL accepted corrupt rollback bootstrap' >&2; exit 1; fi
-    [[ ! -e /etc/corgi-untrusted-rollback-ran && -d /var/lib/corgi-host-adoption ]]
+    assert_absent /etc/corgi-untrusted-rollback-ran
+    [[ -d /var/lib/corgi-host-adoption ]]
     [[ "$(sha256sum /etc/corgi/production.env | cut -d' ' -f1)" == "$configuration_sha" ]]
     [[ "$(sha256sum /etc/sudoers.d/corgi-deploy | cut -d' ' -f1)" == "$managed_sudoers_sha" ]]
     [[ "$(sha256sum /etc/systemd/system/bluesky-feed.service | cut -d' ' -f1)" == "$managed_unit_sha" ]]
