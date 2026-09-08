@@ -11,6 +11,9 @@ readonly SERVICE_USER='bluesky-feed'
 readonly SERVICE_GROUP='bluesky-feed'
 readonly SERVICE_HOME='/var/lib/bluesky-feed'
 readonly UNIT_PATH='/etc/systemd/system/bluesky-feed.service'
+readonly DROPIN_DIR='/etc/systemd/system/bluesky-feed.service.d'
+readonly DROPIN_PATH="${DROPIN_DIR}/90-corgi-host-identity.conf"
+readonly LEGACY_DEPENDENCY_HOOK='/usr/local/bin/bluesky-feed-ensure-deps.sh'
 readonly WRAPPER_PATH='/usr/local/sbin/corgi-deploy-root'
 readonly SUDOERS_PATH='/etc/sudoers.d/corgi-deploy'
 readonly STATE_DIR='/var/lib/corgi-host-adoption'
@@ -20,6 +23,8 @@ readonly UNIT_BACKUP="${STATE_DIR}/bluesky-feed.service.before"
 readonly SUDOERS_BACKUP="${STATE_DIR}/deployment-sudoers.before"
 readonly ENVIRONMENT_BACKUP="${STATE_DIR}/environment.before"
 readonly WRAPPER_BACKUP="${STATE_DIR}/dispatcher.installed"
+readonly DROPIN_BACKUP="${STATE_DIR}/dropins.before"
+readonly DROPIN_SNAPSHOT="${STATE_DIR}/startup-override.installed"
 readonly APPLY_CONFIRMATION='CONFIRM-CORGI-HOST-IDENTITY-ADOPTION'
 readonly ROLLBACK_CONFIRMATION='CONFIRM-CORGI-HOST-IDENTITY-ROLLBACK'
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -37,7 +42,7 @@ usage() {
     'Usage:' \
     '  provision-corgi-host-identity.sh plan' \
     '  sudo provision-corgi-host-identity.sh preflight DEPLOY_USER BROAD_SUDOERS_PATH' \
-    '  sudo provision-corgi-host-identity.sh apply DEPLOY_USER BROAD_SUDOERS_PATH EXPECTED_SUDOERS_SHA256 EXPECTED_UNIT_SHA256 EXPECTED_REPOSITORY_SHA CONFIRM-CORGI-HOST-IDENTITY-ADOPTION' \
+    '  sudo provision-corgi-host-identity.sh apply DEPLOY_USER BROAD_SUDOERS_PATH EXPECTED_SUDOERS_SHA256 EXPECTED_UNIT_BOUNDARY_SHA256 EXPECTED_REPOSITORY_SHA CONFIRM-CORGI-HOST-IDENTITY-ADOPTION' \
     '  sudo provision-corgi-host-identity.sh verify DEPLOY_USER' \
     '  sudo provision-corgi-host-identity.sh rollback DEPLOY_USER CONFIRM-CORGI-HOST-IDENTITY-ROLLBACK'
 }
@@ -296,11 +301,121 @@ assert_negative_permissions() {
   fi
 }
 
+# Only the observed production overrides are admitted. Their exact bytes (and
+# the old dependency hook) remain pinned even when comments change.
+assert_dropin_ancestors() {
+  local directory=''
+
+  for directory in /etc/systemd /etc/systemd/system; do
+    [[ -d "$directory" && ! -L "$directory" && "$(numeric_shape "$directory")" == '0:0:755' ]] ||
+      fail "systemd ancestor must be a root-owned real directory mode 755: ${directory}"
+  done
+  if [[ -e "$DROPIN_DIR" || -L "$DROPIN_DIR" ]]; then
+    [[ -d "$DROPIN_DIR" && ! -L "$DROPIN_DIR" && "$(numeric_shape "$DROPIN_DIR")" == '0:0:755' ]] ||
+      fail 'service drop-in directory must be a root-owned real directory mode 755'
+  fi
+}
+
+baseline_dropin_manifest() {
+  local digest=''
+  local path=''
+  local content=''
+  local expected=''
+
+  assert_dropin_ancestors
+  for path in "$DROPIN_DIR"/*.conf; do
+    [[ -e "$path" || -L "$path" ]] || continue
+    [[ "$path" != "$DROPIN_PATH" ]] || continue
+    assert_root_regular_file "$path" 644 'baseline service drop-in'
+    content="$(/usr/bin/awk 'NF && $0 !~ /^[[:space:]]*[#;]/ { print }' "$path")" || fail "cannot read service drop-in: ${path}"
+    case "${path##*/}" in
+      10-dependencies.conf)
+        expected=$'[Service]\nExecStartPre=/usr/local/bin/bluesky-feed-ensure-deps.sh'
+        assert_root_regular_file "$LEGACY_DEPENDENCY_HOOK" 755 'legacy dependency hook'
+        digest="$(file_sha256 "$LEGACY_DEPENDENCY_HOOK")" || fail 'cannot fingerprint the legacy dependency hook'
+        require_sha256 "$digest" 'computed legacy dependency hook digest'
+        printf '%s  %s\n' "$digest" "$LEGACY_DEPENDENCY_HOOK"
+        ;;
+      20-watchdog-hotfix.conf)
+        expected=$'[Service]\nWatchdogSec=180'
+        ;;
+      web-next-cutover.conf)
+        expected=$'[Service]\nEnvironment=WEB_DIST_DIR=web-next/out\nEnvironment=WEB_ROUTING_MODE=export'
+        ;;
+      *) fail "unreviewed service drop-in: ${path}" ;;
+    esac
+    [[ "$content" == "$expected" ]] || fail "unreviewed directives in service drop-in: ${path}"
+    digest="$(file_sha256 "$path")" || fail "cannot fingerprint service drop-in: ${path}"
+    require_sha256 "$digest" 'computed service drop-in digest'
+    printf '%s  %s\n' "$digest" "$path"
+  done
+}
+
+assert_loaded_unit_boundary() {
+  local path=''
+  local expected_paths=''
+  local loaded_paths=''
+
+  [[ "$(/usr/bin/systemctl show "$SERVICE_UNIT" --property=FragmentPath --value)" == "$UNIT_PATH" ]] ||
+    fail 'systemd loaded an unexpected service fragment'
+  [[ "$(/usr/bin/systemctl show "$SERVICE_UNIT" --property=NeedDaemonReload --value)" == 'no' ]] ||
+    fail 'systemd unit files changed without daemon-reload'
+  for path in "$DROPIN_DIR"/*.conf; do
+    [[ -e "$path" || -L "$path" ]] || continue
+    expected_paths+="${path}"$'\n'
+  done
+  expected_paths="$(printf '%s' "$expected_paths" | LC_ALL=C /usr/bin/sort)"
+  loaded_paths="$(/usr/bin/systemctl show "$SERVICE_UNIT" --property=DropInPaths --value | /usr/bin/tr ' ' '\n' | LC_ALL=C /usr/bin/sort)"
+  [[ "$loaded_paths" == "$expected_paths" ]] || fail 'systemd loaded unexpected or stale service drop-ins'
+}
+
+unit_boundary_sha256() {
+  local manifest=''
+  local unit_sha=''
+
+  manifest="$(baseline_dropin_manifest)" || fail 'cannot fingerprint the service drop-in boundary'
+  unit_sha="$(file_sha256 "$UNIT_PATH")" || fail 'cannot fingerprint the installed service unit'
+  require_sha256 "$unit_sha" 'computed service unit digest'
+  { printf '%s  %s\n' "$unit_sha" "$UNIT_PATH"; printf '%s\n' "$manifest"; } |
+    /usr/bin/sha256sum | /usr/bin/awk '{ print $1 }'
+}
+
+render_startup_override() {
+  printf '%s\n' '[Service]' 'ExecStartPre=' \
+    'ExecStartPre=+/usr/local/sbin/corgi-deploy-root production-dependencies-ready'
+}
+
+assert_baseline_dropins_unchanged() {
+  local manifest=''
+
+  manifest="$(baseline_dropin_manifest)" || fail 'cannot verify original service drop-ins'
+  [[ "$manifest" == "$(/usr/bin/tail -n +2 "$DROPIN_BACKUP")" ]] ||
+    fail 'original service drop-ins or dependency hook changed; preserve recovery evidence'
+}
+
+assert_owned_startup_override_if_present() {
+  assert_dropin_ancestors
+  if [[ -e "$DROPIN_PATH" || -L "$DROPIN_PATH" ]]; then
+    assert_root_regular_file "$DROPIN_PATH" 644 'managed startup override'
+    [[ "$(file_sha256 "$DROPIN_PATH")" == "$(read_state_value installed_dropin_sha256)" ]] ||
+      fail 'startup override changed after adoption; preserve it for explicit root recovery'
+  fi
+}
+
+assert_managed_startup() {
+  assert_baseline_dropins_unchanged
+  assert_owned_startup_override_if_present
+  assert_root_regular_file "$DROPIN_PATH" 644 'managed startup override'
+  [[ "$(<"$DROPIN_PATH")" == "$(render_startup_override)" ]] || fail 'startup override differs from reviewed policy'
+  assert_loaded_unit_boundary
+}
+
 preflight() {
   local deploy_user="$1"
   local broad_sudoers_path="$2"
   local broad_sha=''
   local unit_sha=''
+  local boundary_sha=''
   local directory=''
 
   require_root
@@ -321,6 +436,11 @@ preflight() {
   assert_root_regular_file "$UNIT_PATH" 644 'installed service unit'
   [[ "$(/usr/bin/grep -Fxc 'EnvironmentFile=/opt/bluesky-feed/.env' "$UNIT_PATH")" == '1' ]] ||
     fail 'installed unit must use the expected legacy environment path before migration'
+  [[ ! -e "$DROPIN_PATH" && ! -L "$DROPIN_PATH" ]] || fail 'managed startup override already exists before adoption'
+  baseline_dropin_manifest >/dev/null
+  assert_loaded_unit_boundary
+  [[ "$(/usr/bin/systemctl is-enabled docker.service)" == 'enabled' ]] || fail 'Docker must be enabled for dependency recovery after boot'
+  /bin/bash "$WRAPPER_SOURCE" production-dependencies-ready
   assert_safe_sudoers_path "$broad_sudoers_path"
   /usr/sbin/visudo -cf "$broad_sudoers_path" >/dev/null
   [[ "$(/usr/bin/awk -v user="$deploy_user" 'NF && $1 !~ /^#/ { active += 1; if ($1 == user) named += 1 } END { print active + 0 ":" named + 0 }' "$broad_sudoers_path")" == '1:1' ]] ||
@@ -337,10 +457,13 @@ preflight() {
   /usr/bin/systemctl is-active --quiet "$SERVICE_UNIT" || fail 'service must be active before adoption'
   broad_sha="$(file_sha256 "$broad_sudoers_path")"
   unit_sha="$(file_sha256 "$UNIT_PATH")"
+  boundary_sha="$(unit_boundary_sha256)" || fail 'cannot fingerprint the service unit boundary'
+  require_sha256 "$boundary_sha" 'computed unit boundary digest'
   printf 'PROJ-2268 preflight passed.\n'
   printf 'broad_sudoers_path=%s\n' "$broad_sudoers_path"
   printf 'broad_sudoers_sha256=%s\n' "$broad_sha"
   printf 'unit_sha256=%s\n' "$unit_sha"
+  printf 'unit_boundary_sha256=%s\n' "$boundary_sha"
   printf 'repository_sha=%s\n' "$(<"${SOURCE_DIR}/REVISION")"
   printf 'environment_shape=%s\n' "$(numeric_shape "$LEGACY_ENVIRONMENT_FILE")"
 }
@@ -354,12 +477,14 @@ write_state() {
   [[ ! -e "$STATE_TMP" && ! -L "$STATE_TMP" ]] || fail "adoption state temporary path already exists: ${STATE_TMP}"
   /usr/bin/install -o root -g root -m 0600 /dev/null "$STATE_TMP"
   {
-    printf 'version=3\n'
+    printf 'version=4\n'
     printf 'deploy_user=%s\n' "$deploy_user"
     printf 'broad_sudoers_path=%s\n' "$broad_sudoers_path"
     printf 'environment_shape=%s\n' "$env_shape"
     printf 'environment_backup_sha256=%s\n' "$(file_sha256 "$ENVIRONMENT_BACKUP")"
     printf 'installed_wrapper_sha256=%s\n' "$(file_sha256 "$WRAPPER_BACKUP")"
+    printf 'dropin_backup_sha256=%s\n' "$(file_sha256 "$DROPIN_BACKUP")"
+    printf 'installed_dropin_sha256=%s\n' "$(file_sha256 "$DROPIN_SNAPSHOT")"
     printf 'unit_backup_sha256=%s\n' "$(file_sha256 "$UNIT_BACKUP")"
     printf 'sudoers_backup_sha256=%s\n' "$(file_sha256 "$SUDOERS_BACKUP")"
     printf 'service_user_phase=%s\n' "$service_user_phase"
@@ -380,13 +505,18 @@ read_state_value() {
 
 assert_state_shape() {
   [[ -d "$STATE_DIR" && ! -L "$STATE_DIR" && "$(numeric_shape "$STATE_DIR")" == '0:0:700' ]] || fail 'adoption state directory is unsafe'
+  assert_root_regular_file "$DROPIN_BACKUP" 600 'baseline drop-in manifest'
+  assert_root_regular_file "$DROPIN_SNAPSHOT" 600 'installed startup override snapshot'
   assert_root_regular_file "$WRAPPER_BACKUP" 600 'installed dispatcher snapshot'
   assert_root_regular_file "$ENVIRONMENT_BACKUP" 600 'environment recovery copy'
   assert_root_regular_file "$STATE_FILE" 600 'adoption state file'
   assert_root_regular_file "$UNIT_BACKUP" 600 'service unit backup'
   assert_root_regular_file "$SUDOERS_BACKUP" 600 'deployment sudoers backup'
   [[ ! -e "$STATE_TMP" && ! -L "$STATE_TMP" ]] || fail 'adoption state has an incomplete journal write'
-  [[ "$(read_state_value version)" == '3' ]] || fail 'unsupported adoption state version'
+  [[ "$(read_state_value version)" == '4' ]] || fail 'unsupported adoption state version'
+  [[ "$(file_sha256 "$DROPIN_BACKUP")" == "$(read_state_value dropin_backup_sha256)" ]] || fail 'baseline drop-in manifest digest mismatch'
+  [[ "$(file_sha256 "$DROPIN_SNAPSHOT")" == "$(read_state_value installed_dropin_sha256)" ]] || fail 'startup override snapshot digest mismatch'
+  [[ "$(/usr/bin/head -n 1 "$DROPIN_BACKUP")" =~ ^directory=(present|absent)$ ]] || fail 'invalid original drop-in directory state'
   [[ "$(file_sha256 "$WRAPPER_BACKUP")" == "$(read_state_value installed_wrapper_sha256)" ]] ||
     fail 'installed dispatcher snapshot digest mismatch'
   [[ "$(file_sha256 "$ENVIRONMENT_BACKUP")" == "$(read_state_value environment_backup_sha256)" ]] ||
@@ -418,6 +548,7 @@ verify_policy() {
   assert_root_regular_file "$WRAPPER_PATH" 755 'installed privileged wrapper'
   [[ "$(file_sha256 "$WRAPPER_PATH")" == "$(file_sha256 "$WRAPPER_SOURCE")" ]] ||
     fail 'installed privileged wrapper differs from reviewed source'
+  assert_managed_startup
   assert_managed_sudoers "$deploy_user"
   /usr/sbin/visudo -c >/dev/null
   assert_runtime_identity
@@ -449,6 +580,8 @@ rollback_internal() {
   local state_cleanup_complete='true'
 
   assert_state_shape
+  assert_baseline_dropins_unchanged
+  assert_owned_startup_override_if_present
   assert_owned_dispatcher_if_present
   deploy_user="$(read_state_value deploy_user)"
   [[ "$deploy_user" == "$expected_deploy_user" ]] || fail 'rollback deployment user differs from adoption state'
@@ -494,6 +627,13 @@ rollback_internal() {
     /bin/chmod "$env_mode" "$LEGACY_ENVIRONMENT_FILE"
     restore_service='true'
   fi
+  if [[ -e "$DROPIN_PATH" ]]; then
+    /usr/bin/rm -- "$DROPIN_PATH"
+    restore_service='true'
+  fi
+  if [[ "$(/usr/bin/head -n 1 "$DROPIN_BACKUP")" == 'directory=absent' && -d "$DROPIN_DIR" ]]; then
+    /usr/bin/rmdir "$DROPIN_DIR" || fail 'created drop-in directory contains foreign entries; preserve recovery evidence'
+  fi
   if [[ "$restore_service" == 'true' ]]; then
     /usr/bin/systemctl daemon-reload
     /usr/bin/systemctl reset-failed "$SERVICE_UNIT" || fail 'rollback could not clear the service start limit'
@@ -520,7 +660,7 @@ rollback_internal() {
   if [[ "$service_group_phase" != 'unchanged' ]] && /usr/bin/getent group "$SERVICE_GROUP" >/dev/null; then
     /usr/sbin/groupdel "$SERVICE_GROUP"
   fi
-  /usr/bin/rm -f -- "$STATE_FILE" "$STATE_TMP" "$UNIT_BACKUP" "$SUDOERS_BACKUP" "$ENVIRONMENT_BACKUP" "$WRAPPER_BACKUP"
+  /usr/bin/rm -f -- "$STATE_FILE" "$STATE_TMP" "$UNIT_BACKUP" "$SUDOERS_BACKUP" "$ENVIRONMENT_BACKUP" "$WRAPPER_BACKUP" "$DROPIN_BACKUP" "$DROPIN_SNAPSHOT"
   if ! /usr/bin/rmdir "$STATE_DIR" 2>/dev/null; then
     state_cleanup_complete='false'
     printf '%s\n' \
@@ -546,12 +686,15 @@ rollback_partial_adoption() {
         -f "$UNIT_BACKUP" && ! -L "$UNIT_BACKUP" && \
         -f "$SUDOERS_BACKUP" && ! -L "$SUDOERS_BACKUP" && \
         -f "$ENVIRONMENT_BACKUP" && ! -L "$ENVIRONMENT_BACKUP" && \
-        -f "$WRAPPER_BACKUP" && ! -L "$WRAPPER_BACKUP" ]]; then
+        -f "$WRAPPER_BACKUP" && ! -L "$WRAPPER_BACKUP" && \
+        -f "$DROPIN_BACKUP" && ! -L "$DROPIN_BACKUP" && \
+        -f "$DROPIN_SNAPSHOT" && ! -L "$DROPIN_SNAPSHOT" ]]; then
     /usr/bin/rm -f -- "$STATE_TMP"
     rollback_internal "$1"
     return
   fi
 
+  [[ ! -e "$DROPIN_PATH" && ! -L "$DROPIN_PATH" ]] || fail 'startup override exists without a complete journal; preserve recovery evidence'
   [[ ! -e "$CONFIGURATION_DIR" && ! -L "$CONFIGURATION_DIR" ]] ||
     fail 'configuration migration exists without a complete journal; preserve recovery evidence'
   if [[ -e "$ENVIRONMENT_BACKUP" || -L "$ENVIRONMENT_BACKUP" ]]; then
@@ -565,7 +708,7 @@ rollback_partial_adoption() {
     [[ "$(file_sha256 "$UNIT_PATH")" == "$(file_sha256 "$UNIT_BACKUP")" ]] ||
       fail 'incomplete journal with changed unit; preserve recovery evidence'
   fi
-  /usr/bin/rm -f -- "$STATE_FILE" "$STATE_TMP" "$UNIT_BACKUP" "$SUDOERS_BACKUP" "$ENVIRONMENT_BACKUP" "$WRAPPER_BACKUP"
+  /usr/bin/rm -f -- "$STATE_FILE" "$STATE_TMP" "$UNIT_BACKUP" "$SUDOERS_BACKUP" "$ENVIRONMENT_BACKUP" "$WRAPPER_BACKUP" "$DROPIN_BACKUP" "$DROPIN_SNAPSHOT"
   if [[ -e "$STATE_DIR" || -L "$STATE_DIR" ]]; then
     [[ -d "$STATE_DIR" && ! -L "$STATE_DIR" ]] || fail "partial adoption state is unsafe: ${STATE_DIR}"
     /usr/bin/rmdir "$STATE_DIR" || fail "partial adoption state contains unowned entries: ${STATE_DIR}"
@@ -588,7 +731,7 @@ apply_policy() {
   local deploy_user="$1"
   local broad_sudoers_path="$2"
   local expected_sudoers_sha="$3"
-  local expected_unit_sha="$4"
+  local expected_unit_boundary_sha="$4"
   local expected_repository_sha="$5"
   local confirmation="$6"
   local env_shape=''
@@ -600,7 +743,7 @@ apply_policy() {
   require_root
   [[ "$confirmation" == "$APPLY_CONFIRMATION" ]] || fail 'apply confirmation phrase does not match'
   require_sha256 "$expected_sudoers_sha" 'expected sudoers digest'
-  require_sha256 "$expected_unit_sha" 'expected unit digest'
+  require_sha256 "$expected_unit_boundary_sha" 'expected unit boundary digest'
   assert_reviewed_bundle "$expected_repository_sha"
   if [[ -f "$STATE_FILE" && ! -L "$STATE_FILE" ]]; then
     verify_policy "$deploy_user"
@@ -610,8 +753,8 @@ apply_policy() {
   preflight "$deploy_user" "$broad_sudoers_path" >/dev/null
   [[ "$(file_sha256 "$broad_sudoers_path")" == "$expected_sudoers_sha" ]] ||
     fail 'existing broad sudoers policy changed after review'
-  [[ "$(file_sha256 "$UNIT_PATH")" == "$expected_unit_sha" ]] ||
-    fail 'installed service unit changed after review'
+  [[ "$(unit_boundary_sha256)" == "$expected_unit_boundary_sha" ]] ||
+    fail 'installed service unit boundary changed after review'
   env_shape="$(numeric_shape "$LEGACY_ENVIRONMENT_FILE")"
 
   # Capture the validated account now: function locals are gone when EXIT runs.
@@ -624,6 +767,15 @@ apply_policy() {
   /usr/bin/install -o root -g root -m 0600 "$broad_sudoers_path" "$SUDOERS_BACKUP"
   /usr/bin/install -o root -g root -m 0600 "$LEGACY_ENVIRONMENT_FILE" "$ENVIRONMENT_BACKUP"
   /usr/bin/install -o root -g root -m 0600 "$WRAPPER_SOURCE" "$WRAPPER_BACKUP"
+  /usr/bin/install -o root -g root -m 0600 /dev/null "$DROPIN_BACKUP"
+  if [[ -d "$DROPIN_DIR" ]]; then
+    printf 'directory=present\n' >"$DROPIN_BACKUP"
+  else
+    printf 'directory=absent\n' >"$DROPIN_BACKUP"
+  fi
+  baseline_dropin_manifest >>"$DROPIN_BACKUP"
+  /usr/bin/install -o root -g root -m 0600 /dev/null "$DROPIN_SNAPSHOT"
+  render_startup_override >"$DROPIN_SNAPSHOT"
   write_state "$deploy_user" "$broad_sudoers_path" "$env_shape" "$service_user_phase" "$service_group_phase"
 
   if ! /usr/bin/getent group "$SERVICE_GROUP" >/dev/null; then
@@ -660,8 +812,12 @@ apply_policy() {
   assert_configuration_ancestors
   [[ "$(file_sha256 "$LEGACY_ENVIRONMENT_FILE")" == "$(file_sha256 "$ENVIRONMENT_BACKUP")" ]] ||
     fail 'legacy environment changed during adoption; preserve recovery evidence'
+  assert_baseline_dropins_unchanged
+  /usr/bin/install -d -o root -g root -m 0755 "$DROPIN_DIR"
+  /usr/bin/install -o root -g root -m 0644 "$DROPIN_SNAPSHOT" "$DROPIN_PATH"
   /usr/bin/install -o root -g root -m 0644 "$UNIT_SOURCE" "$UNIT_PATH"
   /usr/bin/systemctl daemon-reload
+  assert_managed_startup
   /usr/bin/rm -- "$LEGACY_ENVIRONMENT_FILE"
   /usr/bin/sync -f "$APPLICATION_DIR"
   /usr/bin/systemctl restart "$SERVICE_UNIT"
@@ -686,7 +842,8 @@ rollback_policy() {
 print_plan() {
   printf '%s\n' \
     'PROJ-2268 repository-only host-adoption plan:' \
-    '- preflight prints only current unit/sudoers SHA-256 digests and file metadata' \
+    '- preflight pins the main unit, admitted drop-ins and dependency hook; secret contents are never printed' \
+    '- startup replaces inherited pre-start actions with a fixed root-owned read-only dependency health probe' \
     '- apply requires those exact digests plus CONFIRM-CORGI-HOST-IDENTITY-ADOPTION' \
     '- service identity: bluesky-feed:bluesky-feed with /usr/sbin/nologin' \
     '- production environment target: /etc/corgi/production.env under root-owned ancestry' \

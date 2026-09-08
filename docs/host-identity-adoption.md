@@ -55,6 +55,7 @@ dynamic value is a demo-session Redis key matching
 | `service-state` | Print the active state of `bluesky-feed` |
 | `service-restart` | Restart only `bluesky-feed` |
 | `service-can-read-entrypoint` | Prove the service user can traverse to and read the fixed production entry point |
+| `production-dependencies-ready` | Wait for the fixed production Postgres and Redis containers to be running, healthy, and configured with `unless-stopped`; read-only `docker inspect` only |
 | `postgres-ingestion-signals` | Run one fixed, read-only cursor/newest-post query in `bluesky-feed-postgres` |
 | `demo-redis-ping` | Ping only `bluesky-feed-demo-redis` |
 | `demo-redis-exists KEY` | Read one validated demo-session key from demo Redis |
@@ -65,11 +66,42 @@ dynamic value is a demo-session Redis key matching
 | `demo-redis-save` | Read one fixed demo Redis configuration value |
 
 The wrapper uses an empty environment with a fixed `PATH`, locale, and home.
-Every container call has a 15-second outer deadline. Arbitrary `systemctl`,
+Existing container probes have a 15-second outer deadline. The startup probe
+uses five-second inspect deadlines within a 60-second retry window (an in-flight
+iteration can finish just after that window). Arbitrary `systemctl`,
 `docker`, `docker exec`, shell, SQL, Redis, file, and service names are rejected.
 After each candidate install and rollback restore, the workflow grants only
 read/traverse bits on the fixed runtime-artifact paths and asks the wrapper to
 prove `bluesky-feed` can read `/opt/bluesky-feed/dist/index.js` before restart.
+
+## Effective systemd startup boundary
+
+Replacing the main unit leaves existing systemd drop-ins active. Admission accepts
+only the root-owned `10-dependencies.conf`, `20-watchdog-hotfix.conf`, and
+`web-next-cutover.conf` shapes documented by the provisioner, or an empty set.
+It pins their exact bytes and the referenced legacy dependency hook together with
+the main unit in `unit_boundary_sha256`. The raw `unit_sha256` remains diagnostic;
+**apply requires the boundary digest**, not that raw file digest. Unexpected
+files/directives, unsafe ancestry, stale loaded files, and drop-ins from another
+systemd search path stop admission.
+
+Adoption installs one root-owned `90-corgi-host-identity.conf`. It resets inherited
+`ExecStartPre` commands and invokes the fixed dispatcher token
+`production-dependencies-ready` with systemd's `+` execution prefix. This prefix
+lets only that pre-start process inspect Docker as root; the application retains
+its dedicated identity and filesystem restrictions. The probe uses an empty
+environment and never runs Compose or reads deployment-owned configuration.
+The existing dependency containers must already have the `unless-stopped` restart
+policy, and Docker must be enabled at boot. Missing or unhealthy dependencies
+block startup within the bounded wait; this procedure does not recreate them.
+
+The original drop-ins stay untouched, retaining the 180-second watchdog and
+frontend export routing. Journal version 4 records their manifest and the managed
+override snapshot. Verification checks both filesystem and loaded manager state.
+Rollback refuses changed originals or a replaced managed override before mutation,
+removes only its matching override, reloads systemd, and restores the original
+startup hook. Use the matching reviewed bootstrap for recovery; this version does
+not reinterpret an older journal format.
 
 ## Reviewable execution vehicle
 
@@ -79,7 +111,7 @@ five modes:
 1. `plan` is local and non-privileged. It describes the boundary without
    contacting a host.
 2. `preflight DEPLOY_USER BROAD_SUDOERS_PATH` is read-only. It prints only file
-   metadata and SHA-256 digests for the existing unit and broad sudoers file;
+   metadata and SHA-256 digests for the existing unit, startup boundary and broad sudoers file;
    it never reads or prints `.env` contents.
 3. `apply` requires the exact observed digests, the exact reviewed repository
    SHA, and the literal confirmation phrase. It backs up the unit, sudoers
@@ -96,7 +128,7 @@ five modes:
    paths created by the script. Recovery intentionally restores the prior weaker
    boundary; it does not count as successful adoption.
 
-Apply refuses a wrong-revision or changed bootstrap bundle, changed unit/sudoers hashes,
+Apply refuses a wrong-revision or changed bootstrap bundle, changed unit-boundary/sudoers hashes,
 symlinks, foreign file owners, an inactive starting service, pre-existing
 managed paths, malformed state, or an unexpected account shape. It refuses an existing `/etc/corgi` destination
 and requires the installed unit to reference the expected legacy `.env`. The
@@ -166,7 +198,7 @@ env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin /bin/bash "$bundle/provision-corgi-hos
   DEPLOY_USER \
   /etc/sudoers.d/EXISTING_POLICY \
   OBSERVED_SUDOERS_SHA256 \
-  OBSERVED_UNIT_SHA256 \
+  OBSERVED_UNIT_BOUNDARY_SHA256 \
   APPROVED_REPOSITORY_SHA \
   CONFIRM-CORGI-HOST-IDENTITY-ADOPTION
 
@@ -245,8 +277,11 @@ ownership does not require logging in over SSH as root.
 Linux container with real systemd. Supply the three reviewed `ops` files under
 `/fixture/source`. It creates only dummy identities, configuration and an
 application fixture, then exercises successful adoption, denial of configuration
-replacement, rollback, a failed service transition and twelve abrupt-interruption
-boundaries. It also rejects a modified bootstrap before interpretation and
+replacement, rollback, failed service/dependency transitions and fourteen abrupt-interruption
+boundaries. The observed production drop-ins reproduce the inherited Docker-hook
+failure. Tests verify delayed dependency health, rejection of unknown or changed
+overrides, preservation of routing/watchdog settings, and guarded removal of only
+the owned startup override. It also rejects a modified bootstrap before interpretation and
 changes both checkout sources after admission to prove only the protected
 approved artifacts reach the installed unit and dispatcher. The Docker service dependency is a fixture; no Docker socket is
 exposed. This is migration acceptance evidence, not a production application

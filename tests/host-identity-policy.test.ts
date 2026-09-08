@@ -18,6 +18,7 @@ const ALLOWED_ROOT_COMMANDS = [
   'service-state',
   'service-restart',
   'service-can-read-entrypoint',
+  'production-dependencies-ready',
   'postgres-ingestion-signals',
   'demo-redis-ping',
   'demo-redis-exists',
@@ -118,7 +119,7 @@ describe('PROJ-2268 host identity policy', () => {
     );
 
     // The shared command parser and substitution cases live in demo-shadow-isolation.test.ts.
-    expect(new Set(invokedCommands)).toEqual(new Set(ALLOWED_ROOT_COMMANDS));
+    expect(new Set(invokedCommands)).toEqual(new Set(ALLOWED_ROOT_COMMANDS.filter((command) => command !== 'production-dependencies-ready')));
     expect(workflow).toContain('sudo -n /usr/bin/true');
   });
 
@@ -136,7 +137,7 @@ describe('PROJ-2268 host identity policy', () => {
     const provisioner = readFileSync(PROVISIONER_PATH, 'utf8');
 
     expect(provisioner).toContain('EXPECTED_SUDOERS_SHA256');
-    expect(provisioner).toContain('EXPECTED_UNIT_SHA256');
+    expect(provisioner).toContain('EXPECTED_UNIT_BOUNDARY_SHA256');
     expect(provisioner).toContain('EXPECTED_REPOSITORY_SHA');
     expect(provisioner).toContain('CONFIRM-CORGI-HOST-IDENTITY-ADOPTION');
     expect(provisioner).toContain('CONFIRM-CORGI-HOST-IDENTITY-ROLLBACK');

@@ -20,6 +20,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - Dedicated support guide (`SUPPORT.md`) and issue-template contact links for support/security routing
 
 ### Changed
+- Host identity adoption now validates existing systemd overrides and replaces the inherited Docker Compose startup hook with a bounded, read-only dependency check, preserving watchdog/routing settings and guarded rollback.
 - Protected production configuration against replacement through writable application directories; host adoption now migrates configuration with guarded recovery, and the dedicated service accepts its own readiness/watchdog helper notifications.
 - Updated vulnerable dependencies across shipped workspaces without adding audit exceptions. Numeric `TRUST_PROXY` hop counts now fail startup with migration guidance; use an explicit trusted proxy IP/CIDR or `loopback` before deploying this update.
 - Relicensed the project from MIT to Apache-2.0. Releases through v1.2.0 remain available under MIT.
