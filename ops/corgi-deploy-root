@@ -40,6 +40,34 @@ require_demo_session_key() {
     fail 'Redis key must be one bounded demo session key'
 }
 
+wait_production_dependencies() {
+  local deadline=$((SECONDS + 60))
+  local container=''
+  local state=''
+  local ready='false'
+
+  # A root-owned unit invokes this fixed read-only probe before the unprivileged
+  # application. Never run Compose or consume a deployment-owned file here.
+  while [[ "$SECONDS" -lt "$deadline" ]]; do
+    ready='true'
+    for container in "$POSTGRES_CONTAINER" "$PRODUCTION_REDIS_CONTAINER"; do
+      if state="$(/usr/bin/env -i PATH=/usr/bin:/bin HOME=/root \
+        /usr/bin/timeout --foreground 5s /usr/bin/docker inspect \
+        --format '{{.State.Status}}|{{.State.Health.Status}}|{{.HostConfig.RestartPolicy.Name}}' "$container" 2>&1)"; then
+        [[ "$state" == 'running|healthy|unless-stopped' ]] || ready='false'
+      else
+        ready='false'
+      fi
+      if [[ "$state" != 'running|healthy|unless-stopped' ]]; then
+        printf 'PROJ-2268 waiting for fixed dependency %s: %s\n' "$container" "$state" >&2
+      fi
+    done
+    [[ "$ready" == 'true' ]] && return 0
+    /usr/bin/sleep 2
+  done
+  fail 'production dependencies did not become healthy with unless-stopped restart policy within the bounded startup wait'
+}
+
 main() {
   local command_name="${1:-}"
   local redis_key=''
@@ -76,6 +104,10 @@ main() {
     service-can-read-entrypoint)
       require_arg_count 0 "$#" "$command_name"
       run_clean /usr/sbin/runuser -u "$SERVICE_USER" -- /usr/bin/test -r "$SERVICE_ENTRYPOINT"
+      ;;
+    production-dependencies-ready)
+      require_arg_count 0 "$#" "$command_name"
+      wait_production_dependencies
       ;;
     postgres-ingestion-signals)
       require_arg_count 0 "$#" "$command_name"

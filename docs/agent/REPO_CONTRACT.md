@@ -263,7 +263,13 @@ npm run cli -- --help
    with its reviewed fixed operation tokens. Direct privileged `systemctl`,
    `docker exec`, `docker compose`, container creation and free-form container
    commands are prohibited. The demo Redis container must already be running. That host policy change is a separate
-   approval gate. The service must declare an explicit dedicated non-root user
+   approval gate. Host adoption pins the effective systemd drop-in boundary as
+   well as the main unit. Its owned startup override replaces the inherited
+   Compose hook with a fixed root-owned, read-only dependency health probe;
+   Docker restart policy owns container recovery. Unknown overrides block
+   adoption, and rollback restores the original startup hook. See
+   [host identity adoption](../host-identity-adoption.md).
+   The service must declare an explicit dedicated non-root user
    and group, distinct from the deployment account, and the active MainPID must
    be owned by that service user; otherwise both host admissions fail before
    transfer or mutation. The GitHub runner builds and verifies the exact SHA
