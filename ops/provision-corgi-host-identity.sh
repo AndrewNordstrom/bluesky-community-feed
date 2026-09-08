@@ -317,6 +317,7 @@ assert_dropin_ancestors() {
 }
 
 baseline_dropin_manifest() {
+  local digest=''
   local path=''
   local content=''
   local expected=''
@@ -326,12 +327,14 @@ baseline_dropin_manifest() {
     [[ -e "$path" || -L "$path" ]] || continue
     [[ "$path" != "$DROPIN_PATH" ]] || continue
     assert_root_regular_file "$path" 644 'baseline service drop-in'
-    content="$(/usr/bin/awk 'NF && $0 !~ /^[[:space:]]*[#;]/ { print }' "$path")"
+    content="$(/usr/bin/awk 'NF && $0 !~ /^[[:space:]]*[#;]/ { print }' "$path")" || fail "cannot read service drop-in: ${path}"
     case "${path##*/}" in
       10-dependencies.conf)
         expected=$'[Service]\nExecStartPre=/usr/local/bin/bluesky-feed-ensure-deps.sh'
         assert_root_regular_file "$LEGACY_DEPENDENCY_HOOK" 755 'legacy dependency hook'
-        printf '%s  %s\n' "$(file_sha256 "$LEGACY_DEPENDENCY_HOOK")" "$LEGACY_DEPENDENCY_HOOK"
+        digest="$(file_sha256 "$LEGACY_DEPENDENCY_HOOK")" || fail 'cannot fingerprint the legacy dependency hook'
+        require_sha256 "$digest" 'computed legacy dependency hook digest'
+        printf '%s  %s\n' "$digest" "$LEGACY_DEPENDENCY_HOOK"
         ;;
       20-watchdog-hotfix.conf)
         expected=$'[Service]\nWatchdogSec=180'
@@ -342,7 +345,9 @@ baseline_dropin_manifest() {
       *) fail "unreviewed service drop-in: ${path}" ;;
     esac
     [[ "$content" == "$expected" ]] || fail "unreviewed directives in service drop-in: ${path}"
-    printf '%s  %s\n' "$(file_sha256 "$path")" "$path"
+    digest="$(file_sha256 "$path")" || fail "cannot fingerprint service drop-in: ${path}"
+    require_sha256 "$digest" 'computed service drop-in digest'
+    printf '%s  %s\n' "$digest" "$path"
   done
 }
 
@@ -366,9 +371,12 @@ assert_loaded_unit_boundary() {
 
 unit_boundary_sha256() {
   local manifest=''
+  local unit_sha=''
 
   manifest="$(baseline_dropin_manifest)" || fail 'cannot fingerprint the service drop-in boundary'
-  { printf '%s  %s\n' "$(file_sha256 "$UNIT_PATH")" "$UNIT_PATH"; printf '%s\n' "$manifest"; } |
+  unit_sha="$(file_sha256 "$UNIT_PATH")" || fail 'cannot fingerprint the installed service unit'
+  require_sha256 "$unit_sha" 'computed service unit digest'
+  { printf '%s  %s\n' "$unit_sha" "$UNIT_PATH"; printf '%s\n' "$manifest"; } |
     /usr/bin/sha256sum | /usr/bin/awk '{ print $1 }'
 }
 
@@ -407,6 +415,7 @@ preflight() {
   local broad_sudoers_path="$2"
   local broad_sha=''
   local unit_sha=''
+  local boundary_sha=''
   local directory=''
 
   require_root
@@ -448,11 +457,13 @@ preflight() {
   /usr/bin/systemctl is-active --quiet "$SERVICE_UNIT" || fail 'service must be active before adoption'
   broad_sha="$(file_sha256 "$broad_sudoers_path")"
   unit_sha="$(file_sha256 "$UNIT_PATH")"
+  boundary_sha="$(unit_boundary_sha256)" || fail 'cannot fingerprint the service unit boundary'
+  require_sha256 "$boundary_sha" 'computed unit boundary digest'
   printf 'PROJ-2268 preflight passed.\n'
   printf 'broad_sudoers_path=%s\n' "$broad_sudoers_path"
   printf 'broad_sudoers_sha256=%s\n' "$broad_sha"
   printf 'unit_sha256=%s\n' "$unit_sha"
-  printf 'unit_boundary_sha256=%s\n' "$(unit_boundary_sha256)"
+  printf 'unit_boundary_sha256=%s\n' "$boundary_sha"
   printf 'repository_sha=%s\n' "$(<"${SOURCE_DIR}/REVISION")"
   printf 'environment_shape=%s\n' "$(numeric_shape "$LEGACY_ENVIRONMENT_FILE")"
 }

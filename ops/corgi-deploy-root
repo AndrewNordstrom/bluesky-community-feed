@@ -56,6 +56,7 @@ wait_production_dependencies() {
         --format '{{.State.Status}}|{{.State.Health.Status}}|{{.HostConfig.RestartPolicy.Name}}' "$container" 2>&1)"; then
         [[ "$state" == 'running|healthy|unless-stopped' ]] || ready='false'
       else
+        state="inspect-failed(exit=$?):${state}"
         ready='false'
       fi
       if [[ "$state" != 'running|healthy|unless-stopped' ]]; then

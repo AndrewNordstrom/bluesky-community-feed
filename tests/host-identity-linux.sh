@@ -102,6 +102,10 @@ if [[ "$*" == 'compose -f docker-compose.prod.yml up -d postgres redis' ]]; then
 elif [[ "$#" == 4 && "$1" == inspect && "$2" == --format && "$3" == '{{.State.Status}}|{{.State.Health.Status}}|{{.HostConfig.RestartPolicy.Name}}' &&
         ( "$4" == bluesky-feed-postgres || "$4" == bluesky-feed-redis ) ]]; then
   printf 'root-inspect:%s\n' "$4" >> /dev/shm/corgi-fixture-docker-calls
+  if [[ -e /run/corgi-fixture-inspect-fail-once ]]; then
+    rm /run/corgi-fixture-inspect-fail-once
+    exit 124
+  fi
   if [[ -f /run/corgi-fixture-dependencies-unhealthy ]]; then
     printf 'running|unhealthy|unless-stopped\n'
   elif [[ -f /run/corgi-fixture-ready-at && "$(date +%s)" -lt "$(cat /run/corgi-fixture-ready-at)" ]]; then
@@ -179,6 +183,44 @@ for mutation in unknown directive symlink unloaded digest hook; do
   esac
   systemctl daemon-reload
   printf 'PASS rejected %s startup boundary mutation before adoption\n' "$mutation"
+done
+
+# Failures during final fingerprinting must never produce a successful receipt.
+cat > /root/preflight-fault-harness.sh <<'FAULT'
+set -Eeuo pipefail
+source "$1"
+fault_kind="$2"
+set -T
+fault_injected=false
+inject_failure() {
+  local frame="$1"
+  local command_text="$2"
+  if [[ "$fault_injected" == false && "$frame" == unit_boundary_sha256 && "$command_text" == 'local manifest='* ]]; then
+    fault_injected=true
+    case "$fault_kind" in
+      dropin) chmod 000 /etc/systemd/system/bluesky-feed.service.d/20-watchdog-hotfix.conf ;;
+      unit) mv /etc/systemd/system/bluesky-feed.service /root/fixture-unit-before-hash-fault ;;
+    esac
+  fi
+}
+trap 'inject_failure "${FUNCNAME[0]:-}" "$BASH_COMMAND"' DEBUG
+preflight deploy-fixture /etc/sudoers.d/fixture-deployment
+FAULT
+chmod 0600 /root/preflight-fault-harness.sh
+for fault in dropin unit; do
+  if output="$(run_harness /root/preflight-fault-harness.sh "$provisioner" "$fault" 2>&1)"; then
+    echo "FAIL preflight accepted final $fault fingerprint failure" >&2; exit 1
+  fi
+  [[ "$output" == *'cannot fingerprint the service unit boundary'* ]]
+  [[ "$output" != *'preflight passed'* && "$output" != *'unit_boundary_sha256='* ]]
+  case "$fault" in
+    dropin) chmod 0644 "$dropin_dir/20-watchdog-hotfix.conf" ;;
+    unit) mv /root/fixture-unit-before-hash-fault /etc/systemd/system/bluesky-feed.service ;;
+  esac
+  systemctl daemon-reload
+  assert_absent /var/lib/corgi-host-adoption /etc/corgi "$managed_dropin"
+  systemctl is-active --quiet bluesky-feed
+  printf 'PASS final %s fingerprint failure rejects preflight without a success receipt\n' "$fault"
 done
 
 # Replacing a checkout script after approval must fail BEFORE it can execute as root.
@@ -268,8 +310,8 @@ apply
 [[ "$(systemctl show bluesky-feed --property=Environment --value)" == *'WEB_ROUTING_MODE=export'* ]]
 [[ "$(systemctl show bluesky-feed --property=Environment --value)" == *'WEB_DIST_DIR=web-next/out'* ]]
 legacy_calls="$(grep -c '^legacy-compose$' /dev/shm/corgi-fixture-docker-calls)"
-printf '%s\n' "$(( $(date +%s) + 4 ))" > /run/corgi-fixture-ready-at
 start_time="$(date +%s)"
+printf '%s\n' "$(( start_time + 4 ))" > /run/corgi-fixture-ready-at
 systemctl restart bluesky-feed
 [[ "$(( $(date +%s) - start_time ))" -ge 4 ]]
 [[ "$(grep -c '^legacy-compose$' /dev/shm/corgi-fixture-docker-calls)" == "$legacy_calls" ]]
@@ -278,6 +320,11 @@ grep -q '^root-inspect:bluesky-feed-redis$' /dev/shm/corgi-fixture-docker-calls
 run_provisioner verify deploy-fixture
 rm /run/corgi-fixture-ready-at
 printf 'PASS root-only dependency wait precedes unprivileged app; watchdog and routing preserved; no Compose invoked\n'
+touch /run/corgi-fixture-inspect-fail-once
+inspect_output="$(/usr/local/sbin/corgi-deploy-root production-dependencies-ready 2>&1)"
+[[ "$inspect_output" == *'bluesky-feed-postgres: inspect-failed(exit=124):'* ]]
+printf 'PASS empty-output inspect failure records its exit code and retries successfully\n'
+
 
 # Preserve a foreign replacement before any rollback changes.
 printf '# foreign override replacement\n' >> "$managed_dropin"
