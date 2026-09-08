@@ -7,7 +7,7 @@
 
 [Unit]
 Description=Community Feed Generator (Bluesky)
-Documentation=https://github.com/corgi-network/bluesky-feed
+Documentation=https://github.com/andrewnordstrom-eng/corgi
 After=network-online.target docker.service
 Wants=network-online.target
 Requires=docker.service
@@ -20,11 +20,14 @@ StartLimitBurst=5
 
 [Service]
 Type=notify
-NotifyAccess=main
+# Readiness and watchdog notifications are sent by the fixed systemd-notify child.
+NotifyAccess=all
+User=bluesky-feed
+Group=bluesky-feed
 
 # Working directory and environment
 WorkingDirectory=/opt/bluesky-feed
-EnvironmentFile=/opt/bluesky-feed/.env
+EnvironmentFile=/etc/corgi/production.env
 Environment=NODE_ENV=production
 Environment=NODE_OPTIONS=--max-old-space-size=896
 
@@ -61,7 +64,6 @@ KillMode=mixed
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/bluesky-feed
 PrivateTmp=true
 
 # Logging

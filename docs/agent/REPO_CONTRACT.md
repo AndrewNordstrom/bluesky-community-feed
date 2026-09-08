@@ -1,10 +1,10 @@
-# Repo Contract -- bluesky-community-feed
+# Repo Contract -- corgi
 
 Status: canonical repo contract
 Owner: bluesky-feed
 Service class: production_service
 Contract version: 2
-Last updated: 2026-08-02
+Last updated: 2026-09-07
 Last verified: not yet rehearsed for the 2026-08-02 workflow revision
 
 > Canonical reference for any human or tooling operating in this repo.
@@ -22,7 +22,14 @@ applied and the feed is rescored.
 
 **Canonical URL:** `https://feed.corgi.network`
 **API docs:** `https://docs.corgi.network`
-**Repo:** `andrewnordstrom-eng/bluesky-community-feed`
+**Repo:** `andrewnordstrom-eng/corgi` (GitHub repository ID `1151738081`)
+The former `andrewnordstrom-eng/bluesky-community-feed` URL redirects to this
+same repository ID. This establishes the GitHub repository rename only.
+The live mapping of `feed.corgi.network` to that repository ID is unverified
+in PROJ-2268; host adoption is blocked. Before approving adoption, record
+authoritative service-to-repository evidence and its approval reference in the
+execution receipt. A missing or mismatched mapping must stop adoption.
+Production access and promotion still require their separate approval gates.
 **Linear project:** tracked on the maintainers' private project board
 **Product doc:** maintained in the maintainers' private product-doc tool
 
@@ -247,12 +254,15 @@ npm run cli -- --help
    the checkout by an approved recovery procedure before the first dispatch;
    `web-next/` `.env*.bak` files are ignored by that workspace. Any unrelated
    non-ignored artifact also blocks promotion.
-   The production `.env` must be root-owned and unreadable by the deployment
-   user, which must not have unrestricted passwordless sudo. Its sudo policy
-   must be reviewed and limited to the exact systemd calls and fixed-container,
-   fixed-command `docker exec` probes used by this workflow before enablement;
-   `docker compose`, container creation, and free-form `docker exec` are not
-   permitted. The demo Redis container must already be running. That host policy change is a separate
+   Production configuration must live at `/etc/corgi/production.env`, root-owned
+   mode 0600 under root-owned mode 0755 directory ancestry. The deployment user
+   must not be able to read, write or replace it. The legacy application-directory
+   `.env` must be absent, and production does not load working-directory dotenv
+   files. The deployment user must not have unrestricted passwordless sudo. Its sudo policy
+   must allow only the root-owned `/usr/local/sbin/corgi-deploy-root` dispatcher
+   with its reviewed fixed operation tokens. Direct privileged `systemctl`,
+   `docker exec`, `docker compose`, container creation and free-form container
+   commands are prohibited. The demo Redis container must already be running. That host policy change is a separate
    approval gate. The service must declare an explicit dedicated non-root user
    and group, distinct from the deployment account, and the active MainPID must
    be owned by that service user; otherwise both host admissions fail before
