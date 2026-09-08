@@ -1,0 +1,169 @@
+#!/bin/bash
+
+set -Eeuo pipefail
+
+readonly SERVICE_UNIT='bluesky-feed'
+readonly SERVICE_USER='bluesky-feed'
+readonly SERVICE_ENTRYPOINT='/opt/bluesky-feed/dist/index.js'
+readonly POSTGRES_CONTAINER='bluesky-feed-postgres'
+readonly DEMO_REDIS_CONTAINER='bluesky-feed-demo-redis'
+readonly PRODUCTION_REDIS_CONTAINER='bluesky-feed-redis'
+readonly COMMAND_TIMEOUT='15s'
+
+fail() {
+  printf '%s\n' "PROJ-2268 privileged command rejected: $*" >&2
+  exit 64
+}
+
+require_arg_count() {
+  local expected="$1"
+  local actual="$2"
+  local command_name="$3"
+
+  [[ "$actual" -eq "$expected" ]] ||
+    fail "${command_name} expected ${expected} argument(s), received ${actual}"
+}
+
+run_clean() {
+  exec /usr/bin/env -i \
+    HOME=/root \
+    PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+    LANG=C \
+    LC_ALL=C \
+    "$@"
+}
+
+require_demo_session_key() {
+  local key="$1"
+
+  [[ "$key" =~ ^demo:session:demo-[A-Za-z0-9_-]{1,128}$ ]] ||
+    fail 'Redis key must be one bounded demo session key'
+}
+
+wait_production_dependencies() {
+  local deadline=$((SECONDS + 60))
+  local container=''
+  local state=''
+  local ready='false'
+
+  # A root-owned unit invokes this fixed read-only probe before the unprivileged
+  # application. Never run Compose or consume a deployment-owned file here.
+  while [[ "$SECONDS" -lt "$deadline" ]]; do
+    ready='true'
+    for container in "$POSTGRES_CONTAINER" "$PRODUCTION_REDIS_CONTAINER"; do
+      if state="$(/usr/bin/env -i PATH=/usr/bin:/bin HOME=/root \
+        /usr/bin/timeout --foreground 5s /usr/bin/docker inspect \
+        --format '{{.State.Status}}|{{.State.Health.Status}}|{{.HostConfig.RestartPolicy.Name}}' "$container" 2>&1)"; then
+        [[ "$state" == 'running|healthy|unless-stopped' ]] || ready='false'
+      else
+        state="inspect-failed(exit=$?):${state}"
+        ready='false'
+      fi
+      if [[ "$state" != 'running|healthy|unless-stopped' ]]; then
+        printf 'PROJ-2268 waiting for fixed dependency %s: %s\n' "$container" "$state" >&2
+      fi
+    done
+    [[ "$ready" == 'true' ]] && return 0
+    /usr/bin/sleep 2
+  done
+  fail 'production dependencies did not become healthy with unless-stopped restart policy within the bounded startup wait'
+}
+
+main() {
+  local command_name="${1:-}"
+  local redis_key=''
+
+  [[ "$(/usr/bin/id -u)" -eq 0 ]] || fail 'wrapper must run as root through sudo'
+  [[ -n "$command_name" ]] || fail 'one command token is required'
+  shift
+
+  case "$command_name" in
+    service-user)
+      require_arg_count 0 "$#" "$command_name"
+      run_clean /usr/bin/systemctl show "$SERVICE_UNIT" --property=User --value
+      ;;
+    service-group)
+      require_arg_count 0 "$#" "$command_name"
+      run_clean /usr/bin/systemctl show "$SERVICE_UNIT" --property=Group --value
+      ;;
+    service-main-pid)
+      require_arg_count 0 "$#" "$command_name"
+      run_clean /usr/bin/systemctl show "$SERVICE_UNIT" --property=MainPID --value
+      ;;
+    service-is-active)
+      require_arg_count 0 "$#" "$command_name"
+      run_clean /usr/bin/systemctl is-active --quiet "$SERVICE_UNIT"
+      ;;
+    service-state)
+      require_arg_count 0 "$#" "$command_name"
+      run_clean /usr/bin/systemctl is-active "$SERVICE_UNIT"
+      ;;
+    service-restart)
+      require_arg_count 0 "$#" "$command_name"
+      run_clean /usr/bin/systemctl restart "$SERVICE_UNIT"
+      ;;
+    service-can-read-entrypoint)
+      require_arg_count 0 "$#" "$command_name"
+      run_clean /usr/sbin/runuser -u "$SERVICE_USER" -- /usr/bin/test -r "$SERVICE_ENTRYPOINT"
+      ;;
+    production-dependencies-ready)
+      require_arg_count 0 "$#" "$command_name"
+      wait_production_dependencies
+      ;;
+    postgres-ingestion-signals)
+      require_arg_count 0 "$#" "$command_name"
+      run_clean /usr/bin/timeout --foreground "$COMMAND_TIMEOUT" \
+        /usr/bin/docker exec "$POSTGRES_CONTAINER" \
+        psql -U feed -d bluesky_feed -v ON_ERROR_STOP=1 -tA -c \
+        "SELECT cursor.cursor_us::text || '|' || newest.indexed_epoch::text FROM (SELECT cursor_us FROM jetstream_cursor WHERE id = 1) cursor CROSS JOIN (SELECT FLOOR(EXTRACT(EPOCH FROM MAX(indexed_at)))::bigint AS indexed_epoch FROM posts WHERE deleted = FALSE) newest WHERE newest.indexed_epoch IS NOT NULL;"
+      ;;
+    demo-redis-ping)
+      require_arg_count 0 "$#" "$command_name"
+      run_clean /usr/bin/timeout --foreground "$COMMAND_TIMEOUT" \
+        /usr/bin/docker exec "$DEMO_REDIS_CONTAINER" redis-cli ping
+      ;;
+    demo-redis-exists)
+      require_arg_count 1 "$#" "$command_name"
+      redis_key="$1"
+      require_demo_session_key "$redis_key"
+      run_clean /usr/bin/timeout --foreground "$COMMAND_TIMEOUT" \
+        /usr/bin/docker exec "$DEMO_REDIS_CONTAINER" redis-cli --raw EXISTS "$redis_key"
+      ;;
+    production-redis-exists)
+      require_arg_count 1 "$#" "$command_name"
+      redis_key="$1"
+      require_demo_session_key "$redis_key"
+      run_clean /usr/bin/timeout --foreground "$COMMAND_TIMEOUT" \
+        /usr/bin/docker exec "$PRODUCTION_REDIS_CONTAINER" redis-cli --raw EXISTS "$redis_key"
+      ;;
+    demo-redis-maxmemory-policy)
+      require_arg_count 0 "$#" "$command_name"
+      run_clean /usr/bin/timeout --foreground "$COMMAND_TIMEOUT" \
+        /usr/bin/docker exec "$DEMO_REDIS_CONTAINER" redis-cli --raw CONFIG GET maxmemory-policy
+      ;;
+    demo-redis-maxmemory)
+      require_arg_count 0 "$#" "$command_name"
+      run_clean /usr/bin/timeout --foreground "$COMMAND_TIMEOUT" \
+        /usr/bin/docker exec "$DEMO_REDIS_CONTAINER" redis-cli --raw CONFIG GET maxmemory
+      ;;
+    demo-redis-appendonly)
+      require_arg_count 0 "$#" "$command_name"
+      run_clean /usr/bin/timeout --foreground "$COMMAND_TIMEOUT" \
+        /usr/bin/docker exec "$DEMO_REDIS_CONTAINER" redis-cli --raw CONFIG GET appendonly
+      ;;
+    demo-redis-save)
+      require_arg_count 0 "$#" "$command_name"
+      run_clean /usr/bin/timeout --foreground "$COMMAND_TIMEOUT" \
+        /usr/bin/docker exec "$DEMO_REDIS_CONTAINER" redis-cli --raw CONFIG GET save
+      ;;
+    *)
+      fail "unknown command token: ${command_name}"
+      ;;
+  esac
+}
+
+if [[ "${CORGI_DEPLOY_ROOT_LIBRARY_ONLY:-0}" == '1' ]]; then
+  [[ "$EUID" -ne 0 ]] || fail 'library-only mode is prohibited for root execution'
+else
+  main "$@"
+fi

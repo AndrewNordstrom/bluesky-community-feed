@@ -105,9 +105,11 @@ deadline bounds startup, cleanup, and any failure outside the database driver.
 The existing weekly job reads `BOT_*` or `BSKY_*` application passwords from
 `/opt/bluesky-feed/.env`, creates an isolated CLI session, writes two plaintext
 CSV files under a unique remote `/tmp` directory, copies them, and removes the
-session and temporary files. The production admission contract now requires
-`.env` to be root-owned and unreadable by non-root. Granting `corgi-operations`
-read access would undo that control, and adding a broad root export wrapper
+session and temporary files. The adopted production contract stores configuration
+at `/etc/corgi/production.env`, root-owned mode 0600 beneath protected root-owned
+directories, and requires the legacy `/opt/bluesky-feed/.env` path to be absent.
+Granting `corgi-operations` read access would undo that control, and adding a
+broad root export wrapper
 would make the operations key an application-credential exfiltration path.
 
 PROJ-2258 therefore does not make weekly export work and does not treat its
@@ -128,6 +130,11 @@ installation vehicle. It is idempotent: a repeated run validates the existing
 account shape, overwrites only the four managed files with reviewed content,
 validates sudoers before installation, and reruns local policy verification.
 
+Before account creation, the script checks `/etc/corgi/production.env` and its
+directory ancestry, and rejects any remaining legacy `.env`, including a
+dangling symlink. It does not migrate configuration or change its permissions.
+The PROJ-2268 host-adoption contract must already be satisfied.
+
 Positive tests, run through `acceptance`, require all four exact tokens to
 succeed:
 
@@ -138,10 +145,12 @@ succeed:
    value is data, not authorization failure.
 
 Negative tests send an empty interactive request and exact attempts to read
-`.env`, run arbitrary `docker exec`, write under `/opt/bluesky-feed`, and
+`/etc/corgi/production.env` and the legacy `.env`, run arbitrary `docker exec`,
+write under `/opt/bluesky-feed`, and
 restart `bluesky-feed.service`. Each must exit nonzero through the dispatcher
 without executing. Root-side `verify` additionally proves the user cannot read
-`.env`, cannot write the checkout or Docker socket, has no supplementary group,
+or write `/etc/corgi/production.env` or write its parent directories, cannot
+write the checkout or Docker socket, has no supplementary group,
 and has exactly one sudoers rule. The restart prohibition is checked by
 deny-by-default dispatch plus policy inspection; the test never risks actually
 restarting production to prove a negative.

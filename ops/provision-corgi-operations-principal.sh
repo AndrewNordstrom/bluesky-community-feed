@@ -165,11 +165,16 @@ assert_production_environment_isolated() {
   local operations_uid=''
 
   assert_safe_directory_chain /opt
+  assert_safe_directory_chain /etc/corgi
   if /usr/bin/getent passwd "$OPERATIONS_USER" >/dev/null; then
     operations_uid="$(/usr/bin/id -u "$OPERATIONS_USER")"
   fi
   assert_application_directory_isolated /opt/bluesky-feed "$operations_uid"
-  assert_isolated_secret_file /opt/bluesky-feed/.env 0 'production environment file'
+  assert_isolated_secret_file /etc/corgi/production.env 0 'production environment file'
+  [[ "$(read_numeric_owner_mode /etc/corgi/production.env)" == '0:600' ]] ||
+    fail 'production environment file must be root-owned mode 0600: /etc/corgi/production.env'
+  [[ ! -e /opt/bluesky-feed/.env && ! -L /opt/bluesky-feed/.env ]] ||
+    fail 'legacy production environment path must be absent: /opt/bluesky-feed/.env'
 }
 
 remove_new_account_after_failed_isolation() {
@@ -257,6 +262,7 @@ assert_no_other_sudo_references() {
 
 verify_host_policy() {
   local sudoers_content=''
+  local path=''
 
   assert_source_files
   assert_production_environment_isolated
@@ -284,8 +290,12 @@ verify_host_policy() {
   [[ "$(/usr/bin/awk 'NF { count += 1 } END { print count + 0 }' "$AUTHORIZED_KEYS_PATH")" == '1' ]] ||
     fail 'authorized_keys must contain exactly one non-empty key line'
 
-  /usr/sbin/runuser -u "$OPERATIONS_USER" -- /usr/bin/test ! -r /opt/bluesky-feed/.env ||
-    fail "${OPERATIONS_USER} can read /opt/bluesky-feed/.env"
+  /usr/sbin/runuser -u "$OPERATIONS_USER" -- /usr/bin/test ! -r /etc/corgi/production.env ||
+    fail "${OPERATIONS_USER} can read /etc/corgi/production.env"
+  for path in / /etc /etc/corgi /etc/corgi/production.env; do
+    /usr/sbin/runuser -u "$OPERATIONS_USER" -- /usr/bin/test ! -w "$path" ||
+      fail "${OPERATIONS_USER} can write the production environment boundary: ${path}"
+  done
   /usr/sbin/runuser -u "$OPERATIONS_USER" -- /usr/bin/test ! -w /opt/bluesky-feed ||
     fail "${OPERATIONS_USER} can write under /opt/bluesky-feed"
   if [[ -e /var/run/docker.sock ]]; then
@@ -463,7 +473,7 @@ assert_private_input_file() {
     fail "${purpose} must have no group or other permission bits: ${path} (${mode})"
 }
 
-run_remote_acceptance() {
+run_remote_acceptance() (
   local host="$1"
   local private_key="$2"
   local known_hosts="$3"
@@ -471,6 +481,7 @@ run_remote_acceptance() {
   local output_dir=''
   local command=''
   local result_path=''
+  local vector_index=0
   local -a ssh_options=(
     -i "$private_key"
     -o BatchMode=yes
@@ -487,7 +498,7 @@ run_remote_acceptance() {
   assert_private_input_file "$private_key" 'private key'
   assert_private_input_file "$database_url_file" 'database URL file'
   output_dir="$(/usr/bin/mktemp -d)"
-  trap '/usr/bin/rm -rf -- "${output_dir:-}"' RETURN
+  trap '/bin/rm -rf -- "$output_dir"' EXIT
 
   /usr/bin/ssh "${ssh_options[@]}" "${OPERATIONS_USER}@${host}" epoch-status \
     <"$database_url_file" >"${output_dir}/epoch-status.out"
@@ -502,11 +513,13 @@ run_remote_acceptance() {
     >"${output_dir}/feed-updated-at.out"
 
   for command in \
+    'cat /etc/corgi/production.env' \
     'cat /opt/bluesky-feed/.env' \
     'docker exec bluesky-feed-redis redis-cli FLUSHALL' \
     'touch /opt/bluesky-feed/PROJ-2258-negative-test' \
     'sudo systemctl restart bluesky-feed.service'; do
-    result_path="${output_dir}/negative-$(( ${#command} )).out"
+    vector_index=$((vector_index + 1))
+    result_path="${output_dir}/negative-${vector_index}.out"
     # shellcheck disable=SC2029 # The client-side value is a fixed test vector; the forced command rejects it remotely.
     if /usr/bin/ssh "${ssh_options[@]}" "${OPERATIONS_USER}@${host}" "$command" >"$result_path" 2>&1; then
       fail "forbidden command unexpectedly succeeded: ${command}"
@@ -521,10 +534,10 @@ run_remote_acceptance() {
   /usr/bin/grep -Fq 'command denied' "${output_dir}/negative-shell.out" ||
     fail 'interactive shell request did not fail through the dispatcher'
 
-  /usr/bin/rm -rf -- "$output_dir"
-  trap - RETURN
+  /bin/rm -rf -- "$output_dir"
+  trap - EXIT
   printf '%s\n' 'PROJ-2258 remote acceptance passed: four allowed commands succeeded and all forbidden commands were denied.'
-}
+)
 
 print_plan() {
   printf '%s\n' \
@@ -535,7 +548,8 @@ print_plan() {
     "  Redis wrapper: ${REDIS_READER_PATH}, root:root 0755, fixed container/key arguments" \
     "  sudoers: ${SUDOERS_PATH}, exactly: ${SUDOERS_RULE}" \
     '  supplementary groups: none; specifically not docker or sudo' \
-    '  production application .env: remains unreadable' \
+    '  production environment: /etc/corgi/production.env, root-owned 0600, unreadable and unwritable by operations' \
+    '  legacy environment: /opt/bluesky-feed/.env must remain absent' \
     '  allowed SSH commands: epoch-status, disk-root, health-ready, feed-updated-at' \
     "  rollback confirmation: ${ROLLBACK_CONFIRMATION}"
 }

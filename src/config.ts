@@ -1,7 +1,16 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
 
-dotenv.config();
+// Production receives its environment from the service manager, never the writable checkout.
+const startupNodeEnv = process.env.NODE_ENV;
+if (startupNodeEnv !== 'production') {
+  dotenv.config();
+  if (process.env.NODE_ENV === 'production') {
+    throw new TypeError(
+      'NODE_ENV=production must be set before startup by the service manager, not a working-directory .env file.',
+    );
+  }
+}
 
 const INSECURE_EXPORT_SALT_DEFAULT = 'dev-salt-not-for-prod';
 const INSECURE_DEMO_RATE_LIMIT_HASH_SECRET_DEFAULT = 'dev-demo-rate-limit-secret-not-for-prod';
@@ -31,7 +40,7 @@ export const ConfigSchema = z.object({
   FEEDGEN_HOSTNAME: z.string().min(1),
 
   // Server
-  FEEDGEN_PORT: z.coerce.number().default(3000),
+  FEEDGEN_PORT: z.coerce.number().int().min(1024).max(65535).default(3000),
   FEEDGEN_LISTENHOST: z.string().default('0.0.0.0'),
 
   // Jetstream

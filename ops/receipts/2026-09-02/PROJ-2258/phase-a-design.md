@@ -9,6 +9,42 @@ Branch: `dev/PROJ-2258-least-privilege-operations-principal`
 Base: `c703244da266679a289109871920d0320f14ebf3`
 Phase: A only; production execution is not authorized
 
+## Compatibility refresh — 2026-09-08 UTC
+
+The sections below retain the original Phase A history. This refresh brings
+the candidate onto main `faddc0b7fef621840514cbdaff6382ca666dafe1` and aligns
+provisioning with PROJ-2268's adopted `/etc/corgi/production.env` contract.
+It supersedes the historical dependency-audit failures for this candidate.
+
+- Provisioning requires root-owned mode-0600 configuration beneath protected
+  root-owned directory ancestry and rejects any legacy `.env`, including a
+  dangling symlink. Verification checks that operations cannot read or write
+  the configuration or write its ancestors. The four-command allowlist is unchanged.
+- All four clean dependency installs completed with zero reported vulnerabilities.
+  `npm run verify` passed after review fixes: 159 test files, 2,247 passing tests
+  and one Linux-only timeout case skipped on macOS, backend/CLI/SDK builds,
+  SDK consumer fixture, documentation checks, legacy frontend lint/build, and
+  canonical frontend build. Shell syntax, ShellCheck, and diff whitespace checks passed.
+- An isolated Ubuntu 24.04 container reproduced the old precondition failure
+  on the adopted layout. The repaired candidate rejected eight unsafe layouts
+  before account creation, then passed real account provisioning, verification,
+  repeated apply, rollback and repeated rollback. Actual operations-user attempts
+  to read, write, unlink or replace protected configuration were denied, and
+  the synthetic configuration digest remained unchanged.
+- Local validation used synthetic configuration and a disposable key, with no
+  production connection. The Linux fixture had no network or host Docker socket.
+- One local CodeRabbit review completed with 17 findings, including unchanged
+  main integration files. Two reproduced defects were fixed: the second stdin
+  read now preserves its timeout status, and acceptance output is removed on
+  failed exits. The remaining findings were checked against source and received
+  reasoned dispositions instead of speculative changes to already-merged code.
+- A separate real-Linux before/after regression proved that the original
+  dispatcher ran the synthetic CLI after stdin timed out; the corrected version
+  rejected the request after five seconds with exit 65. A local regression also
+  proved that failed SSH acceptance removes its temporary output directory.
+- Hosted review of the refreshed candidate is pending. These validation results
+  do not authorize a production operation or establish hosted approval.
+
 ## Runtime Health Check
 
 - No SSH connection to the production host was made.

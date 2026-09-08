@@ -3,6 +3,7 @@ import {
   chmodSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -142,6 +143,7 @@ describe('PROJ-2258 operations principal policy', () => {
   it.each([
     '',
     'epoch-status --help',
+    'cat /etc/corgi/production.env',
     'cat /opt/bluesky-feed/.env',
     'docker exec bluesky-feed-redis redis-cli FLUSHALL',
     'touch /opt/bluesky-feed/PROJ-2258-negative-test',
@@ -203,6 +205,23 @@ describe('PROJ-2258 operations principal policy', () => {
     8_000,
   );
 
+  // Production uses Linux Bash; macOS Bash 3.2 reports timeout as EOF (1).
+  it.runIf(process.platform === 'linux')(
+    'rejects a complete database URL when the sender does not close stdin',
+    async () => {
+      const result = await runDispatcherWithOpenStdin(
+        'epoch-status',
+        'postgresql://example.invalid/db\n',
+      );
+
+      expect(result.code).toBe(65);
+      expect(result.elapsedMillis).toBeGreaterThanOrEqual(4_500);
+      expect(result.elapsedMillis).toBeLessThan(6_500);
+      expect(result.stderr).toContain('input did not close before the deadline');
+    },
+    8_000,
+  );
+
   it('fixes the Redis container, executable, subcommand, and key', () => {
     const redisReader = readFileSync(REDIS_READER_PATH, 'utf8');
 
@@ -241,7 +260,9 @@ describe('PROJ-2258 operations principal policy', () => {
     expect(provisioner).toContain('required parent is group- or other-writable');
     expect(provisioner).toContain('assert_safe_existing_managed_path "$managed_path"');
     expect(provisioner).toContain('assert_production_environment_isolated');
-    expect(provisioner).toContain("assert_isolated_secret_file /opt/bluesky-feed/.env 0 'production environment file'");
+    expect(provisioner).toContain("assert_isolated_secret_file /etc/corgi/production.env 0 'production environment file'");
+    expect(provisioner).toContain('assert_safe_directory_chain /etc/corgi');
+    expect(provisioner).toContain('legacy production environment path must be absent');
     expect(provisioner).toContain('unexpected entry blocks rollback before mutation');
     expect(provisioner).toContain('operations home is missing or unsafe; rollback made no changes');
     expect(provisioner).toContain('/usr/bin/curl');
@@ -278,6 +299,33 @@ describe('PROJ-2258 operations principal policy', () => {
       assertSpawnCompleted(result);
       expect(result.status).toBe(1);
       expect(result.stderr).toContain('acceptance input file must not be a symlink');
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('removes acceptance output after SSH fails before a connection', () => {
+    const directory = createAcceptanceInputs();
+    const before = readdirSync(directory).sort();
+
+    try {
+      const result = spawnSync('bash', [
+        PROVISIONER_PATH,
+        'acceptance',
+        'invalid/hostname',
+        path.join(directory, 'private-key'),
+        path.join(directory, 'known-hosts'),
+        path.join(directory, 'database-url'),
+      ], {
+        env: { ...process.env, TMPDIR: directory },
+        encoding: 'utf8',
+        timeout: 5_000,
+      });
+
+      assertSpawnCompleted(result);
+      expect(result.status).toBe(255);
+      expect(result.stderr).toContain('ssh:');
+      expect(readdirSync(directory).sort()).toEqual(before);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

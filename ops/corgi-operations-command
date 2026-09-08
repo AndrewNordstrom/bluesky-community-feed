@@ -23,7 +23,6 @@ read_database_url() {
   if IFS= read -r -t "$INPUT_TIMEOUT_SECONDS" -n "$((MAX_DATABASE_URL_BYTES + 2))" database_url; then
     :
   else
-    read_status="$?"
     printf '%s\n' 'corgi-operations: epoch-status requires one newline-terminated database URL within five seconds' >&2
     return 65
   fi
@@ -35,8 +34,9 @@ read_database_url() {
   if IFS= read -r -t "$INPUT_TIMEOUT_SECONDS" -n 1 extra_input; then
     printf '%s\n' 'corgi-operations: epoch-status accepts exactly one input line' >&2
     return 65
+  else
+    read_status="$?"
   fi
-  read_status="$?"
   if [[ -n "$extra_input" ]]; then
     printf '%s\n' 'corgi-operations: epoch-status accepts exactly one input line' >&2
     return 65
